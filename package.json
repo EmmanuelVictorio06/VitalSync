@@ -1,0 +1,34 @@
+{
+  "name": "vitalsync",
+  "version": "0.1.0",
+  "private": true,
+  "description": "VitalSync — sistema de monitoramento domiciliar pós-operatório",
+  "workspaces": [
+    "packages/*",
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "build:shared": "npm run build --workspace @vitalsync/shared",
+    "dev:backend": "npm run dev --workspace @vitalsync/backend",
+    "dev:frontend": "npm run dev --workspace @vitalsync/frontend",
+    "dev": "npm run build:shared && concurrently -n backend,frontend -c blue,green \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:generate": "prisma generate --schema backend/prisma/schema.prisma",
+    "db:migrate": "prisma migrate dev --schema backend/prisma/schema.prisma",
+    "db:deploy": "prisma migrate deploy --schema backend/prisma/schema.prisma",
+    "db:seed": "tsx backend/prisma/seed.ts",
+    "db:seed:demo": "tsx backend/prisma/seed-demo.ts",
+    "db:reset": "prisma migrate reset --schema backend/prisma/schema.prisma",
+    "build": "npm run build:shared && npm run build --workspace @vitalsync/backend && npm run build --workspace @vitalsync/frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "playwright": "^1.60.0",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

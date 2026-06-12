@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: vitalsync-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vitalsync
+      POSTGRES_PASSWORD: vitalsync
+      POSTGRES_DB: vitalsync
+    # Host usa 5544 para evitar conflito com um PostgreSQL local na 5432.
+    ports:
+      - "5544:5432"
+    volumes:
+      - vitalsync_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vitalsync -d vitalsync"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  vitalsync_pgdata:

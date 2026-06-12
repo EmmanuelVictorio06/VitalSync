@@ -1,0 +1,303 @@
+// ============================================================================
+//  VitalSync — Modelagem do banco de dados (PostgreSQL)
+// ============================================================================
+// Princípios: alta coesão, índices para as buscas frequentes (paciente, equipe,
+// médico, status, período), e estrutura preparada para auditoria/LGPD.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------------
+// Enums
+// ----------------------------------------------------------------------------
+
+enum Role {
+  ADM
+  SURGEON // Cirurgião responsável
+  ASSOCIATE // Médico associado
+}
+
+enum Period {
+  MORNING
+  NIGHT
+}
+
+enum ClinicalStatus {
+  GREEN
+  YELLOW
+  RED
+}
+
+// ----------------------------------------------------------------------------
+// Identidade e acesso
+// ----------------------------------------------------------------------------
+
+/// Usuários com login (ADM, cirurgião responsável, médico associado).
+/// Pacientes NÃO são usuários — acessam só via link com token.
+model User {
+  id           String  @id @default(uuid())
+  name         String
+  email        String  @unique
+  passwordHash String
+  role         Role
+  whatsapp     String? // usado para receber alertas (cirurgião/associado)
+  isActive     Boolean @default(true)
+
+  /// Equipe à qual o médico pertence (null para ADM).
+  teamId String?
+  team   MedicalTeam? @relation("TeamMembers", fields: [teamId], references: [id], onDelete: SetNull)
+
+  /// Equipe que este usuário lidera, quando for cirurgião principal.
+  ledTeam MedicalTeam? @relation("TeamSurgeon")
+
+  attendanceConfirmations AttendanceConfirmation[]
+  alertRecipients         AlertRecipient[]
+  auditLogs               AuditLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([role])
+  @@index([teamId])
+  @@map("users")
+}
+
+// ----------------------------------------------------------------------------
+// Equipes médicas
+// ----------------------------------------------------------------------------
+
+model MedicalTeam {
+  id     String @id @default(uuid())
+  number Int    @unique // não pode duplicar (regra do documento)
+
+  /// Cirurgião principal (responsável) da equipe.
+  surgeonId String? @unique
+  surgeon   User?   @relation("TeamSurgeon", fields: [surgeonId], references: [id], onDelete: SetNull)
+
+  /// Médicos (cirurgião + associados) vinculados à equipe.
+  members  User[]    @relation("TeamMembers")
+  patients Patient[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("medical_teams")
+}
+
+// ----------------------------------------------------------------------------
+// Catálogos (listas para os dropdowns)
+// ----------------------------------------------------------------------------
+
+model SurgeryType {
+  id       String  @id @default(uuid())
+  name     String  @unique
+  isActive Boolean @default(true)
+
+  patients Patient[]
+
+  @@map("surgery_types")
+}
+
+model Hospital {
+  id       String  @id @default(uuid())
+  name     String  @unique
+  isActive Boolean @default(true)
+
+  patients Patient[]
+
+  @@map("hospitals")
+}
+
+// ----------------------------------------------------------------------------
+// Pacientes e monitoramento
+// ----------------------------------------------------------------------------
+
+model Patient {
+  id        String   @id @default(uuid())
+  name      String
+  birthDate DateTime @db.Date
+  phone     String // armazenado só com dígitos
+
+  surgeryTypeId String
+  surgeryType   SurgeryType @relation(fields: [surgeryTypeId], references: [id])
+  surgeryDate   DateTime    @db.Date
+  dischargeDate DateTime    @db.Date // inicia a contagem dos 10 dias
+
+  hospitalId String
+  hospital   Hospital @relation(fields: [hospitalId], references: [id])
+
+  teamId String
+  team   MedicalTeam @relation(fields: [teamId], references: [id])
+
+  /// Status clínico corrente (após o último registro) — acelera os cards/filtros.
+  currentStatus     ClinicalStatus @default(GREEN)
+  lastMeasurementAt DateTime?
+
+  /// Estado de atendimento corrente (resetado a cada nova medição).
+  attendedById String?
+  attendedBy   AttendanceConfirmation? @relation("CurrentAttendance", fields: [attendedById], references: [id])
+  attendedAt   DateTime?
+
+  isActive Boolean @default(true)
+
+  monitoringLinks         PatientMonitoringLink[]
+  vitalSignRecords        VitalSignRecord[]
+  clinicalAlerts          ClinicalAlert[]
+  attendanceConfirmations AttendanceConfirmation[] @relation("PatientAttendances")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([teamId])
+  @@index([currentStatus])
+  @@index([isActive])
+  @@index([name])
+  @@map("patients")
+}
+
+/// Link seguro e único do paciente (acesso via WhatsApp). Guardamos apenas o
+/// HASH do token — o valor cru existe somente na URL enviada (boas práticas).
+model PatientMonitoringLink {
+  id        String @id @default(uuid())
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  tokenHash String   @unique // sha256 do token
+  expiresAt DateTime
+  isActive  Boolean  @default(true)
+
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  @@index([patientId])
+  @@map("patient_monitoring_links")
+}
+
+/// Uma medição (manhã ou noite) de um dia de monitoramento.
+model VitalSignRecord {
+  id        String  @id @default(uuid())
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  recordDate    DateTime @db.Date
+  period        Period
+  monitoringDay Int // 1..10
+
+  temperature Float
+  spo2        Float
+  systolic    Int
+  diastolic   Int
+  heartRate   Int
+  pain        Int // 0..10
+  dyspnea     Int // 0..10
+
+  urinatedNormally Boolean
+  urinationCount   Int?
+  hadVomit         Boolean
+  vomitCount       Int?
+  hadBleeding      Boolean
+  stepsCount       Int? // só à noite
+
+  overallStatus ClinicalStatus
+  /// Status por dimensão (JSON) — preserva o detalhe sem inflar colunas.
+  statusByVital Json
+
+  submittedAt DateTime @default(now())
+
+  clinicalAlerts ClinicalAlert[]
+
+  // Impede duplicidade de envio para o mesmo paciente/dia/período.
+  @@unique([patientId, recordDate, period])
+  @@index([patientId, recordDate])
+  @@map("vital_sign_records")
+}
+
+// ----------------------------------------------------------------------------
+// Alertas clínicos
+// ----------------------------------------------------------------------------
+
+model ClinicalAlert {
+  id        String  @id @default(uuid())
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  vitalSignRecordId String
+  vitalSignRecord   VitalSignRecord @relation(fields: [vitalSignRecordId], references: [id], onDelete: Cascade)
+
+  status  ClinicalStatus // YELLOW ou RED
+  message String
+
+  recipients AlertRecipient[]
+
+  createdAt DateTime @default(now())
+
+  @@index([patientId])
+  @@index([status])
+  @@map("clinical_alerts")
+}
+
+/// Registro de para quem cada alerta foi enviado e o resultado da entrega.
+model AlertRecipient {
+  id      String        @id @default(uuid())
+  alertId String
+  alert   ClinicalAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  channel        String // ex.: "whatsapp"
+  deliveryStatus String // ex.: "sent", "failed", "logged"
+  detail         String?
+  sentAt         DateTime @default(now())
+
+  @@index([alertId])
+  @@map("alert_recipients")
+}
+
+// ----------------------------------------------------------------------------
+// Confirmação de atendimento (log) + LGPD/auditoria
+// ----------------------------------------------------------------------------
+
+model AttendanceConfirmation {
+  id        String  @id @default(uuid())
+  patientId String
+  patient   Patient @relation("PatientAttendances", fields: [patientId], references: [id], onDelete: Cascade)
+
+  attendedByUserId String
+  attendedBy       User   @relation(fields: [attendedByUserId], references: [id])
+
+  attendedAt DateTime @default(now())
+
+  /// Back-relation para o "atendimento corrente" referenciado pelo paciente.
+  currentForPatient Patient[] @relation("CurrentAttendance")
+
+  @@index([patientId])
+  @@map("attendance_confirmations")
+}
+
+/// Trilha de auditoria (login, cadastro, alteração, exclusão, visualização de
+/// paciente, marcação de atendimento, envio de alerta, exportação).
+model AuditLog {
+  id     String  @id @default(uuid())
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  action     String // ex.: "LOGIN", "PATIENT_CREATE", "ALERT_SENT"
+  entityType String?
+  entityId   String?
+  metadata   Json?
+  ip         String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
