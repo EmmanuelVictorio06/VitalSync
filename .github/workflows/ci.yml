@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Valor fictício apenas para o Prisma resolver o datasource em build-time.
+# O build (tsc + vite) NÃO conecta ao banco.
+env:
+  DATABASE_URL: postgresql://vitalsync:vitalsync@localhost:5432/vitalsync?schema=public
+
+jobs:
+  build:
+    name: Build (shared + backend + frontend)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate --schema backend/prisma/schema.prisma
+
+      - name: Build monorepo
+        run: npm run build

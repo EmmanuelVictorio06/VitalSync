@@ -1,0 +1,16 @@
+# Normaliza fins de linha: texto sempre em LF no repositório.
+* text=auto eol=lf
+
+# Arquivos binários (não devem sofrer conversão de fim de linha).
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.xlsx binary
+*.woff binary
+*.woff2 binary
+
+# Lockfile gerado.
+package-lock.json -diff
