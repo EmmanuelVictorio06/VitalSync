@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Calendar, Copy, Eye, FileDown, MessageCircle, Search, Trash2 } from 'lucide-react';
 import { ClinicalStatus, formatCivilDate } from '@vitalsync/shared';
 import { Role, useAuth } from '../auth/AuthContext';
@@ -20,9 +20,11 @@ export function MonitoringPage() {
   const navigate = useNavigate();
   const { hasRole } = useAuth();
 
+  // Aceita ?search= vindo da busca da topbar.
+  const [searchParams] = useSearchParams();
   const [data, setData] = useState<Paginated<PatientCardData> | null>(null);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(searchParams.get('search') ?? '');
   const [status, setStatus] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
