@@ -1,5 +1,7 @@
 # VitalSync — Monitoramento Domiciliar Pós-Operatório
 
+[![CI](https://github.com/EmmanuelVictorio06/VitalSync/actions/workflows/ci.yml/badge.svg)](https://github.com/EmmanuelVictorio06/VitalSync/actions/workflows/ci.yml)
+
 Sistema web responsivo, seguro e escalável para acompanhamento de pacientes nos **10 dias
 pós-alta hospitalar**. Pacientes registram sinais vitais 2×/dia (via link de WhatsApp) e a
 equipe médica acompanha gráficos, recebe alertas automáticos e exporta os dados.
