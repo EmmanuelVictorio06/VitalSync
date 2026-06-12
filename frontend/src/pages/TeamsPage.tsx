@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Pencil, Plus, Trash2, Users2, X } from 'lucide-react';
 import { onlyDigits } from '@vitalsync/shared';
 import { useToast } from '../components/Toast';
 import { Button, ConfirmModal, PhoneInput, TextInput } from '../components/ui';
@@ -85,24 +86,29 @@ export function TeamsPage() {
   }
 
   return (
-    <div className="stack">
-      <div>
-        <h1>Cadastro de Equipes Médicas</h1>
-        <p className="subtext">
+    <div className="p-4 md:p-8 max-w-6xl mx-auto w-full space-y-8">
+      <div className="animate-entry">
+        <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">Cadastro de Equipes Médicas</h2>
+        <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
           Defina as equipes sob liderança dos cirurgiões responsáveis e os médicos associados que monitoram os
           pacientes em recuperação domiciliar.
         </p>
       </div>
 
       {/* Nova equipe */}
-      <div className="card stack">
-        <div className="block-title">Nova equipe de saúde</div>
-        <div className="grid grid-2">
+      <form
+        className="bg-card rounded-xl border border-border shadow-sm p-6 space-y-6 animate-entry [animation-delay:100ms]"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void createTeam();
+        }}
+      >
+        <div className="grid md:grid-cols-2 gap-4">
           <TextInput
             label="Número da equipe"
             type="number"
             inputMode="numeric"
-            placeholder="Ex.: 1"
+            placeholder="Ex. 03"
             hint="Não pode repetir um número já utilizado."
             value={number}
             onChange={(e) => setNumber(e.target.value)}
@@ -110,68 +116,100 @@ export function TeamsPage() {
           />
         </div>
 
-        <div className="block-title">Cirurgião principal (responsável)</div>
-        <div className="grid grid-2">
-          <TextInput label="Nome do cirurgião" value={surgeon.name} onChange={(e) => setSurgeon({ ...surgeon, name: e.target.value })} required />
-          <PhoneInput value={surgeon.whatsapp} onChange={(v) => setSurgeon({ ...surgeon, whatsapp: v })} />
-          <TextInput label="E-mail (login)" type="email" value={surgeon.email} onChange={(e) => setSurgeon({ ...surgeon, email: e.target.value })} required />
-          <TextInput label="Senha" type="password" hint="Mínimo 6 caracteres." value={surgeon.password} onChange={(e) => setSurgeon({ ...surgeon, password: e.target.value })} required />
+        <div>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3">
+            Cirurgião principal (responsável)
+          </h3>
+          <div className="grid md:grid-cols-2 gap-4 p-3 bg-muted/40 rounded-lg">
+            <TextInput label="Nome do cirurgião" placeholder="Ex. Dr. João Silva" value={surgeon.name} onChange={(e) => setSurgeon({ ...surgeon, name: e.target.value })} required />
+            <PhoneInput value={surgeon.whatsapp} onChange={(v) => setSurgeon({ ...surgeon, whatsapp: v })} />
+            <TextInput label="E-mail (login)" type="email" placeholder="medico@email.com" value={surgeon.email} onChange={(e) => setSurgeon({ ...surgeon, email: e.target.value })} required />
+            <TextInput label="Senha" type="password" placeholder="••••••••" hint="Mínimo 6 caracteres." value={surgeon.password} onChange={(e) => setSurgeon({ ...surgeon, password: e.target.value })} required />
+          </div>
         </div>
 
-        <div className="row" style={{ alignItems: 'center' }}>
-          <div className="block-title" style={{ margin: 0 }}>Médicos associados</div>
-          <span className="spacer" />
-          <Button variant="secondary" size="sm" onClick={() => setAssociates((p) => [...p, emptyMember()])}>
-            + Adicionar associado
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Médicos associados</h3>
+            <button
+              type="button"
+              onClick={() => setAssociates((p) => [...p, emptyMember()])}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+            >
+              <Plus className="size-3.5" /> Adicionar médico associado
+            </button>
+          </div>
+          {associates.length === 0 && (
+            <p className="text-sm text-muted-foreground">Nenhum associado adicionado ainda.</p>
+          )}
+          <div className="space-y-3">
+            {associates.map((m, i) => (
+              <div key={i} className="grid md:grid-cols-[1fr_1fr_1fr_1fr_auto] gap-2 items-end p-3 bg-muted/40 rounded-lg">
+                <TextInput label="Nome" placeholder="Nome do médico" value={m.name} onChange={(e) => setAssoc(i, { name: e.target.value })} />
+                <PhoneInput hint="" value={m.whatsapp} onChange={(v) => setAssoc(i, { whatsapp: v })} />
+                <TextInput label="E-mail" type="email" placeholder="medico@email.com" value={m.email} onChange={(e) => setAssoc(i, { email: e.target.value })} />
+                <TextInput label="Senha" type="password" placeholder="••••••••" value={m.password} onChange={(e) => setAssoc(i, { password: e.target.value })} />
+                <button
+                  type="button"
+                  onClick={() => setAssociates((p) => p.filter((_, idx) => idx !== i))}
+                  className="size-10 rounded-md border border-border text-muted-foreground hover:text-alert hover:border-alert/40 flex items-center justify-center"
+                  aria-label="Remover médico"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex justify-end">
+          <Button type="submit" loading={saving}>
+            Cadastrar equipe
           </Button>
         </div>
-        {associates.length === 0 && <p className="muted" style={{ fontSize: '.85rem' }}>Nenhum associado adicionado ainda.</p>}
-        {associates.map((m, i) => (
-          <div key={i} className="card" style={{ background: 'var(--bg)' }}>
-            <div className="grid grid-2">
-              <TextInput label="Nome do médico" value={m.name} onChange={(e) => setAssoc(i, { name: e.target.value })} />
-              <PhoneInput value={m.whatsapp} onChange={(v) => setAssoc(i, { whatsapp: v })} />
-              <TextInput label="E-mail (login)" type="email" value={m.email} onChange={(e) => setAssoc(i, { email: e.target.value })} />
-              <TextInput label="Senha" type="password" value={m.password} onChange={(e) => setAssoc(i, { password: e.target.value })} />
-            </div>
-            <Button variant="ghost" size="sm" onClick={() => setAssociates((p) => p.filter((_, idx) => idx !== i))}>
-              Remover associado
-            </Button>
-          </div>
-        ))}
-
-        <Button size="lg" onClick={createTeam} loading={saving}>
-          Cadastrar equipe
-        </Button>
-      </div>
+      </form>
 
       {/* Equipes cadastradas */}
-      <div>
-        <div className="block-title">Equipes cadastradas</div>
+      <section className="space-y-3">
+        <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Equipes cadastradas</h3>
         {loading ? (
-          <p className="loading">Carregando…</p>
+          <p className="text-center text-muted-foreground py-8 animate-pulse">Carregando…</p>
         ) : teams.length === 0 ? (
-          <p className="empty">Nenhuma equipe cadastrada ainda.</p>
+          <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground">
+            <p className="font-semibold">Nenhuma equipe cadastrada ainda</p>
+          </div>
         ) : (
-          <div className="grid grid-2">
+          <div className="grid md:grid-cols-2 gap-4">
             {teams.map((t) => (
               <TeamCard key={t.id} team={t} onDelete={() => setToDelete(t)} onEdit={() => setEditing(t)} />
             ))}
           </div>
         )}
-      </div>
+      </section>
 
-      {editing && <EditTeamModal team={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); void load(); }} />}
+      {editing && (
+        <EditTeamModal
+          team={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            void load();
+          }}
+        />
+      )}
 
       {toDelete && (
         <ConfirmModal
-          title={`Excluir equipe ${toDelete.number}?`}
+          title={`Excluir equipe nº ${toDelete.number}?`}
           message="Esta ação desativa os logins dos médicos da equipe e não pode ser desfeita."
           confirmLabel="Excluir equipe"
           requireText="EXCLUIR"
           confirmInput={confirmText}
           onConfirmInputChange={setConfirmText}
-          onCancel={() => { setToDelete(null); setConfirmText(''); }}
+          onCancel={() => {
+            setToDelete(null);
+            setConfirmText('');
+          }}
           onConfirm={removeTeam}
         />
       )}
@@ -183,25 +221,47 @@ function TeamCard({ team, onEdit, onDelete }: { team: Team; onEdit: () => void; 
   const surgeon = team.members.find((m) => m.id === team.surgeonId);
   const associates = team.members.filter((m) => m.id !== team.surgeonId);
   return (
-    <div className="card stack">
-      <div className="row" style={{ alignItems: 'center' }}>
-        <div className="pill-day">Equipe {team.number}</div>
-        <span className="spacer" />
-        <Button variant="ghost" size="sm" onClick={onEdit} title="Editar">✏️ Editar</Button>
-        <Button variant="ghost" size="sm" onClick={onDelete} title="Excluir">🗑️</Button>
-      </div>
-      <div className="kv"><span>Cirurgião principal</span><span>{surgeon?.name ?? '—'}</span></div>
-      <div className="kv"><span>Total de médicos</span><span>{team.members.length}</span></div>
-      <div className="divider" />
-      <div className="block-title">Médicos associados ({associates.length})</div>
-      {associates.length === 0 ? (
-        <span className="muted" style={{ fontSize: '.85rem' }}>Sem associados.</span>
-      ) : (
-        associates.map((a) => (
-          <div key={a.id} className="kv"><span>{a.name}</span><span>{a.email}</span></div>
-        ))
-      )}
-    </div>
+    <article className="bg-card rounded-xl border border-border shadow-sm p-5 flex flex-col gap-4">
+      <header className="flex items-start justify-between">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            Equipe nº {team.number}
+          </p>
+          <h4 className="font-bold text-lg mt-0.5">{surgeon?.name ?? '—'}</h4>
+          <p className="text-xs text-muted-foreground inline-flex items-center gap-1 mt-1">
+            <Users2 className="size-3.5" /> {associates.length} médico(s) associado(s)
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={onEdit}
+            className="size-8 rounded-md border border-border hover:bg-muted flex items-center justify-center text-muted-foreground"
+            aria-label="Editar equipe"
+          >
+            <Pencil className="size-4" />
+          </button>
+          <button
+            onClick={onDelete}
+            className="size-8 rounded-md border border-alert/30 text-alert hover:bg-alert/5 flex items-center justify-center"
+            aria-label="Excluir equipe"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        </div>
+      </header>
+      <ul className="space-y-1.5 border-t border-border pt-3">
+        {associates.length === 0 ? (
+          <li className="text-xs text-muted-foreground">Sem associados.</li>
+        ) : (
+          associates.map((a) => (
+            <li key={a.id} className="text-xs flex items-center justify-between gap-2">
+              <span className="font-medium truncate">{a.name}</span>
+              <span className="text-muted-foreground truncate">{a.email}</span>
+            </li>
+          ))
+        )}
+      </ul>
+    </article>
   );
 }
 
@@ -233,35 +293,59 @@ function EditTeamModal({ team, onClose, onSaved }: { team: Team; onClose: () => 
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal stack" onClick={(e) => e.stopPropagation()}>
-        <h2>Editar equipe {team.number}</h2>
+    <div
+      className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-md space-y-4 animate-entry my-8"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-lg font-extrabold tracking-tight">Editar equipe {team.number}</h2>
         <TextInput label="Número da equipe" type="number" value={number} onChange={(e) => setNumber(e.target.value)} />
 
-        <div className="block-title">Remover associados</div>
-        {associates.length === 0 && <span className="muted" style={{ fontSize: '.85rem' }}>Sem associados.</span>}
-        {associates.map((a) => (
-          <label key={a.id} className="kv" style={{ cursor: 'pointer' }}>
-            <span>{a.name} · {a.email}</span>
-            <input
-              type="checkbox"
-              style={{ width: 'auto', minHeight: 'auto' }}
-              checked={removeIds.includes(a.id)}
-              onChange={(e) => setRemoveIds((p) => (e.target.checked ? [...p, a.id] : p.filter((x) => x !== a.id)))}
-            />
-          </label>
-        ))}
+        <div>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Remover associados</h3>
+          {associates.length === 0 && <span className="text-sm text-muted-foreground">Sem associados.</span>}
+          <div className="space-y-1">
+            {associates.map((a) => (
+              <label
+                key={a.id}
+                className="flex items-center justify-between gap-2 text-xs font-medium bg-muted/40 rounded-md px-3 py-2 cursor-pointer"
+              >
+                <span className="truncate">
+                  {a.name} · {a.email}
+                </span>
+                <input
+                  type="checkbox"
+                  className="accent-[#ef4444]"
+                  checked={removeIds.includes(a.id)}
+                  onChange={(e) =>
+                    setRemoveIds((p) => (e.target.checked ? [...p, a.id] : p.filter((x) => x !== a.id)))
+                  }
+                />
+              </label>
+            ))}
+          </div>
+        </div>
 
-        <div className="block-title">Adicionar associado</div>
-        <TextInput label="Nome" value={newAssoc.name} onChange={(e) => setNewAssoc({ ...newAssoc, name: e.target.value })} />
-        <TextInput label="E-mail (login)" type="email" value={newAssoc.email} onChange={(e) => setNewAssoc({ ...newAssoc, email: e.target.value })} />
-        <TextInput label="Senha" type="password" value={newAssoc.password} onChange={(e) => setNewAssoc({ ...newAssoc, password: e.target.value })} />
-        <PhoneInput value={newAssoc.whatsapp} onChange={(v) => setNewAssoc({ ...newAssoc, whatsapp: v })} />
+        <div className="space-y-3">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Adicionar associado</h3>
+          <TextInput label="Nome" value={newAssoc.name} onChange={(e) => setNewAssoc({ ...newAssoc, name: e.target.value })} />
+          <TextInput label="E-mail (login)" type="email" value={newAssoc.email} onChange={(e) => setNewAssoc({ ...newAssoc, email: e.target.value })} />
+          <TextInput label="Senha" type="password" value={newAssoc.password} onChange={(e) => setNewAssoc({ ...newAssoc, password: e.target.value })} />
+          <PhoneInput value={newAssoc.whatsapp} onChange={(v) => setNewAssoc({ ...newAssoc, whatsapp: v })} />
+        </div>
 
-        <div className="row">
-          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-          <span className="spacer" />
-          <Button onClick={save} loading={busy}>Salvar alterações</Button>
+        <div className="flex items-center justify-between gap-3 pt-2">
+          <Button variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button onClick={save} loading={busy}>
+            Salvar alterações
+          </Button>
         </div>
       </div>
     </div>

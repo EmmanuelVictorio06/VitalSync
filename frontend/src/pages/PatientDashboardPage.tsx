@@ -1,5 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
+import {
+  Activity,
+  AlertCircle,
+  ArrowLeft,
+  Droplets,
+  Footprints,
+  Gauge,
+  HeartPulse,
+  MessageCircle,
+  Thermometer,
+  Wind,
+} from 'lucide-react';
 import {
   ALERT_THRESHOLDS,
   ClinicalStatus,
@@ -13,16 +25,23 @@ import { useToast } from '../components/Toast';
 import {
   BloodPressureChart,
   IndicatorCard,
+  ScaleIndicatorCard,
   StepsBarChart,
   VitalLineChart,
   type DayPoint,
 } from '../components/charts';
-import { Button, Loading, SelectField, StatusBadge } from '../components/ui';
+import { Button, Loading, StatusBadge, cn, statusBorder } from '../components/ui';
 import { api, ApiError } from '../lib/api';
 import type { PatientDashboard, VitalRecord } from '../lib/dto';
 
 type PeriodFilter = 'MORNING' | 'NIGHT' | 'BOTH';
 const DAYS = Array.from({ length: 10 }, (_, i) => i + 1);
+
+const PERIOD_OPTIONS: Array<{ value: PeriodFilter; label: string }> = [
+  { value: 'MORNING', label: 'Manhã' },
+  { value: 'NIGHT', label: 'Noite' },
+  { value: 'BOTH', label: 'Ambos (média)' },
+];
 
 export function PatientDashboardPage() {
   const { id } = useParams<{ id: string }>();
@@ -119,103 +138,155 @@ export function PatientDashboardPage() {
   }
 
   if (loading) return <Loading label="Carregando painel…" />;
-  if (!data) return <p className="empty">Paciente não encontrado.</p>;
+  if (!data) return <p className="text-center text-muted-foreground py-12">Paciente não encontrado.</p>;
 
   const p = data.patient;
   const worst = (s?: ClinicalStatus) => s ?? ClinicalStatus.GREEN;
 
   return (
-    <div className="stack">
-      <div>
-        <h1>Painel de acompanhamento</h1>
-        <p className="subtext">Evolução diária dos sinais vitais nos 10 dias de monitoramento.</p>
-      </div>
+    <div className="p-4 md:p-8 max-w-7xl mx-auto w-full space-y-6">
+      <Link
+        to="/monitoring"
+        className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="size-3.5" /> Voltar para pacientes
+      </Link>
 
       {/* Resumo do paciente */}
-      <div className="card">
-        <div className="row" style={{ alignItems: 'center' }}>
-          <div>
-            <div className="card-title" style={{ fontSize: '1.3rem' }}>{p.name}</div>
-            <div className="muted">{p.surgeryTypeName} · {p.hospitalName}</div>
+      <section
+        className={cn(
+          'bg-card border border-border rounded-xl shadow-sm p-5 md:p-6 border-l-4 animate-entry',
+          statusBorder(p.currentStatus),
+        )}
+      >
+        <div className="grid lg:grid-cols-[1fr_auto] gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h2 className="text-xl md:text-2xl font-extrabold tracking-tight">{p.name}</h2>
+              <StatusBadge status={p.currentStatus} />
+            </div>
+            <p className="text-sm text-muted-foreground mt-1">
+              {p.surgeryTypeName} · {p.hospitalName}
+              {p.surgeonName ? ` · ${p.surgeonName}` : ''}
+            </p>
+            <dl className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5 text-xs">
+              <SummaryItem label="Data da cirurgia" value={fmt(p.surgeryDate)} />
+              <SummaryItem label="Alta hospitalar" value={fmt(p.dischargeDate)} />
+              <SummaryItem label="Dia de monitoramento" value={p.monitoringDay ? `D+${p.monitoringDay}` : 'Fora da janela'} mono />
+              <SummaryItem label="Dias pós-alta" value={String(p.daysSinceDischarge)} mono />
+            </dl>
           </div>
-          <span className="spacer" />
-          <div className="pill-day">{p.monitoringDay ? `${p.monitoringDay}º dia` : 'Fora da janela'}</div>
-          <StatusBadge status={p.currentStatus} />
+          <div className="flex flex-col gap-2 lg:items-end lg:min-w-64">
+            <button
+              onClick={() => window.open(whatsappLink(p.phone, `Olá, ${p.name}! Aqui é da sua equipe médica.`), '_blank')}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#25D366] text-white rounded-lg font-semibold text-sm hover:opacity-90 w-full lg:w-auto"
+            >
+              <MessageCircle className="size-4" /> Conversar no WhatsApp
+            </button>
+            {p.attendedByName ? (
+              <p className="text-xs text-muted-foreground lg:text-right">
+                ✓ Atendido por <strong className="text-foreground">{p.attendedByName}</strong>. Será resetado
+                quando o paciente enviar nova medição.
+              </p>
+            ) : (
+              <div className="flex items-center gap-2 text-xs font-medium w-full lg:w-auto">
+                <select
+                  className="bg-card border border-border rounded-md text-xs px-2 py-2 flex-1 outline-none focus:border-primary"
+                  value={attendant}
+                  onChange={(e) => setAttendant(e.target.value)}
+                >
+                  <option value="">Atendido por…</option>
+                  {data.teamMembers.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+                <Button size="sm" onClick={markAttended} loading={marking}>
+                  Marcar
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
-        <div className="divider" />
-        <div className="grid grid-3">
-          <div className="kv"><span>Cirurgião</span><span>{p.surgeonName ?? '—'}</span></div>
-          <div className="kv"><span>Data da cirurgia</span><span>{fmt(p.surgeryDate)}</span></div>
-          <div className="kv"><span>Alta hospitalar</span><span>{fmt(p.dischargeDate)}</span></div>
-          <div className="kv"><span>Dias pós-alta</span><span>{p.daysSinceDischarge}</span></div>
-        </div>
-      </div>
+      </section>
 
       {/* Período */}
-      <div className="card">
-        <div className="block-title">Período de monitoramento</div>
-        <div className="toggle-group">
-          <Button variant={period === 'MORNING' ? 'primary' : 'ghost'} onClick={() => setPeriod('MORNING')}>Manhã</Button>
-          <Button variant={period === 'NIGHT' ? 'primary' : 'ghost'} onClick={() => setPeriod('NIGHT')}>Noite</Button>
-          <Button variant={period === 'BOTH' ? 'primary' : 'ghost'} onClick={() => setPeriod('BOTH')}>Ambos (média)</Button>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Período:</span>
+        <div className="flex gap-1 bg-muted rounded-lg p-1">
+          {PERIOD_OPTIONS.map((o) => (
+            <button
+              key={o.value}
+              onClick={() => setPeriod(o.value)}
+              className={cn(
+                'px-3 py-1.5 rounded-md text-xs font-semibold transition-colors',
+                period === o.value ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {o.label}
+            </button>
+          ))}
         </div>
       </div>
 
       {data.records.length === 0 ? (
-        <p className="empty">O paciente ainda não enviou nenhuma medição.</p>
+        <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground">
+          <p className="font-semibold">Nenhuma medição registrada</p>
+          <p className="text-sm mt-1">O paciente ainda não enviou nenhuma medição.</p>
+        </div>
       ) : (
         <>
-          <div className="grid grid-2">
-            <VitalLineChart title="Temperatura" unit="°C" data={tempSeries} domain={[35, 42]} status={worstOf(tempSeries)} />
-            <VitalLineChart title="Saturação (SpO₂)" unit="%" data={spo2Series} domain={[91, 100]} status={worstOf(spo2Series)} />
-            <BloodPressureChart data={bpSeries} status={worstOfBp(bpSeries)} pending={ALERT_THRESHOLDS.bloodPressure.PENDING_MEDICAL_VALIDATION} />
-            <VitalLineChart title="Frequência cardíaca" unit="bpm" data={hrSeries} domain={[60, 130]} status={worstOf(hrSeries)} />
-            <StepsBarChart data={stepsSeries} status={worstOf(stepsSeries)} />
-          </div>
+          <section className="grid md:grid-cols-2 xl:grid-cols-3 gap-4 animate-entry [animation-delay:100ms]">
+            <VitalLineChart title="Temperatura" unit="°C" icon={Thermometer} data={tempSeries} domain={[35, 42]} status={worstOf(tempSeries)} />
+            <VitalLineChart title="Saturação O₂" unit="%" icon={Wind} data={spo2Series} domain={[91, 100]} status={worstOf(spo2Series)} />
+            <BloodPressureChart icon={Gauge} data={bpSeries} status={worstOfBp(bpSeries)} pending={ALERT_THRESHOLDS.bloodPressure.PENDING_MEDICAL_VALIDATION} />
+            <VitalLineChart title="Frequência Cardíaca" unit="bpm" icon={HeartPulse} data={hrSeries} domain={[60, 130]} status={worstOf(hrSeries)} />
+            <StepsBarChart icon={Footprints} data={stepsSeries} status={worstOf(stepsSeries)} />
+          </section>
 
           {/* Indicadores do último registro */}
           {latest && (
             <>
-              <div className="block-title">Indicadores do último registro ({latest.monitoringDay}º dia · {latest.period === Period.MORNING ? 'manhã' : 'noite'})</div>
-              <div className="grid grid-3">
-                <IndicatorCard title="Diurese" valueText={latest.urinationCount != null ? `${latest.urinationCount} micções` : latest.urinatedNormally ? 'Normal' : 'Reduzida'} status={worst(latest.statusByVital.DIURESIS)} />
-                <IndicatorCard title="Vômitos" valueText={latest.hadVomit ? `Sim${latest.vomitCount ? ` (${latest.vomitCount}x)` : ''}` : 'Não'} status={worst(latest.statusByVital.VOMIT)} />
-                <IndicatorCard title="Sangramento" valueText={latest.hadBleeding ? 'Sim' : 'Não'} status={worst(latest.statusByVital.BLEEDING)} />
-                <IndicatorCard title="Nível de dor" valueText={`${latest.pain} / 10`} status={worst(latest.statusByVital.PAIN)} />
-                <IndicatorCard title="Dispneia" valueText={`${latest.dyspnea} / 10`} status={worst(latest.statusByVital.DYSPNEA)} />
+              <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground pt-2">
+                Indicadores do último registro ({latest.monitoringDay}º dia ·{' '}
+                {latest.period === Period.MORNING ? 'manhã' : 'noite'})
+              </h3>
+              <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                <ScaleIndicatorCard title="Dor" icon={AlertCircle} value={latest.pain} status={worst(latest.statusByVital.PAIN)} />
+                <ScaleIndicatorCard title="Dispneia" icon={Wind} value={latest.dyspnea} status={worst(latest.statusByVital.DYSPNEA)} />
+                <IndicatorCard
+                  title="Diurese"
+                  icon={Droplets}
+                  valueText={latest.urinationCount != null ? `${latest.urinationCount} micções` : latest.urinatedNormally ? 'Normal' : 'Reduzida'}
+                  status={worst(latest.statusByVital.DIURESIS)}
+                />
+                <IndicatorCard
+                  title="Vômitos"
+                  icon={Activity}
+                  valueText={latest.hadVomit ? `Sim${latest.vomitCount ? ` (${latest.vomitCount}x)` : ''}` : 'Não'}
+                  status={worst(latest.statusByVital.VOMIT)}
+                />
+                <IndicatorCard
+                  title="Sangramento"
+                  icon={Droplets}
+                  valueText={latest.hadBleeding ? 'Sim' : 'Não'}
+                  status={worst(latest.statusByVital.BLEEDING)}
+                />
               </div>
             </>
           )}
         </>
       )}
+    </div>
+  );
+}
 
-      {/* Confirmação de atendimento */}
-      <div className="card stack">
-        <div className="block-title">Confirmação de atendimento</div>
-        {p.attendedByName ? (
-          <p className="muted">✓ Já atendido por <strong>{p.attendedByName}</strong>. Será resetado quando o paciente enviar uma nova medição.</p>
-        ) : (
-          <p className="muted">Marque o atendimento para avisar o restante da equipe.</p>
-        )}
-        <div className="row" style={{ alignItems: 'flex-end' }}>
-          <div style={{ flex: 1, minWidth: 220 }}>
-            <SelectField
-              label="Atendido por"
-              value={attendant}
-              onChange={(e) => setAttendant(e.target.value)}
-              options={data.teamMembers.map((m) => ({ value: m.id, label: m.name }))}
-              placeholder="Selecione o profissional"
-            />
-          </div>
-          <Button onClick={markAttended} loading={marking}>Marcar como atendido</Button>
-          <Button
-            variant="whatsapp"
-            onClick={() => window.open(whatsappLink(p.phone, `Olá, ${p.name}! Aqui é da sua equipe médica.`), '_blank')}
-          >
-            Conversar
-          </Button>
-        </div>
-      </div>
+function SummaryItem({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div>
+      <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</dt>
+      <dd className={cn('mt-1 font-semibold', mono && 'font-mono')}>{value}</dd>
     </div>
   );
 }

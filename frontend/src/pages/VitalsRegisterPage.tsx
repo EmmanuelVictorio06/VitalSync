@@ -1,12 +1,26 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import {
+  AlertCircle,
+  CheckCircle2,
+  Droplets,
+  Footprints,
+  Gauge,
+  Heart,
+  HeartPulse,
+  Moon,
+  Sun,
+  Thermometer,
+  Wind,
+} from 'lucide-react';
 import { Period, formatCivilDate } from '@vitalsync/shared';
 import { useToast } from '../components/Toast';
-import { Button, Field, IntensityScale, Loading, TextInput, YesNo } from '../components/ui';
+import { Field, IntensityScale, Loading, YesNo, cn } from '../components/ui';
 import { api, ApiError } from '../lib/api';
 import type { PatientLinkInfo } from '../lib/dto';
 
 type Step = 'choose' | 'form' | 'success';
+type IconType = React.ComponentType<{ className?: string }>;
 
 export function VitalsRegisterPage() {
   const { token } = useParams<{ token: string }>();
@@ -26,14 +40,23 @@ export function VitalsRegisterPage() {
       .finally(() => setLoading(false));
   }, [token]);
 
-  if (loading) return <div className="center-screen"><Loading label="Abrindo seu registro…" /></div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background grid place-items-center p-6">
+        <Loading label="Abrindo seu registro…" />
+      </div>
+    );
+  }
   if (error || !info) {
     return (
-      <div className="center-screen">
-        <div className="card auth-card" style={{ textAlign: 'center' }}>
-          <h2>Link indisponível</h2>
-          <p className="subtext">{error ?? 'Não foi possível abrir este link.'}</p>
-          <p className="muted">Solicite um novo link à sua equipe médica.</p>
+      <div className="min-h-screen bg-background grid place-items-center p-6">
+        <div className="bg-card border border-border rounded-2xl shadow-sm p-8 w-full max-w-sm text-center animate-entry">
+          <div className="size-14 rounded-full bg-alert/10 text-alert flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="size-7" />
+          </div>
+          <h2 className="text-lg font-extrabold tracking-tight">Link indisponível</h2>
+          <p className="text-sm text-muted-foreground mt-2">{error ?? 'Não foi possível abrir este link.'}</p>
+          <p className="text-xs text-muted-foreground mt-3">Solicite um novo link à sua equipe médica.</p>
         </div>
       </div>
     );
@@ -46,47 +69,87 @@ export function VitalsRegisterPage() {
   }
 
   return (
-    <div style={{ maxWidth: 560, margin: '0 auto', padding: 16 }} className="stack">
-      <div style={{ textAlign: 'center', paddingTop: 8 }}>
-        <div style={{ fontWeight: 800, color: 'var(--primary)', fontSize: '1.4rem' }}>VitalSync</div>
-        <h1 style={{ fontSize: '1.2rem' }}>Registro de sinais vitais</h1>
-      </div>
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Cabeçalho do paciente */}
+      <header className="border-b border-border bg-card sticky top-0 z-10">
+        <div className="max-w-md mx-auto px-5 py-4 flex items-center gap-3">
+          <div className="size-9 bg-primary rounded-lg flex items-center justify-center text-primary-foreground">
+            <Heart className="size-5" fill="currentColor" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground">Olá,</p>
+            <p className="font-bold truncate">{p.name}</p>
+          </div>
+          {step === 'form' && (
+            <span className="ml-auto inline-flex items-center gap-1 bg-primary/10 text-primary px-2.5 py-1 rounded-full text-[10px] font-bold uppercase">
+              {period === Period.MORNING ? 'Manhã' : 'Noite'}
+            </span>
+          )}
+        </div>
+      </header>
 
-      {/* Resumo do paciente */}
-      <div className="card">
-        <div className="card-title">{p.name}</div>
-        <div className="grid grid-2" style={{ marginTop: 8 }}>
-          <div className="kv"><span>Idade</span><span>{p.age} anos</span></div>
-          <div className="kv"><span>Monitoramento</span><span>{p.monitoringDay ? `${p.monitoringDay}º dia` : '—'}</span></div>
-          <div className="kv"><span>Cirurgia</span><span>{fmt(p.surgeryDate)}</span></div>
-          <div className="kv"><span>Alta</span><span>{fmt(p.dischargeDate)}</span></div>
+      <main className="flex-1 max-w-md mx-auto w-full px-5 py-6 pb-10 space-y-5">
+        <div className="text-center animate-entry">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">
+            {p.monitoringDay ? `Dia ${p.monitoringDay} de monitoramento` : 'Registro de sinais vitais'}
+          </p>
+          <h1 className="text-xl font-extrabold tracking-tight mt-1">
+            {new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+          </h1>
         </div>
-      </div>
 
-      {!p.withinWindow ? (
-        <div className="card" style={{ textAlign: 'center', borderColor: 'var(--yellow)' }}>
-          <h2>Monitoramento encerrado</h2>
-          <p className="subtext">O período de 10 dias de acompanhamento não está ativo nesta data. Em caso de sintomas, contate sua equipe.</p>
+        {/* Resumo do paciente */}
+        <div className="bg-card border border-border rounded-2xl shadow-sm p-5 animate-entry">
+          <dl className="grid grid-cols-2 gap-3 text-xs">
+            <SummaryItem label="Idade" value={`${p.age} anos`} />
+            <SummaryItem label="Monitoramento" value={p.monitoringDay ? `${p.monitoringDay}º dia` : '—'} />
+            <SummaryItem label="Cirurgia" value={fmt(p.surgeryDate)} />
+            <SummaryItem label="Alta" value={fmt(p.dischargeDate)} />
+          </dl>
         </div>
-      ) : step === 'choose' ? (
-        <div className="card stack">
-          <div className="block-title">Quando você está registrando?</div>
-          <Button size="lg" block onClick={() => { setPeriod(Period.MORNING); setStep('form'); }}>
-            ☀️ Manhã (ao acordar)
-          </Button>
-          <Button size="lg" block variant="secondary" onClick={() => { setPeriod(Period.NIGHT); setStep('form'); }}>
-            🌙 Noite (antes de dormir)
-          </Button>
-        </div>
-      ) : (
-        <MeasurementForm
-          token={token!}
-          period={period}
-          ranges={info.inputRanges}
-          onBack={() => setStep('choose')}
-          onSuccess={() => setStep('success')}
-        />
-      )}
+
+        {!p.withinWindow ? (
+          <div className="bg-card border border-warning/30 rounded-2xl shadow-sm p-6 text-center animate-entry">
+            <h2 className="text-lg font-extrabold tracking-tight">Monitoramento encerrado</h2>
+            <p className="text-sm text-muted-foreground mt-2">
+              O período de 10 dias de acompanhamento não está ativo nesta data. Em caso de sintomas, contate sua
+              equipe.
+            </p>
+          </div>
+        ) : step === 'choose' ? (
+          <div className="bg-card border border-border rounded-2xl shadow-sm p-5 space-y-3 animate-entry">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+              Quando você está registrando?
+            </h2>
+            <button
+              onClick={() => {
+                setPeriod(Period.MORNING);
+                setStep('form');
+              }}
+              className="w-full flex items-center gap-3 py-4 px-5 bg-primary text-primary-foreground rounded-xl font-bold text-base hover:bg-primary/90 shadow-lg shadow-primary/20"
+            >
+              <Sun className="size-5" /> Manhã (ao acordar)
+            </button>
+            <button
+              onClick={() => {
+                setPeriod(Period.NIGHT);
+                setStep('form');
+              }}
+              className="w-full flex items-center gap-3 py-4 px-5 border-2 border-primary/30 text-primary bg-card rounded-xl font-bold text-base hover:bg-accent"
+            >
+              <Moon className="size-5" /> Noite (antes de dormir)
+            </button>
+          </div>
+        ) : (
+          <MeasurementForm
+            token={token!}
+            period={period}
+            ranges={info.inputRanges}
+            onBack={() => setStep('choose')}
+            onSuccess={() => setStep('success')}
+          />
+        )}
+      </main>
     </div>
   );
 }
@@ -117,7 +180,6 @@ function MeasurementForm({
   const [steps, setSteps] = useState('');
 
   const isNight = period === Period.NIGHT;
-  const today = new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
 
   function num(v: string): number {
     return Number(v.replace(',', '.'));
@@ -181,98 +243,181 @@ function MeasurementForm({
   }
 
   return (
-    <div className="stack">
-      <div className="card" style={{ textAlign: 'center', padding: 12 }}>
-        <strong>{today}</strong> · Período: {isNight ? '🌙 Noite' : '☀️ Manhã'}
-      </div>
-
-      <div className="card">
-        <div className="block-title">Temperatura</div>
-        <p className="muted" style={{ fontSize: '.85rem', marginTop: 0 }}>Use o termômetro digital.</p>
-        <TextInput label="Temperatura" inputMode="decimal" placeholder={ranges.temperature.example} hint={`${ranges.temperature.unit} · entre ${ranges.temperature.min} e ${ranges.temperature.max}`} value={temperature} onChange={(e) => setTemperature(e.target.value)} />
-      </div>
-
-      <div className="card">
-        <div className="block-title">Saturação de oxigênio</div>
-        <p className="muted" style={{ fontSize: '.85rem', marginTop: 0 }}>Use o oxímetro de dedo.</p>
-        <TextInput label="Saturação" inputMode="numeric" placeholder={ranges.spo2.example} hint={`${ranges.spo2.unit} · entre ${ranges.spo2.min} e ${ranges.spo2.max}`} value={spo2} onChange={(e) => setSpo2(e.target.value)} />
-      </div>
-
-      <div className="card">
-        <div className="block-title">Pressão arterial e batimentos</div>
-        <p className="muted" style={{ fontSize: '.85rem', marginTop: 0 }}>
-          Use o aparelho de pressão.
-          {(ranges.systolic.PENDING_MEDICAL_VALIDATION || ranges.heartRate.PENDING_MEDICAL_VALIDATION) && (
-            <span className="pending-flag" style={{ marginLeft: 6 }}>faixas a confirmar</span>
-          )}
-        </p>
-        <div className="grid grid-2">
-          <TextInput label="Sistólica" inputMode="numeric" placeholder={ranges.systolic.example} hint="mmHg" value={systolic} onChange={(e) => setSystolic(e.target.value)} />
-          <TextInput label="Diastólica" inputMode="numeric" placeholder={ranges.diastolic.example} hint="mmHg" value={diastolic} onChange={(e) => setDiastolic(e.target.value)} />
-          <TextInput label="Frequência cardíaca" inputMode="numeric" placeholder={ranges.heartRate.example} hint="bpm" value={heartRate} onChange={(e) => setHeartRate(e.target.value)} />
+    <div className="space-y-4 animate-entry">
+      <Section title="Sinais vitais" subtitle="Informe os valores medidos agora.">
+        <VitalInput
+          icon={Thermometer}
+          label={`Temperatura (${ranges.temperature.unit})`}
+          placeholder={ranges.temperature.example}
+          hint={`Use o termômetro digital · entre ${ranges.temperature.min} e ${ranges.temperature.max}`}
+          inputMode="decimal"
+          value={temperature}
+          onChange={setTemperature}
+        />
+        <VitalInput
+          icon={Wind}
+          label={`Saturação de oxigênio (${ranges.spo2.unit})`}
+          placeholder={ranges.spo2.example}
+          hint={`Use o oxímetro de dedo · entre ${ranges.spo2.min} e ${ranges.spo2.max}`}
+          inputMode="numeric"
+          value={spo2}
+          onChange={setSpo2}
+        />
+        <div className="grid grid-cols-2 gap-3">
+          <VitalInput icon={Gauge} label="Pressão sistólica" placeholder={ranges.systolic.example} hint="mmHg" inputMode="numeric" value={systolic} onChange={setSystolic} />
+          <VitalInput icon={Gauge} label="Pressão diastólica" placeholder={ranges.diastolic.example} hint="mmHg" inputMode="numeric" value={diastolic} onChange={setDiastolic} />
         </div>
-      </div>
+        <VitalInput icon={HeartPulse} label="Frequência cardíaca (bpm)" placeholder={ranges.heartRate.example} hint="Use o aparelho de pressão" inputMode="numeric" value={heartRate} onChange={setHeartRate} />
+        {(ranges.systolic.PENDING_MEDICAL_VALIDATION || ranges.heartRate.PENDING_MEDICAL_VALIDATION) && (
+          <p className="text-[10px] font-bold uppercase text-warning bg-warning/10 border border-warning/20 rounded-full px-3 py-1 inline-block">
+            ⚠ faixas a confirmar
+          </p>
+        )}
+      </Section>
 
-      <div className="card">
-        <div className="block-title">Nível de dor</div>
-        <IntensityScale value={pain} onChange={setPain} leftLabel="0 – Sem dor" rightLabel="10 – Dor extrema" colorFor={(n) => (n <= 6 ? 'g' : n <= 8 ? 'y' : 'r')} />
-      </div>
-
-      <div className="card">
-        <div className="block-title">Dispneia (falta de ar)</div>
-        <IntensityScale value={dyspnea} onChange={setDyspnea} leftLabel="0 – Respiração normal" rightLabel="10 – Falta de ar extrema" colorFor={(n) => (n === 0 ? 'g' : n <= 5 ? 'y' : 'r')} />
-      </div>
-
-      <div className="card">
-        <div className="block-title">Diurese</div>
-        <Field label="Urinou normalmente?"><YesNo value={urinatedNormally} onChange={setUrinatedNormally} /></Field>
+      <Section title="Sintomas" subtitle="Como você está se sentindo?">
+        <div>
+          <ScaleLabel icon={AlertCircle} label="Nível de dor" value={pain} />
+          <IntensityScale value={pain} onChange={setPain} leftLabel="0 – Sem dor" rightLabel="10 – Dor extrema" colorFor={(n) => (n <= 6 ? 'g' : n <= 8 ? 'y' : 'r')} />
+        </div>
+        <div>
+          <ScaleLabel icon={Wind} label="Falta de ar / dispneia" value={dyspnea} />
+          <IntensityScale value={dyspnea} onChange={setDyspnea} leftLabel="0 – Respiração normal" rightLabel="10 – Falta de ar extrema" colorFor={(n) => (n === 0 ? 'g' : n <= 5 ? 'y' : 'r')} />
+        </div>
+        <Field label="Diurese — urinou normalmente?">
+          <YesNo value={urinatedNormally} onChange={setUrinatedNormally} />
+        </Field>
         {urinatedNormally === true && (
-          <TextInput label="Quantas vezes?" inputMode="numeric" placeholder="Ex.: 5" value={urinationCount} onChange={(e) => setUrinationCount(e.target.value)} />
+          <VitalInput icon={Droplets} label="Quantas vezes?" placeholder="Ex. 5" inputMode="numeric" value={urinationCount} onChange={setUrinationCount} />
         )}
-      </div>
-
-      <div className="card">
-        <div className="block-title">Vômitos</div>
-        <Field label="Teve episódios de vômito?"><YesNo value={hadVomit} onChange={setHadVomit} /></Field>
+        <Field label="Teve episódios de vômito?">
+          <YesNo value={hadVomit} onChange={setHadVomit} />
+        </Field>
         {hadVomit === true && (
-          <TextInput label="Quantas vezes?" inputMode="numeric" placeholder="Ex.: 2" value={vomitCount} onChange={(e) => setVomitCount(e.target.value)} />
+          <VitalInput label="Quantas vezes?" placeholder="Ex. 2" inputMode="numeric" value={vomitCount} onChange={setVomitCount} />
         )}
-      </div>
-
-      <div className="card">
-        <div className="block-title">Sangramentos</div>
-        <Field label="Observou sangue no vômito, fezes ou urina?"><YesNo value={hadBleeding} onChange={setHadBleeding} /></Field>
-      </div>
+        <Field label="Observou sangue no vômito, fezes ou urina?">
+          <YesNo value={hadBleeding} onChange={setHadBleeding} />
+        </Field>
+      </Section>
 
       {isNight && (
-        <div className="card">
-          <div className="block-title">Contagem de passos</div>
-          <p className="muted" style={{ fontSize: '.85rem', marginTop: 0 }}>Verifique seu smartwatch.</p>
-          <TextInput label="Passos" inputMode="numeric" placeholder={ranges.steps.example} hint="passos" value={steps} onChange={(e) => setSteps(e.target.value)} />
-          <p className="muted" style={{ fontSize: '.8rem' }}>⚠️ A caminhada leve ajuda a prevenir trombose e melhora o trânsito intestinal pós-cirúrgico.</p>
-        </div>
+        <Section title="Atividade física" subtitle="Quantos passos você deu hoje?">
+          <VitalInput icon={Footprints} label="Número de passos hoje" placeholder={ranges.steps.example} hint="Verifique seu smartwatch" inputMode="numeric" value={steps} onChange={setSteps} />
+          <p className="text-xs text-muted-foreground">
+            ⚠️ A caminhada leve ajuda a prevenir trombose e melhora o trânsito intestinal pós-cirúrgico.
+          </p>
+        </Section>
       )}
 
-      <Button size="lg" block onClick={submit} loading={busy}>Enviar dados</Button>
-      <Button variant="ghost" block onClick={onBack}>Voltar</Button>
+      <div className="flex flex-col gap-3 pt-2">
+        <button
+          onClick={submit}
+          disabled={busy}
+          className="w-full py-3.5 bg-stable text-stable-foreground rounded-xl font-bold text-sm hover:opacity-95 shadow-lg shadow-stable/20 inline-flex items-center justify-center gap-2 disabled:opacity-55"
+        >
+          {busy ? 'Aguarde…' : 'Enviar dados'} {!busy && <CheckCircle2 className="size-5" />}
+        </button>
+        <button
+          onClick={onBack}
+          className="w-full py-3 border border-border rounded-xl font-semibold text-sm hover:bg-muted"
+        >
+          Voltar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Section({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
+  return (
+    <section className="bg-card border border-border rounded-2xl shadow-sm p-5 space-y-5">
+      <header>
+        <h2 className="text-lg font-extrabold tracking-tight">{title}</h2>
+        <p className="text-sm text-muted-foreground">{subtitle}</p>
+      </header>
+      {children}
+    </section>
+  );
+}
+
+function VitalInput({
+  icon: Icon,
+  label,
+  placeholder,
+  hint,
+  value,
+  onChange,
+  inputMode,
+}: {
+  icon?: IconType;
+  label: string;
+  placeholder?: string;
+  hint?: string;
+  value: string;
+  onChange: (v: string) => void;
+  inputMode?: 'decimal' | 'numeric';
+}) {
+  return (
+    <label className="block">
+      <span className="flex items-center gap-1.5 text-xs font-bold text-foreground mb-1.5">
+        {Icon && <Icon className="size-3.5 text-primary" />}
+        {label}
+      </span>
+      <input
+        value={value}
+        inputMode={inputMode}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full bg-muted/60 border border-border rounded-xl px-4 py-3.5 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+      />
+      {hint && <span className="block text-xs text-muted-foreground mt-1">{hint}</span>}
+    </label>
+  );
+}
+
+function ScaleLabel({ icon: Icon, label, value }: { icon: IconType; label: string; value: number | null }) {
+  return (
+    <span className="flex items-center gap-1.5 text-xs font-bold mb-2">
+      <Icon className="size-3.5 text-primary" />
+      {label}
+      <span className={cn('font-mono ml-auto', value === null ? 'text-muted-foreground' : 'text-foreground')}>
+        {value ?? '—'}/10
+      </span>
+    </span>
+  );
+}
+
+function SummaryItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5 font-semibold">{value}</dd>
     </div>
   );
 }
 
 function SuccessScreen() {
   return (
-    <div className="center-screen">
-      <div className="card auth-card" style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: '3rem' }}>✅</div>
-        <h2>Dados enviados com sucesso!</h2>
-        <p className="subtext">
-          Suas medições foram registradas e estão sendo acompanhadas com atenção pela nossa equipe.
-        </p>
-        <p className="muted" style={{ fontSize: '.85rem' }}>
-          Fique tranquilo(a): se identificarmos qualquer sinal de alerta, um profissional entrará em contato.
-        </p>
-        <Button block size="lg" onClick={() => window.close()}>SAIR</Button>
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
+      <div className="size-20 rounded-full bg-stable/10 text-stable flex items-center justify-center mb-6 animate-entry">
+        <CheckCircle2 className="size-10" />
       </div>
+      <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight max-w-md animate-entry [animation-delay:100ms]">
+        Dados enviados com sucesso!
+      </h1>
+      <p className="text-muted-foreground mt-3 max-w-sm text-balance animate-entry [animation-delay:200ms]">
+        Suas medições foram registradas e estão sendo acompanhadas com atenção pela nossa equipe.
+      </p>
+      <p className="text-xs text-muted-foreground mt-2 max-w-sm animate-entry [animation-delay:250ms]">
+        Fique tranquilo(a): se identificarmos qualquer sinal de alerta, um profissional entrará em contato.
+      </p>
+      <button
+        onClick={() => window.close()}
+        className="mt-10 w-full max-w-xs py-4 bg-primary text-primary-foreground rounded-xl font-bold text-base hover:bg-primary/90 shadow-lg shadow-primary/20"
+      >
+        SAIR
+      </button>
     </div>
   );
 }

@@ -12,7 +12,7 @@ import { VitalsRegisterPage } from './pages/VitalsRegisterPage';
 
 function RequireAuth({ children, roles }: { children: ReactElement; roles?: Role[] }) {
   const { user, loading } = useAuth();
-  if (loading) return <div className="center-screen"><Loading label="Carregando VitalSync…" /></div>;
+  if (loading) return <div className="min-h-screen grid place-items-center bg-background"><Loading label="Carregando VitalSync…" /></div>;
   if (!user) return <Navigate to="/login" replace />;
   if (roles && !roles.includes(user.role)) return <Navigate to="/monitoring" replace />;
   return children;

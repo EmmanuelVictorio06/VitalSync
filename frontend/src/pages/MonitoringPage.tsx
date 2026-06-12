@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Calendar, Copy, Eye, FileDown, MessageCircle, Search, Trash2 } from 'lucide-react';
 import { ClinicalStatus, formatCivilDate } from '@vitalsync/shared';
 import { Role, useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
-import { Button, ConfirmModal, SelectField, StatusBadge, TextInput } from '../components/ui';
+import { Button, ConfirmModal, StatusBadge, cn, statusBorder } from '../components/ui';
 import { api, ApiError, downloadFile } from '../lib/api';
 import type { Paginated, PatientCardData } from '../lib/dto';
 
-const STATUS_OPTIONS = [
-  { value: ClinicalStatus.RED, label: 'Alerta (vermelho)' },
-  { value: ClinicalStatus.YELLOW, label: 'Atenção (amarelo)' },
-  { value: ClinicalStatus.GREEN, label: 'Estável (verde)' },
+const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '', label: 'Todos' },
+  { value: ClinicalStatus.GREEN, label: 'Estável' },
+  { value: ClinicalStatus.YELLOW, label: 'Atenção' },
+  { value: ClinicalStatus.RED, label: 'Alerta' },
 ];
 
 export function MonitoringPage() {
@@ -90,40 +92,90 @@ export function MonitoringPage() {
   }
 
   return (
-    <div className="stack">
-      <div className="row" style={{ alignItems: 'flex-end' }}>
-        <div>
-          <h1>Pacientes em monitoramento</h1>
-          <p className="subtext" style={{ marginBottom: 0 }}>
+    <div className="p-4 md:p-8 max-w-7xl mx-auto w-full space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-end gap-3 animate-entry">
+        <div className="flex-1">
+          <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">Pacientes em monitoramento</h2>
+          <p className="text-sm text-muted-foreground mt-1">
             Pacientes ativos em monitoramento domiciliar pós-alta. Filtre por nome, status ou período.
           </p>
         </div>
-        <span className="spacer" />
         {hasRole(Role.ADM) && (
-          <div className="row">
-            <Button variant="secondary" size="sm" onClick={() => exportData('xlsx')}>⬇ Exportar XLSX</Button>
-            <Button variant="secondary" size="sm" onClick={() => exportData('csv')}>⬇ Exportar CSV</Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={() => exportData('xlsx')}>
+              <FileDown className="size-3.5" /> XLSX
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => exportData('csv')}>
+              <FileDown className="size-3.5" /> CSV
+            </Button>
           </div>
         )}
       </div>
 
       {/* Filtro avançado */}
-      <div className="card">
-        <div className="block-title">Filtro avançado de busca</div>
-        <div className="grid grid-2">
-          <TextInput label="Paciente" placeholder="Buscar por nome…" value={search} onChange={(e) => { setPage(1); setSearch(e.target.value); }} />
-          <SelectField label="Status clínico" value={status} onChange={(e) => { setPage(1); setStatus(e.target.value); }} options={STATUS_OPTIONS} placeholder="Todos" />
-          <TextInput label="Cirurgia a partir de" type="date" value={fromDate} onChange={(e) => { setPage(1); setFromDate(e.target.value); }} />
-          <TextInput label="Cirurgia até" type="date" value={toDate} onChange={(e) => { setPage(1); setToDate(e.target.value); }} />
+      <div className="bg-card border border-border shadow-sm rounded-xl p-4 flex flex-col lg:flex-row gap-3 animate-entry [animation-delay:100ms]">
+        <div className="flex-1 flex items-center gap-2 px-3 py-2 bg-muted rounded-lg text-sm">
+          <Search className="size-4 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => {
+              setPage(1);
+              setSearch(e.target.value);
+            }}
+            placeholder="Buscar por nome do paciente..."
+            className="bg-transparent outline-none flex-1 placeholder:text-muted-foreground"
+          />
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="date"
+            className="input !w-auto"
+            title="Cirurgia a partir de"
+            value={fromDate}
+            onChange={(e) => {
+              setPage(1);
+              setFromDate(e.target.value);
+            }}
+          />
+          <input
+            type="date"
+            className="input !w-auto"
+            title="Cirurgia até"
+            value={toDate}
+            onChange={(e) => {
+              setPage(1);
+              setToDate(e.target.value);
+            }}
+          />
+        </div>
+        <div className="flex gap-1 bg-muted rounded-lg p-1 self-start lg:self-auto">
+          {STATUS_OPTIONS.map((s) => (
+            <button
+              key={s.value}
+              onClick={() => {
+                setPage(1);
+                setStatus(s.value);
+              }}
+              className={cn(
+                'px-3 py-1.5 rounded-md text-xs font-semibold transition-colors',
+                status === s.value ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {s.label}
+            </button>
+          ))}
         </div>
       </div>
 
       {loading ? (
-        <p className="loading">Carregando…</p>
+        <p className="text-center text-muted-foreground py-10 animate-pulse">Carregando…</p>
       ) : !data || data.items.length === 0 ? (
-        <p className="empty">Nenhum paciente encontrado com os filtros atuais.</p>
+        <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground">
+          <p className="font-semibold">Nenhum paciente encontrado</p>
+          <p className="text-sm mt-1">Ajuste os filtros para ver mais resultados.</p>
+        </div>
       ) : (
-        <div className="grid grid-3">
+        <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 animate-entry [animation-delay:150ms]">
           {data.items.map((p) => (
             <PatientCard
               key={p.id}
@@ -138,10 +190,21 @@ export function MonitoringPage() {
       )}
 
       {data && data.total > data.pageSize && (
-        <div className="row" style={{ justifyContent: 'center', alignItems: 'center' }}>
-          <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>← Anterior</Button>
-          <span className="muted">Página {data.page} de {Math.ceil(data.total / data.pageSize)}</span>
-          <Button variant="ghost" size="sm" disabled={page >= Math.ceil(data.total / data.pageSize)} onClick={() => setPage((p) => p + 1)}>Próxima →</Button>
+        <div className="flex justify-center items-center gap-3">
+          <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+            ← Anterior
+          </Button>
+          <span className="text-xs text-muted-foreground font-semibold">
+            Página {data.page} de {Math.ceil(data.total / data.pageSize)}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={page >= Math.ceil(data.total / data.pageSize)}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Próxima →
+          </Button>
         </div>
       )}
 
@@ -153,7 +216,10 @@ export function MonitoringPage() {
           requireText="EXCLUIR"
           confirmInput={confirmText}
           onConfirmInputChange={setConfirmText}
-          onCancel={() => { setToDelete(null); setConfirmText(''); }}
+          onCancel={() => {
+            setToDelete(null);
+            setConfirmText('');
+          }}
           onConfirm={remove}
         />
       )}
@@ -173,29 +239,73 @@ function PatientCard({
   onDelete: () => void;
 }) {
   return (
-    <div className="card stack">
-      <div className="row" style={{ alignItems: 'center' }}>
-        <div className="card-title" style={{ cursor: 'pointer' }} onClick={onOpen}>{p.name}</div>
-        <span className="spacer" />
+    <article
+      className={cn(
+        'bg-card border border-border rounded-xl p-4 md:p-5 shadow-sm border-l-4 flex flex-col gap-4',
+        statusBorder(p.currentStatus),
+      )}
+    >
+      <header className="flex items-start justify-between gap-3 min-w-0">
+        <div className="min-w-0 flex-1">
+          <h3 className="font-bold text-base leading-tight truncate cursor-pointer hover:text-primary" onClick={onOpen}>
+            {p.name}
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5 truncate">
+            {p.surgeryTypeName}
+            {p.surgeonName ? ` · ${p.surgeonName}` : ''}
+          </p>
+        </div>
         <StatusBadge status={p.currentStatus} />
-      </div>
-      <div>
-        <div className="kv"><span>Cirurgião</span><span>{p.surgeonName ?? '—'}</span></div>
-        <div className="kv"><span>Cirurgia</span><span>{p.surgeryTypeName}</span></div>
-        <div className="kv"><span>Data da cirurgia</span><span>{fmt(p.surgeryDate)}</span></div>
-        <div className="kv"><span>Alta hospitalar</span><span>{fmt(p.dischargeDate)}</span></div>
-      </div>
-      <label className="kv" style={{ background: 'var(--bg)', borderRadius: 8, padding: '8px 10px' }}>
-        <span>Atendido {p.attendedByName ? `por ${p.attendedByName}` : ''}</span>
-        <input type="checkbox" readOnly checked={!!p.attendedById} style={{ width: 'auto', minHeight: 'auto' }} />
+      </header>
+
+      <dl className="grid grid-cols-2 gap-3 text-xs">
+        <div>
+          <dt className="text-muted-foreground uppercase tracking-wider text-[10px] font-bold">Cirurgia</dt>
+          <dd className="flex items-center gap-1 mt-0.5 font-medium">
+            <Calendar className="size-3" />
+            {fmt(p.surgeryDate)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground uppercase tracking-wider text-[10px] font-bold">Alta</dt>
+          <dd className="flex items-center gap-1 mt-0.5 font-medium">
+            <Calendar className="size-3" />
+            {fmt(p.dischargeDate)}
+          </dd>
+        </div>
+      </dl>
+
+      <label className="flex items-center gap-2 text-xs font-medium select-none bg-muted/60 rounded-lg px-3 py-2">
+        <input type="checkbox" readOnly checked={!!p.attendedById} className="accent-[#2563eb]" />
+        Atendido pela equipe{p.attendedByName ? ` · ${p.attendedByName}` : ''}
       </label>
-      <div className="row">
-        <Button size="sm" onClick={onOpen}>Acompanhar</Button>
-        <Button variant="ghost" size="sm" onClick={onCopy} title="Copiar link">📋</Button>
-        <Button variant="whatsapp" size="sm" onClick={onWhats} title="Conversar no WhatsApp">WhatsApp</Button>
-        <span className="spacer" />
-        <Button variant="ghost" size="sm" onClick={onDelete} title="Excluir">🗑️</Button>
+
+      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border">
+        <button
+          onClick={onOpen}
+          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-primary text-primary-foreground rounded-md text-xs font-semibold hover:bg-primary/90 transition-colors"
+        >
+          <Eye className="size-3.5" /> Acompanhar
+        </button>
+        <button
+          onClick={onWhats}
+          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-border rounded-md text-xs font-semibold hover:bg-muted transition-colors"
+        >
+          <MessageCircle className="size-3.5" /> WhatsApp
+        </button>
+        <button
+          onClick={onCopy}
+          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-border rounded-md text-xs font-semibold hover:bg-muted transition-colors"
+        >
+          <Copy className="size-3.5" /> Copiar link
+        </button>
+        <button
+          onClick={onDelete}
+          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-alert/30 text-alert rounded-md text-xs font-semibold hover:bg-alert/5 transition-colors"
+        >
+          <Trash2 className="size-3.5" /> Excluir
+        </button>
       </div>
-    </div>
+    </article>
   );
 }

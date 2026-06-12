@@ -14,11 +14,18 @@ import { ClinicalStatus } from '@vitalsync/shared';
 import { StatusBadge } from './ui';
 
 const STATUS_COLOR: Record<ClinicalStatus, string> = {
-  GREEN: '#16a34a',
-  YELLOW: '#d97706',
-  RED: '#dc2626',
+  GREEN: '#22c55e',
+  YELLOW: '#eab308',
+  RED: '#ef4444',
 };
-const PRIMARY = '#0f766e';
+const PRIMARY = '#2563eb';
+
+const TOOLTIP_STYLE = {
+  background: '#fff',
+  border: '1px solid #e2e8f0',
+  borderRadius: 8,
+  fontSize: 12,
+};
 
 export interface DayPoint {
   day: number;
@@ -26,30 +33,49 @@ export interface DayPoint {
   status?: ClinicalStatus;
 }
 
-/** Cartão padrão de gráfico, com título, unidade e badge de status geral. */
+type IconType = React.ComponentType<{ className?: string }>;
+
+/** Cartão padrão de gráfico, com ícone, título, unidade e badge de status geral. */
 function ChartCard({
   title,
   unit,
   status,
+  icon: Icon,
   children,
   pending,
 }: {
   title: string;
   unit?: string;
   status?: ClinicalStatus;
+  icon?: IconType;
   pending?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <div className="card">
-      <div className="row" style={{ alignItems: 'center', marginBottom: 8 }}>
-        <div>
-          <div className="card-title">{title}</div>
-          {unit && <span className="muted" style={{ fontSize: '.85rem' }}>{unit}</span>}
+    <div className="bg-card border border-border rounded-xl shadow-sm p-4 flex flex-col">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2 min-w-0">
+          {Icon && (
+            <span className="size-8 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <Icon className="size-4" />
+            </span>
+          )}
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold leading-none truncate">{title}</h3>
+            {unit && <p className="text-[10px] text-muted-foreground mt-1 truncate">{unit}</p>}
+          </div>
         </div>
-        <span className="spacer" />
-        {pending && <span className="pending-flag" title="Valores pendentes de confirmação médica">⚠ a confirmar</span>}
-        {status && <StatusBadge status={status} />}
+        <div className="flex items-center gap-2 shrink-0">
+          {pending && (
+            <span
+              className="text-[10px] font-bold uppercase text-warning bg-warning/10 border border-warning/20 px-2 py-0.5 rounded-full"
+              title="Valores pendentes de confirmação médica"
+            >
+              ⚠ a confirmar
+            </span>
+          )}
+          {status && <StatusBadge status={status} showDot={false} />}
+        </div>
       </div>
       {children}
     </div>
@@ -64,6 +90,7 @@ export function VitalLineChart({
   domain,
   status,
   pending,
+  icon,
 }: {
   title: string;
   unit?: string;
@@ -71,15 +98,16 @@ export function VitalLineChart({
   domain: [number, number];
   status?: ClinicalStatus;
   pending?: boolean;
+  icon?: IconType;
 }) {
   return (
-    <ChartCard title={title} unit={unit} status={status} pending={pending}>
-      <ResponsiveContainer width="100%" height={220}>
-        <LineChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: -10 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
-          <XAxis dataKey="day" tickFormatter={(d) => `${d}`} fontSize={12} />
-          <YAxis domain={domain} fontSize={12} allowDecimals={false} />
-          <Tooltip formatter={(v) => [`${v} ${unit ?? ''}`, title]} labelFormatter={(d) => `Dia ${d}`} />
+    <ChartCard title={title} unit={unit} status={status} pending={pending} icon={icon}>
+      <ResponsiveContainer width="100%" height={200}>
+        <LineChart data={data} margin={{ top: 8, right: 10, bottom: 0, left: -20 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+          <XAxis dataKey="day" tickFormatter={(d) => `${d}`} fontSize={10} stroke="#94a3b8" tickLine={false} axisLine={false} />
+          <YAxis domain={domain} fontSize={10} stroke="#94a3b8" allowDecimals={false} tickLine={false} axisLine={false} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [`${v} ${unit ?? ''}`, title]} labelFormatter={(d) => `Dia ${d}`} />
           <Line
             type="monotone"
             dataKey="value"
@@ -90,7 +118,7 @@ export function VitalLineChart({
               const { cx, cy, payload, index } = props;
               const key = `dot-${payload?.day ?? index}`;
               if (cx == null || cy == null || payload?.value == null) return <g key={key} />;
-              return <circle key={key} cx={cx} cy={cy} r={5} fill={STATUS_COLOR[payload.status ?? ClinicalStatus.GREEN]} stroke="#fff" strokeWidth={1.5} />;
+              return <circle key={key} cx={cx} cy={cy} r={4} fill={STATUS_COLOR[payload.status ?? ClinicalStatus.GREEN]} stroke="#fff" strokeWidth={1.5} />;
             }}
           />
         </LineChart>
@@ -104,10 +132,12 @@ export function BloodPressureChart({
   data,
   status,
   pending,
+  icon,
 }: {
   data: Array<{ day: number; systolic: number | null; diastolic: number | null; status?: ClinicalStatus }>;
   status?: ClinicalStatus;
   pending?: boolean;
+  icon?: IconType;
 }) {
   const chartData = data.map((d) => ({
     day: d.day,
@@ -117,20 +147,21 @@ export function BloodPressureChart({
     status: d.status,
   }));
   return (
-    <ChartCard title="Pressão arterial" unit="mmHg (sistólica/diastólica)" status={status} pending={pending}>
-      <ResponsiveContainer width="100%" height={220}>
-        <BarChart data={chartData} margin={{ top: 8, right: 12, bottom: 4, left: -10 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
-          <XAxis dataKey="day" fontSize={12} />
-          <YAxis domain={[40, 200]} ticks={[40, 60, 80, 100, 120, 140, 160, 180, 200]} fontSize={12} />
+    <ChartCard title="Pressão arterial" unit="mmHg (sistólica/diastólica)" status={status} pending={pending} icon={icon}>
+      <ResponsiveContainer width="100%" height={200}>
+        <BarChart data={chartData} margin={{ top: 8, right: 10, bottom: 0, left: -20 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+          <XAxis dataKey="day" fontSize={10} stroke="#94a3b8" tickLine={false} axisLine={false} />
+          <YAxis domain={[40, 200]} ticks={[40, 80, 120, 160, 200]} fontSize={10} stroke="#94a3b8" tickLine={false} axisLine={false} />
           <Tooltip
+            contentStyle={TOOLTIP_STYLE}
             formatter={(_v, _n, item) => {
               const p = item.payload as { systolic: number | null; diastolic: number };
               return [`${p.systolic ?? '-'} / ${p.diastolic} mmHg`, 'PA'];
             }}
             labelFormatter={(d) => `Dia ${d}`}
           />
-          <Bar dataKey="diastolic" stackId="bp" fill="#94a3b8" radius={[0, 0, 4, 4]} />
+          <Bar dataKey="diastolic" stackId="bp" fill="#93c5fd" radius={[0, 0, 4, 4]} />
           <Bar dataKey="delta" stackId="bp" radius={[4, 4, 0, 0]}>
             {chartData.map((d, i) => (
               <Cell key={i} fill={STATUS_COLOR[d.status ?? ClinicalStatus.GREEN]} />
@@ -143,16 +174,16 @@ export function BloodPressureChart({
 }
 
 /** Número de passos — gráfico de barras. */
-export function StepsBarChart({ data, status }: { data: DayPoint[]; status?: ClinicalStatus }) {
+export function StepsBarChart({ data, status, icon }: { data: DayPoint[]; status?: ClinicalStatus; icon?: IconType }) {
   return (
-    <ChartCard title="Número de passos" unit="passos/dia (noite)" status={status}>
-      <ResponsiveContainer width="100%" height={220}>
-        <BarChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: -10 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
-          <XAxis dataKey="day" fontSize={12} />
-          <YAxis fontSize={12} allowDecimals={false} />
-          <Tooltip formatter={(v) => [`${v} passos`, 'Passos']} labelFormatter={(d) => `Dia ${d}`} />
-          <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+    <ChartCard title="Número de passos" unit="passos/dia (noite)" status={status} icon={icon}>
+      <ResponsiveContainer width="100%" height={200}>
+        <BarChart data={data} margin={{ top: 8, right: 10, bottom: 0, left: -20 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+          <XAxis dataKey="day" fontSize={10} stroke="#94a3b8" tickLine={false} axisLine={false} />
+          <YAxis fontSize={10} stroke="#94a3b8" allowDecimals={false} tickLine={false} axisLine={false} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [`${v} passos`, 'Passos']} labelFormatter={(d) => `Dia ${d}`} />
+          <Bar dataKey="value" radius={[6, 6, 0, 0]}>
             {data.map((d, i) => (
               <Cell key={i} fill={STATUS_COLOR[d.status ?? ClinicalStatus.GREEN]} />
             ))}
@@ -163,27 +194,78 @@ export function StepsBarChart({ data, status }: { data: DayPoint[]; status?: Cli
   );
 }
 
-/** Mostrador simples (diurese, vômitos, sangramento, dor, dispneia). */
+/** Mostrador simples (diurese, vômitos, sangramento). */
 export function IndicatorCard({
   title,
   valueText,
   status,
   detail,
+  icon: Icon,
 }: {
   title: string;
   valueText: string;
   status: ClinicalStatus;
   detail?: string;
+  icon?: IconType;
 }) {
   return (
-    <div className="card">
-      <div className="block-title">{title}</div>
-      <div className="row" style={{ alignItems: 'center' }}>
-        <strong style={{ fontSize: '1.3rem' }}>{valueText}</strong>
-        <span className="spacer" />
-        <StatusBadge status={status} />
+    <div className="bg-card border border-border rounded-xl shadow-sm p-4">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2 min-w-0">
+          {Icon && (
+            <span className="size-8 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <Icon className="size-4" />
+            </span>
+          )}
+          <h3 className="text-sm font-bold truncate">{title}</h3>
+        </div>
+        <StatusBadge status={status} showDot={false} />
       </div>
-      {detail && <div className="muted" style={{ fontSize: '.82rem', marginTop: 6 }}>{detail}</div>}
+      <p className="text-2xl font-bold mt-2">{valueText}</p>
+      {detail && <p className="text-xs text-muted-foreground mt-1">{detail}</p>}
+    </div>
+  );
+}
+
+/** Escala 0–10 (dor / dispneia) com barra de progresso colorida. */
+export function ScaleIndicatorCard({
+  title,
+  value,
+  status,
+  icon: Icon,
+}: {
+  title: string;
+  value: number;
+  status: ClinicalStatus;
+  icon?: IconType;
+}) {
+  const pct = (value / 10) * 100;
+  const color =
+    status === ClinicalStatus.RED ? 'bg-alert' : status === ClinicalStatus.YELLOW ? 'bg-warning' : 'bg-stable';
+  return (
+    <div className="bg-card border border-border rounded-xl shadow-sm p-4">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2 min-w-0">
+          {Icon && (
+            <span className="size-8 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <Icon className="size-4" />
+            </span>
+          )}
+          <h3 className="text-sm font-bold truncate">{title}</h3>
+        </div>
+        <StatusBadge status={status} showDot={false} />
+      </div>
+      <div className="flex items-baseline gap-1 mb-2">
+        <span className="text-3xl font-extrabold font-mono">{value}</span>
+        <span className="text-xs text-muted-foreground">/ 10</span>
+      </div>
+      <div className="h-2 bg-muted rounded-full overflow-hidden">
+        <div className={`h-full ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+      <div className="flex justify-between mt-1.5 text-[10px] text-muted-foreground font-semibold">
+        <span>SEM</span>
+        <span>INTENSO</span>
+      </div>
     </div>
   );
 }
