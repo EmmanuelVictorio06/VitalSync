@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Role, useAuth } from '../auth/AuthContext';
 import { getDashboardData } from '../lib/dashboard-data';
+import { canAccessAdmin } from '../lib/permissions';
 import { cn } from './ui';
 
 type IconType = React.ComponentType<{ className?: string }>;
@@ -61,9 +62,22 @@ function initials(name?: string): string {
 
 /** Menus por perfil (renderização condicional de permissões). */
 function useRoleMenus(): { main: NavItem[]; admin: NavItem[] } {
-  const { hasRole } = useAuth();
+  const { user, hasRole } = useAuth();
   const isAdmin = hasRole(Role.ADM);
   const unattended = getDashboardData(isAdmin ? 'system' : 'team').kpis.unattendedAlerts;
+
+  // Seção Administração: ADM sempre; cirurgião principal apenas se autorizado
+  // (ver lib/permissions). Exportações gerais continuam exclusivas do ADM.
+  const admin: NavItem[] = canAccessAdmin(user?.role)
+    ? [
+        { to: '/admin/hospitals', label: 'Hospitais', short: 'Hospitais', icon: Building2 },
+        { to: '/admin/surgery-types', label: 'Tipos de Cirurgia', short: 'Cirurgias', icon: Scissors },
+        ...(isAdmin
+          ? [{ to: '/admin/exports', label: 'Exportações', short: 'Exportar', icon: FileDown } satisfies NavItem]
+          : []),
+        { to: '/admin/settings', label: 'Configurações', short: 'Config.', icon: Settings },
+      ]
+    : [];
 
   if (isAdmin) {
     return {
@@ -74,12 +88,7 @@ function useRoleMenus(): { main: NavItem[]; admin: NavItem[] } {
         { to: '/monitoring', label: 'Pacientes em Monitoramento', short: 'Pacientes', icon: Activity },
         { to: '/alerts', label: 'Alertas', short: 'Alertas', icon: Bell, badge: unattended },
       ],
-      admin: [
-        { to: '/admin/hospitals', label: 'Hospitais', short: 'Hospitais', icon: Building2 },
-        { to: '/admin/surgery-types', label: 'Tipos de Cirurgia', short: 'Cirurgias', icon: Scissors },
-        { to: '/admin/exports', label: 'Exportações', short: 'Exportar', icon: FileDown },
-        { to: '/admin/settings', label: 'Configurações', short: 'Config.', icon: Settings },
-      ],
+      admin,
     };
   }
 
@@ -95,7 +104,7 @@ function useRoleMenus(): { main: NavItem[]; admin: NavItem[] } {
     main.push({ to: '/teams', label: 'Minha Equipe', short: 'Equipe', icon: Users });
   }
   main.push({ to: '/profile', label: 'Meu Perfil', short: 'Perfil', icon: User });
-  return { main, admin: [] };
+  return { main, admin };
 }
 
 function SidebarLink({ item }: { item: NavItem }) {
