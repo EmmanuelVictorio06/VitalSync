@@ -3,6 +3,7 @@ import { type ReactElement } from 'react';
 import { Role, useAuth } from './auth/AuthContext';
 import { Layout } from './components/Layout';
 import { Loading } from './components/ui';
+import { adminRoles } from './lib/permissions';
 import { AlertsPage } from './pages/AlertsPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { LoginPage } from './pages/LoginPage';
@@ -12,6 +13,10 @@ import { PatientRegisterPage } from './pages/PatientRegisterPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 import { TeamsPage } from './pages/TeamsPage';
 import { VitalsRegisterPage } from './pages/VitalsRegisterPage';
+import { ExportsPage } from './pages/admin/ExportsPage';
+import { HospitalsPage } from './pages/admin/HospitalsPage';
+import { SettingsPage } from './pages/admin/SettingsPage';
+import { SurgeryTypesPage } from './pages/admin/SurgeryTypesPage';
 
 function RequireAuth({ children, roles }: { children: ReactElement; roles?: Role[] }) {
   const { user, loading } = useAuth();
@@ -78,26 +83,20 @@ export function App() {
           }
         />
 
-        {/* Administração (somente ADM) */}
+        {/* Administração — papéis definidos em lib/permissions (backend revalida) */}
         <Route
           path="/admin/hospitals"
           element={
-            <RequireAuth roles={[Role.ADM]}>
-              <PlaceholderPage
-                title="Hospitais"
-                description="Cadastro dos hospitais credenciados onde os procedimentos são realizados."
-              />
+            <RequireAuth roles={adminRoles()}>
+              <HospitalsPage />
             </RequireAuth>
           }
         />
         <Route
           path="/admin/surgery-types"
           element={
-            <RequireAuth roles={[Role.ADM]}>
-              <PlaceholderPage
-                title="Tipos de Cirurgia"
-                description="Catálogo de procedimentos cirúrgicos disponíveis para o cadastro de pacientes."
-              />
+            <RequireAuth roles={adminRoles()}>
+              <SurgeryTypesPage />
             </RequireAuth>
           }
         />
@@ -105,21 +104,15 @@ export function App() {
           path="/admin/exports"
           element={
             <RequireAuth roles={[Role.ADM]}>
-              <PlaceholderPage
-                title="Exportações"
-                description="Exportação de dados do sistema em CSV/XLSX para auditoria e análise. Também disponível na tela de monitoramento."
-              />
+              <ExportsPage />
             </RequireAuth>
           }
         />
         <Route
           path="/admin/settings"
           element={
-            <RequireAuth roles={[Role.ADM]}>
-              <PlaceholderPage
-                title="Configurações"
-                description="Parâmetros gerais do sistema: limiares clínicos, janela de monitoramento e integrações."
-              />
+            <RequireAuth roles={adminRoles()}>
+              <SettingsPage />
             </RequireAuth>
           }
         />
