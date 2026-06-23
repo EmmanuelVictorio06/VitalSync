@@ -9,6 +9,7 @@ import type { Container } from '../../container.js';
 import { errorHandler } from './errorHandler.js';
 import { authRoutes } from './routes/auth.routes.js';
 import { catalogRoutes } from './routes/catalog.routes.js';
+import { dashboardRoutes } from './routes/dashboard.routes.js';
 import { exportRoutes } from './routes/export.routes.js';
 import { patientRoutes } from './routes/patients.routes.js';
 import { teamRoutes } from './routes/teams.routes.js';
@@ -50,6 +51,7 @@ export async function buildApp(container: Container): Promise<FastifyInstance> {
     async (api) => {
       await authRoutes(api, container);
       await catalogRoutes(api, container);
+      await dashboardRoutes(api, container);
       await teamRoutes(api, container);
       await patientRoutes(api, container);
       await vitalsRoutes(api, container);

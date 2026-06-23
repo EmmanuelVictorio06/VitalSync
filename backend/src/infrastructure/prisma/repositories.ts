@@ -13,6 +13,9 @@ import type {
   AlertRepository,
   AttendanceRepository,
   CatalogRepository,
+  DashboardData,
+  DashboardRecentAlert,
+  DashboardRepository,
   ExportRepository,
   ExportRow,
   MonitoringLinkRepository,
@@ -492,6 +495,157 @@ export class PrismaAlertRepository implements AlertRepository {
       },
     });
     return { id: alert.id };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Dashboard / Alertas (agregações de leitura)
+// ----------------------------------------------------------------------------
+
+const WEEKDAY_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+function dayKey(d: Date): string {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x.toISOString().slice(0, 10);
+}
+
+function daysSince(date: Date): number {
+  return Math.max(0, Math.floor((Date.now() - new Date(date).getTime()) / 86_400_000));
+}
+
+function fmtDateTime(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  const x = new Date(d);
+  return `${x.getFullYear()}-${p(x.getMonth() + 1)}-${p(x.getDate())} ${p(x.getHours())}:${p(x.getMinutes())}`;
+}
+
+/** Escolhe o sinal vital que disparou o status (para o card da lista crítica). */
+function pickCriticalVital(
+  rec: { temperature: number; spo2: number; systolic: number; diastolic: number; heartRate: number; pain: number; dyspnea: number; statusByVital: unknown },
+  worst: string,
+): { value: string; label: string } {
+  const sbv = (rec.statusByVital ?? {}) as Record<string, string>;
+  const dims: Array<[string, string, string]> = [
+    ['TEMPERATURE', `${rec.temperature.toFixed(1).replace('.', ',')}°C`, 'Temp.'],
+    ['SPO2', `${rec.spo2}%`, 'SpO₂'],
+    ['HEART_RATE', `${rec.heartRate} bpm`, 'FC'],
+    ['BLOOD_PRESSURE', `${rec.systolic}/${rec.diastolic}`, 'PA'],
+    ['PAIN', `${rec.pain}/10`, 'Dor'],
+    ['DYSPNEA', `${rec.dyspnea}/10`, 'Dispneia'],
+    ['BLEEDING', 'Sim', 'Sangramento'],
+    ['DIURESIS', 'Alterada', 'Diurese'],
+    ['VOMIT', 'Sim', 'Vômito'],
+  ];
+  for (const [key, value, label] of dims) {
+    if (sbv[key] === worst) return { value, label };
+  }
+  return { value: '—', label: 'Medição' };
+}
+
+export class PrismaDashboardRepository implements DashboardRepository {
+  async getDashboard(teamId?: string): Promise<DashboardData> {
+    const pWhere: Prisma.PatientWhereInput = { isActive: true, ...(teamId ? { teamId } : {}) };
+    const recWhere: Prisma.VitalSignRecordWhereInput = { patient: { isActive: true, ...(teamId ? { teamId } : {}) } };
+
+    const startToday = new Date();
+    startToday.setHours(0, 0, 0, 0);
+    const start14 = new Date(Date.now() - 14 * 86_400_000);
+    start14.setHours(0, 0, 0, 0);
+
+    const [monitoring, stable, attention, alert, unattendedAlerts, recordsToday, recent14, criticalRows, alerts] =
+      await Promise.all([
+        prisma.patient.count({ where: pWhere }),
+        prisma.patient.count({ where: { ...pWhere, currentStatus: 'GREEN' } }),
+        prisma.patient.count({ where: { ...pWhere, currentStatus: 'YELLOW' } }),
+        prisma.patient.count({ where: { ...pWhere, currentStatus: 'RED' } }),
+        prisma.patient.count({ where: { ...pWhere, currentStatus: { not: 'GREEN' }, attendedById: null } }),
+        prisma.vitalSignRecord.count({ where: { ...recWhere, submittedAt: { gte: startToday } } }),
+        prisma.vitalSignRecord.findMany({
+          where: { ...recWhere, submittedAt: { gte: start14 } },
+          select: { submittedAt: true },
+        }),
+        prisma.patient.findMany({
+          where: { ...pWhere, currentStatus: { not: 'GREEN' } },
+          orderBy: [{ currentStatus: 'desc' }, { lastMeasurementAt: 'desc' }],
+          take: 6,
+          select: {
+            id: true,
+            name: true,
+            dischargeDate: true,
+            currentStatus: true,
+            surgeryType: { select: { name: true } },
+            vitalSignRecords: { orderBy: { submittedAt: 'desc' }, take: 1 },
+          },
+        }),
+        this.listAlerts(teamId, 8),
+      ]);
+
+    // Buckets diários (14 dias) → semana atual + crescimento vs. semana anterior.
+    const counts = new Map<string, number>();
+    for (const r of recent14) counts.set(dayKey(r.submittedAt), (counts.get(dayKey(r.submittedAt)) ?? 0) + 1);
+
+    const weekly: DashboardData['weekly'] = [];
+    let thisWeek = 0;
+    let lastWeek = 0;
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const c = counts.get(dayKey(d)) ?? 0;
+      weekly.push({ day: WEEKDAY_PT[d.getDay()]!, count: c });
+      thisWeek += c;
+    }
+    for (let i = 13; i >= 7; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      lastWeek += counts.get(dayKey(d)) ?? 0;
+    }
+    const pct = lastWeek === 0 ? (thisWeek > 0 ? 100 : 0) : Math.round(((thisWeek - lastWeek) / lastWeek) * 100);
+    const weeklyGrowth = `${pct >= 0 ? '+' : ''}${pct}%`;
+
+    const critical: DashboardData['critical'] = criticalRows.map((p) => {
+      const rec = p.vitalSignRecords[0];
+      const v = rec ? pickCriticalVital(rec, p.currentStatus) : { value: '—', label: 'Medição' };
+      return {
+        id: p.id,
+        name: p.name,
+        surgeryType: p.surgeryType.name,
+        postOpDay: daysSince(p.dischargeDate),
+        vitalValue: v.value,
+        vitalLabel: v.label,
+        status: p.currentStatus,
+      };
+    });
+
+    return {
+      kpis: { monitoring, stable, attention, alert, unattendedAlerts, recordsToday },
+      weeklyGrowth,
+      weekly,
+      critical,
+      alerts,
+    };
+  }
+
+  async listAlerts(teamId: string | undefined, limit: number): Promise<DashboardRecentAlert[]> {
+    const rows = await prisma.clinicalAlert.findMany({
+      where: teamId ? { patient: { teamId } } : {},
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        status: true,
+        message: true,
+        createdAt: true,
+        patient: { select: { name: true } },
+      },
+    });
+    return rows.map((a) => ({
+      id: a.id,
+      patientName: a.patient.name,
+      description: a.message,
+      datetime: fmtDateTime(a.createdAt),
+      severity: a.status === 'RED' ? 'RED' : 'YELLOW',
+    }));
   }
 }
 

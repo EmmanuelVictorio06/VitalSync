@@ -1,9 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Bell, X } from 'lucide-react';
-import { Role, useAuth } from '../auth/AuthContext';
-import { cn } from '../components/ui';
-import { getDashboardData, type AlertSeverity } from '../lib/dashboard-data';
+import { Loading, cn } from '../components/ui';
+import { fetchAlerts, type AlertSeverity, type RecentAlert } from '../lib/dashboard-data';
 
 const FILTERS: Array<{ value: AlertSeverity | 'ALL'; label: string }> = [
   { value: 'ALL', label: 'Todos' },
@@ -11,13 +10,23 @@ const FILTERS: Array<{ value: AlertSeverity | 'ALL'; label: string }> = [
   { value: 'YELLOW', label: 'Atenção' },
 ];
 
-/** Central de alertas (dados mock — prontos para integração com o backend). */
+/** Central de alertas — dados reais do backend (escopo por equipe via token). */
 export function AlertsPage() {
-  const { hasRole } = useAuth();
   const [filter, setFilter] = useState<AlertSeverity | 'ALL'>('ALL');
-  // ?team= vem de "Minhas Equipes" — o backend restringe aos alertas da equipe.
+  const [alerts, setAlerts] = useState<RecentAlert[] | null>(null);
+  // ?team= vem de "Minhas Equipes" — o backend já restringe os alertas à equipe.
   const [searchParams, setSearchParams] = useSearchParams();
   const team = searchParams.get('team') ?? '';
+
+  useEffect(() => {
+    let alive = true;
+    fetchAlerts()
+      .then((a) => alive && setAlerts(a))
+      .catch(() => alive && setAlerts([]));
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   function clearTeam() {
     const next = new URLSearchParams(searchParams);
@@ -25,8 +34,7 @@ export function AlertsPage() {
     setSearchParams(next, { replace: true });
   }
 
-  const { alerts } = getDashboardData(hasRole(Role.ADM) ? 'system' : 'team');
-  const filtered = alerts.filter((a) => filter === 'ALL' || a.severity === filter);
+  const filtered = (alerts ?? []).filter((a) => filter === 'ALL' || a.severity === filter);
 
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto w-full space-y-6">
@@ -68,11 +76,13 @@ export function AlertsPage() {
         </div>
       )}
 
-      {filtered.length === 0 ? (
+      {alerts === null ? (
+        <Loading label="Carregando alertas…" />
+      ) : filtered.length === 0 ? (
         <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground animate-entry">
           <Bell className="size-8 mx-auto mb-3 opacity-40" />
           <p className="font-semibold">
-            {team ? 'Nenhum alerta pendente nas suas equipes.' : 'Nenhum alerta neste filtro'}
+            {team ? 'Nenhum alerta pendente nas suas equipes.' : 'Nenhum alerta no momento'}
           </p>
         </div>
       ) : (

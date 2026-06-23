@@ -137,6 +137,50 @@ export interface AlertRepository {
   }): Promise<{ id: string }>;
 }
 
+/* ---------------- Dashboard / Alertas (agregações de leitura) ---------------- */
+export interface DashboardKpis {
+  monitoring: number;
+  stable: number;
+  attention: number;
+  alert: number;
+  unattendedAlerts: number;
+  recordsToday: number;
+}
+export interface DashboardWeeklyPoint {
+  day: string;
+  count: number;
+}
+export interface DashboardCriticalPatient {
+  id: string;
+  name: string;
+  surgeryType: string;
+  postOpDay: number;
+  vitalValue: string;
+  vitalLabel: string;
+  status: ClinicalStatus;
+}
+export interface DashboardRecentAlert {
+  id: string;
+  patientName: string;
+  description: string;
+  datetime: string;
+  severity: 'RED' | 'YELLOW';
+}
+export interface DashboardData {
+  kpis: DashboardKpis;
+  weeklyGrowth: string;
+  weekly: DashboardWeeklyPoint[];
+  critical: DashboardCriticalPatient[];
+  alerts: DashboardRecentAlert[];
+}
+
+/** Agregações do painel e da central de alertas (escopo de equipe aplicado). */
+export interface DashboardRepository {
+  /** `teamId` undefined = todas as equipes (ADM). */
+  getDashboard(teamId?: string): Promise<DashboardData>;
+  listAlerts(teamId: string | undefined, limit: number): Promise<DashboardRecentAlert[]>;
+}
+
 export interface CatalogRepository {
   listSurgeryTypes(): Promise<Array<{ id: string; name: string }>>;
   listHospitals(): Promise<Array<{ id: string; name: string }>>;

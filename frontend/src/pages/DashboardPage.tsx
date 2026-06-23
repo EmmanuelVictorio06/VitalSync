@@ -10,6 +10,7 @@ import {
   UserPlus,
   Users,
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Role, useAuth } from '../auth/AuthContext';
 import {
@@ -20,15 +21,27 @@ import {
   StatusDonutCard,
   WeeklyBarChart,
 } from '../components/dashboard';
-import { getDashboardData } from '../lib/dashboard-data';
+import { Loading } from '../components/ui';
+import { fetchDashboard, type DashboardData } from '../lib/dashboard-data';
 
 export function DashboardPage() {
   const { user, hasRole } = useAuth();
   const isAdmin = hasRole(Role.ADM);
 
-  // ADM enxerga o sistema inteiro; profissional, somente a própria equipe.
-  const data = getDashboardData(isAdmin ? 'system' : 'team');
-  const { kpis } = data;
+  // Dados reais — o backend agrega por equipe (ADM = sistema; profissional = sua equipe).
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    fetchDashboard()
+      .then((d) => alive && setData(d))
+      .catch(() => alive && setData(null))
+      .finally(() => alive && setLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const quickActions = isAdmin
     ? [
@@ -43,6 +56,10 @@ export function DashboardPage() {
         { to: '/alerts', label: 'Ver alertas', icon: Bell },
         { to: '/my-care', label: 'Meus atendimentos', icon: ClipboardList },
       ];
+
+  if (loading) return <div className="p-8"><Loading label="Carregando o painel…" /></div>;
+  if (!data) return <div className="p-8"><Loading label="Não foi possível carregar o painel." /></div>;
+  const { kpis } = data;
 
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto w-full">

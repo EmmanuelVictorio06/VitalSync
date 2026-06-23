@@ -6,6 +6,7 @@
 import { env } from './config/env.js';
 import { AlertDispatcher } from './application/alerts.js';
 import { LoginUseCase } from './application/auth.js';
+import { GetDashboardUseCase, ListAlertsUseCase } from './application/dashboard.js';
 import { ExportDataUseCase } from './application/export.js';
 import {
   DeletePatientUseCase,
@@ -30,6 +31,7 @@ import {
   PrismaAlertRepository,
   PrismaAttendanceRepository,
   PrismaCatalogRepository,
+  PrismaDashboardRepository,
   PrismaExportRepository,
   PrismaMonitoringLinkRepository,
   PrismaPatientRepository,
@@ -55,6 +57,7 @@ export function buildContainer() {
   const alertsRepo = new PrismaAlertRepository();
   const catalog = new PrismaCatalogRepository();
   const exportRepo = new PrismaExportRepository();
+  const dashboardRepo = new PrismaDashboardRepository();
 
   // Serviços / adapters
   const hasher = new BcryptPasswordHasher();
@@ -82,6 +85,10 @@ export function buildContainer() {
     auth: {
       login: new LoginUseCase(users, hasher, tokens, audit),
       tokens,
+    },
+    dashboard: {
+      get: new GetDashboardUseCase(dashboardRepo),
+      alerts: new ListAlertsUseCase(dashboardRepo),
     },
     teams: {
       create: new CreateTeamUseCase(teams, users, hasher, audit),
