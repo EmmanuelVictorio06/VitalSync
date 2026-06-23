@@ -1,0 +1,43 @@
+# Blueprint do Render para a API (backend Fastify + Prisma).
+# O frontend continua na Vercel; aqui fica só a API.
+#
+# Fluxo do build (monorepo npm workspaces, a partir da raiz):
+#   1. npm install         → linka @vitalsync/shared e gera o dist (prepare)
+#   2. build:backend       → compila shared + prisma generate + tsc do backend
+#   3. db:deploy           → aplica as migrations no banco (Supabase)
+#   4. db:seed             → garante o usuário ADM (idempotente / upsert)
+#
+# Variáveis marcadas com `sync: false` devem ser preenchidas no painel do Render.
+services:
+  - type: web
+    name: vitalsync-api
+    runtime: node
+    plan: free
+    region: oregon
+    branch: main
+    rootDir: .
+    autoDeploy: true
+    healthCheckPath: /health
+    buildCommand: npm install && npm run build:backend && npm run db:deploy && npm run db:seed
+    startCommand: npm run start:backend
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Gerado automaticamente pelo Render (segredo forte do JWT).
+      - key: JWT_SECRET
+        generateValue: true
+      # Connection string do Supabase (Session pooler, porta 5432). Painel do Render.
+      - key: DATABASE_URL
+        sync: false
+      # URL pública do frontend na Vercel — libera o CORS. Painel do Render.
+      - key: PUBLIC_WEB_URL
+        sync: false
+      - key: ADMIN_EMAIL
+        value: admin@vitalsync.local
+      # Senha do ADM inicial. Painel do Render (não versionar).
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_NAME
+        value: Administrador
+      - key: WHATSAPP_PROVIDER
+        value: log
