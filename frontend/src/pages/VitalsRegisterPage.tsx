@@ -8,6 +8,7 @@ import {
   Gauge,
   Heart,
   HeartPulse,
+  ImageIcon,
   Moon,
   Sun,
   Thermometer,
@@ -15,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Period, formatCivilDate } from '@vitalsync/shared';
 import { useToast } from '../components/Toast';
+import { PhotoUploadField } from '../components/photo';
 import { Field, IntensityScale, Loading, YesNo, cn } from '../components/ui';
 import { api, ApiError } from '../lib/api';
 import type { PatientLinkInfo } from '../lib/dto';
@@ -30,6 +32,7 @@ export function VitalsRegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<Step>('choose');
   const [period, setPeriod] = useState<Period>(Period.MORNING);
+  const [photoSent, setPhotoSent] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -65,7 +68,7 @@ export function VitalsRegisterPage() {
   const p = info.patient;
 
   if (step === 'success') {
-    return <SuccessScreen />;
+    return <SuccessScreen photoSent={photoSent} />;
   }
 
   return (
@@ -146,7 +149,10 @@ export function VitalsRegisterPage() {
             period={period}
             ranges={info.inputRanges}
             onBack={() => setStep('choose')}
-            onSuccess={() => setStep('success')}
+            onSuccess={(photoAttached) => {
+              setPhotoSent(photoAttached);
+              setStep('success');
+            }}
           />
         )}
       </main>
@@ -161,7 +167,7 @@ function MeasurementForm({
   period: Period;
   ranges: PatientLinkInfo['inputRanges'];
   onBack: () => void;
-  onSuccess: () => void;
+  onSuccess: (photoAttached: boolean) => void;
 }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -178,6 +184,7 @@ function MeasurementForm({
   const [vomitCount, setVomitCount] = useState('');
   const [hadBleeding, setHadBleeding] = useState<boolean | null>(null);
   const [steps, setSteps] = useState('');
+  const [photo, setPhoto] = useState<File | null>(null);
 
   const isNight = period === Period.NIGHT;
 
@@ -214,27 +221,33 @@ function MeasurementForm({
     }
     setBusy(true);
     try {
-      await api.post(
+      const payload = {
+        period,
+        temperature: num(temperature),
+        spo2: num(spo2),
+        systolic: num(systolic),
+        diastolic: num(diastolic),
+        heartRate: num(heartRate),
+        pain,
+        dyspnea,
+        urinatedNormally,
+        urinationCount: urinatedNormally && urinationCount ? Number(urinationCount) : null,
+        hadVomit,
+        vomitCount: hadVomit && vomitCount ? Number(vomitCount) : null,
+        hadBleeding,
+        stepsCount: isNight && steps ? Number(steps) : null,
+      };
+      // Envio em multipart: dados (JSON) + foto opcional.
+      const form = new FormData();
+      form.append('data', JSON.stringify(payload));
+      if (photo) form.append('photo', photo, photo.name);
+
+      const result = await api.postForm<{ photoAttached?: boolean }>(
         `/public/link/${token}/records`,
-        {
-          period,
-          temperature: num(temperature),
-          spo2: num(spo2),
-          systolic: num(systolic),
-          diastolic: num(diastolic),
-          heartRate: num(heartRate),
-          pain,
-          dyspnea,
-          urinatedNormally,
-          urinationCount: urinatedNormally && urinationCount ? Number(urinationCount) : null,
-          hadVomit,
-          vomitCount: hadVomit && vomitCount ? Number(vomitCount) : null,
-          hadBleeding,
-          stepsCount: isNight && steps ? Number(steps) : null,
-        },
+        form,
         false,
       );
-      onSuccess();
+      onSuccess(result?.photoAttached ?? Boolean(photo));
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : 'Erro ao enviar. Tente novamente.');
     } finally {
@@ -309,6 +322,16 @@ function MeasurementForm({
           </p>
         </Section>
       )}
+
+      {/* Foto de acompanhamento (opcional) */}
+      <PhotoUploadField value={photo} onChange={setPhoto} onError={(msg) => toast.error(msg)} />
+
+      {/* Revisão rápida antes do envio */}
+      <div className="bg-card border border-border rounded-2xl shadow-sm p-4 flex items-center gap-2 text-sm">
+        <ImageIcon className={cn('size-4', photo ? 'text-stable' : 'text-muted-foreground')} />
+        <span className="font-semibold">{photo ? 'Foto anexada' : 'Nenhuma foto anexada'}</span>
+        {photo && <CheckCircle2 className="size-4 text-stable ml-auto" />}
+      </div>
 
       <div className="flex flex-col gap-3 pt-2">
         <button
@@ -397,7 +420,7 @@ function SummaryItem({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SuccessScreen() {
+function SuccessScreen({ photoSent }: { photoSent?: boolean }) {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
       <div className="size-20 rounded-full bg-stable/10 text-stable flex items-center justify-center mb-6 animate-entry">
@@ -407,8 +430,13 @@ function SuccessScreen() {
         Dados enviados com sucesso!
       </h1>
       <p className="text-muted-foreground mt-3 max-w-sm text-balance animate-entry [animation-delay:200ms]">
-        Suas medições foram registradas e estão sendo acompanhadas com atenção pela nossa equipe.
+        Suas informações foram registradas e serão acompanhadas pela equipe médica.
       </p>
+      {photoSent && (
+        <p className="text-sm font-semibold text-stable mt-3 max-w-sm animate-entry [animation-delay:230ms]">
+          A foto foi enviada para análise da equipe médica.
+        </p>
+      )}
       <p className="text-xs text-muted-foreground mt-2 max-w-sm animate-entry [animation-delay:250ms]">
         Fique tranquilo(a): se identificarmos qualquer sinal de alerta, um profissional entrará em contato.
       </p>

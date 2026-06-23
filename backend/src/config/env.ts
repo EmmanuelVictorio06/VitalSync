@@ -14,6 +14,8 @@ const envSchema = z.object({
   JWT_EXPIRES_IN: z.string().default('8h'),
   PATIENT_LINK_GRACE_HOURS: z.coerce.number().default(24),
   PUBLIC_WEB_URL: z.string().url().default('http://localhost:5173'),
+  /** Diretório (fora do webroot) onde as fotos da ferida são salvas com segurança. */
+  UPLOADS_DIR: z.string().default('./uploads'),
   ADMIN_EMAIL: z.string().email().default('admin@vitalsync.local'),
   ADMIN_PASSWORD: z.string().min(6).default('Admin@123'),
   ADMIN_NAME: z.string().default('Administrador'),

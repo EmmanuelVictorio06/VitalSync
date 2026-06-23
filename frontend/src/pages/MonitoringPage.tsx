@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Calendar, Copy, Eye, FileDown, MessageCircle, Search, Trash2 } from 'lucide-react';
+import { Calendar, Copy, Eye, FileDown, MessageCircle, Search, Trash2, X } from 'lucide-react';
 import { ClinicalStatus, formatCivilDate } from '@vitalsync/shared';
 import { Role, useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
@@ -15,16 +15,36 @@ const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
   { value: ClinicalStatus.RED, label: 'Alerta' },
 ];
 
+/** Copia texto para a área de transferência, com fallback p/ contexto não seguro. */
+async function copyToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  // Fallback (http/LAN sem Clipboard API): textarea temporário + execCommand.
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.setAttribute('readonly', '');
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  const ok = document.execCommand('copy');
+  document.body.removeChild(ta);
+  if (!ok) throw new Error('Não foi possível copiar o link.');
+}
+
 export function MonitoringPage() {
   const toast = useToast();
   const navigate = useNavigate();
   const { hasRole } = useAuth();
 
-  // Aceita ?search= vindo da busca da topbar.
-  const [searchParams] = useSearchParams();
+  // Aceita ?search= (busca da topbar) e ?team= (vindo de "Minhas Equipes").
+  const [searchParams, setSearchParams] = useSearchParams();
   const [data, setData] = useState<Paginated<PatientCardData> | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState(searchParams.get('search') ?? '');
+  const team = searchParams.get('team') ?? '';
   const [status, setStatus] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
@@ -40,29 +60,45 @@ export function MonitoringPage() {
       if (status) params.set('status', status);
       if (fromDate) params.set('fromDate', fromDate);
       if (toDate) params.set('toDate', toDate);
+      // O backend filtra (e revalida) os pacientes pela equipe informada.
+      if (team) params.set('team', team);
       setData(await api.get<Paginated<PatientCardData>>(`/patients?${params}`));
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : 'Erro ao carregar pacientes.');
     } finally {
       setLoading(false);
     }
-  }, [page, search, status, fromDate, toDate]);
+  }, [page, search, status, fromDate, toDate, team]);
+
+  function clearTeam() {
+    const next = new URLSearchParams(searchParams);
+    next.delete('team');
+    setSearchParams(next, { replace: true });
+  }
 
   useEffect(() => {
     void load();
   }, [load]);
 
   async function shareLink(p: PatientCardData, mode: 'copy' | 'whatsapp') {
+    // A aba do WhatsApp precisa ser aberta DENTRO do gesto de clique (antes do
+    // await), senão o navegador bloqueia o popup. Preenchemos a URL depois.
+    const win = mode === 'whatsapp' ? window.open('', '_blank') : null;
     try {
       const res = await api.post<{ link: string; whatsappUrl: string }>(`/patients/${p.id}/link`);
       if (mode === 'copy') {
-        await navigator.clipboard.writeText(res.link);
+        await copyToClipboard(res.link);
         toast.info('Link copiado.');
+      } else if (win) {
+        win.location.href = res.whatsappUrl;
       } else {
-        window.open(res.whatsappUrl, '_blank');
+        // Popup bloqueado: abre na mesma aba como alternativa.
+        window.location.href = res.whatsappUrl;
       }
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Erro ao gerar link.');
+      win?.close();
+      const msg = err instanceof ApiError || err instanceof Error ? err.message : 'Erro ao gerar link.';
+      toast.error(msg);
     }
   }
 
@@ -113,6 +149,21 @@ export function MonitoringPage() {
           </div>
         )}
       </div>
+
+      {team && (
+        <div className="flex items-center gap-2 animate-entry">
+          <span className="inline-flex items-center gap-2 bg-primary/10 text-primary text-xs font-semibold rounded-full pl-3 pr-1.5 py-1">
+            Filtrando pela Equipe nº {team.padStart(2, '0')}
+            <button
+              onClick={clearTeam}
+              className="size-5 rounded-full hover:bg-primary/20 flex items-center justify-center"
+              aria-label="Remover filtro de equipe"
+            >
+              <X className="size-3.5" />
+            </button>
+          </span>
+        </div>
+      )}
 
       {/* Filtro avançado */}
       <div className="bg-card border border-border shadow-sm rounded-xl p-4 flex flex-col lg:flex-row gap-3 animate-entry [animation-delay:100ms]">

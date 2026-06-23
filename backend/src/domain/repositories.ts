@@ -89,13 +89,38 @@ export interface MonitoringLinkRepository {
   touch(id: string): Promise<void>;
 }
 
+/** Metadados da foto a vincular a um registro já criado. */
+export interface WoundPhotoData {
+  url: string;
+  storagePath: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  uploadedAt: Date;
+}
+
 export interface VitalSignRepository {
-  create(input: Omit<VitalSignRecord, 'id' | 'submittedAt'>): Promise<VitalSignRecord>;
+  create(
+    input: Omit<
+      VitalSignRecord,
+      | 'id'
+      | 'submittedAt'
+      | 'woundPhotoUrl'
+      | 'woundPhotoStoragePath'
+      | 'woundPhotoFileName'
+      | 'woundPhotoMimeType'
+      | 'woundPhotoSize'
+      | 'woundPhotoUploadedAt'
+    >,
+  ): Promise<VitalSignRecord>;
+  findById(id: string): Promise<VitalSignRecord | null>;
   findByPatientDayPeriod(patientId: string, recordDate: Date, period: Period): Promise<VitalSignRecord | null>;
   /** Registros do paciente na janela de monitoramento (para gráficos). */
   listByPatient(patientId: string): Promise<VitalSignRecord[]>;
   /** Soma de passos do dia anterior (regra relativa de passos). */
   previousNightSteps(patientId: string, beforeMonitoringDay: number): Promise<number | null>;
+  /** Vincula a foto da ferida a um registro já existente. */
+  attachWoundPhoto(recordId: string, photo: WoundPhotoData): Promise<void>;
 }
 
 export interface AttendanceRepository {

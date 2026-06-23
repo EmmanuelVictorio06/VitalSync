@@ -14,6 +14,7 @@ import {
   MarkPatientAttendedUseCase,
   RegeneratePatientLinkUseCase,
   RegisterPatientUseCase,
+  ViewWoundPhotoUseCase,
 } from './application/patients.js';
 import {
   CreateTeamUseCase,
@@ -24,6 +25,7 @@ import {
 import { RegisterVitalSignsUseCase, ResolvePatientLinkUseCase } from './application/vitals.js';
 import { PrismaAuditLogger } from './infrastructure/audit/PrismaAuditLogger.js';
 import { ExcelExportService } from './infrastructure/export/ExcelExportService.js';
+import { LocalDiskPhotoStorage } from './infrastructure/storage/LocalDiskPhotoStorage.js';
 import {
   PrismaAlertRepository,
   PrismaAttendanceRepository,
@@ -60,6 +62,7 @@ export function buildContainer() {
   const linkTokens = new CryptoLinkTokenService();
   const audit = new PrismaAuditLogger();
   const exportService = new ExcelExportService();
+  const photoStorage = new LocalDiskPhotoStorage(env.UPLOADS_DIR);
   const whatsapp = createWhatsappGateway({
     provider: env.WHATSAPP_PROVIDER,
     apiToken: env.WHATSAPP_API_TOKEN,
@@ -93,11 +96,20 @@ export function buildContainer() {
       remove: new DeletePatientUseCase(patients, links, audit),
       markAttended: new MarkPatientAttendedUseCase(patients, attendance, audit),
       dashboard: new GetPatientDashboardUseCase(patients, vitals, users, audit),
+      viewWoundPhoto: new ViewWoundPhotoUseCase(patients, vitals, photoStorage, audit),
       listForSelect: patients,
     },
     vitals: {
       resolveLink: new ResolvePatientLinkUseCase(links, patients, linkTokens),
-      register: new RegisterVitalSignsUseCase(links, patients, vitals, linkTokens, alertDispatcher, audit),
+      register: new RegisterVitalSignsUseCase(
+        links,
+        patients,
+        vitals,
+        linkTokens,
+        alertDispatcher,
+        audit,
+        photoStorage,
+      ),
     },
     exports: {
       run: new ExportDataUseCase(exportRepo, exportService, audit),

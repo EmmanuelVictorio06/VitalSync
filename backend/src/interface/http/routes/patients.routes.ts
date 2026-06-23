@@ -62,6 +62,18 @@ export async function patientRoutes(app: FastifyInstance, container: Container):
     return container.patients.dashboard.execute(getUser(request), id);
   });
 
+  // Visualização protegida da foto da ferida (auth + RBAC por equipe + auditoria).
+  // A imagem NÃO fica em URL pública — só é servida por esta rota autenticada.
+  app.get('/patients/:id/records/:recordId/wound-photo', guard, async (request, reply) => {
+    const { recordId } = request.params as { id: string; recordId: string };
+    const file = await container.patients.viewWoundPhoto.execute(getUser(request), recordId);
+    return reply
+      .header('Content-Type', file.mimeType)
+      .header('Cache-Control', 'private, no-store')
+      .header('Content-Disposition', `inline; filename="${file.fileName ?? 'foto'}"`)
+      .send(file.buffer);
+  });
+
   app.post('/patients/:id/attend', guard, async (request) => {
     const { id } = request.params as { id: string };
     const body = attendSchema.parse(request.body);

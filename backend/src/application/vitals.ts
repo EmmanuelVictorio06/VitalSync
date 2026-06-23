@@ -2,9 +2,11 @@ import {
   INPUT_RANGES,
   MONITORING_DAYS,
   Period,
+  WOUND_PHOTO,
   calculateAge,
   daysSinceDischarge,
   evaluateVitalSigns,
+  isAcceptedWoundPhotoType,
   monitoringDay,
   shouldAlert,
   startOfToday,
@@ -17,7 +19,20 @@ import type {
   VitalSignRepository,
 } from '../domain/repositories.js';
 import type { AlertDispatcher } from './alerts.js';
-import type { AuditLogger, LinkTokenService } from './ports.js';
+import type { AuditLogger, IncomingPhoto, LinkTokenService, PhotoStorageService } from './ports.js';
+
+/**
+ * Validação autoritativa da foto (nunca confiar só no frontend).
+ * Lança ValidationError com mensagens claras quando o formato/tamanho é inválido.
+ */
+export function validateWoundPhoto(photo: IncomingPhoto): void {
+  if (!isAcceptedWoundPhotoType(photo.mimeType)) {
+    throw new ValidationError(WOUND_PHOTO.messages.invalidFormat);
+  }
+  if (photo.size > WOUND_PHOTO.maxBytes || photo.buffer.length > WOUND_PHOTO.maxBytes) {
+    throw new ValidationError(WOUND_PHOTO.messages.tooLarge);
+  }
+}
 
 /** Resolve o paciente a partir do token do link (acesso público do paciente). */
 export class ResolvePatientLinkUseCase {
@@ -74,9 +89,10 @@ export class RegisterVitalSignsUseCase {
     private readonly linkTokens: LinkTokenService,
     private readonly alerts: AlertDispatcher,
     private readonly audit: AuditLogger,
+    private readonly photos: PhotoStorageService,
   ) {}
 
-  async execute(rawToken: string, input: SubmitVitalSignsInput, ip?: string) {
+  async execute(rawToken: string, input: SubmitVitalSignsInput, ip?: string, photo?: IncomingPhoto) {
     const hash = this.linkTokens.hash(rawToken);
     const link = await this.links.findActiveByTokenHash(hash);
     if (!link || !link.isActive || link.expiresAt.getTime() < Date.now()) {
@@ -95,6 +111,9 @@ export class RegisterVitalSignsUseCase {
     }
 
     this.validateInput(input);
+
+    // Foto é opcional; quando presente, valida formato/tamanho no servidor.
+    if (photo) validateWoundPhoto(photo);
 
     // Impede duplicidade para o mesmo paciente/dia/período.
     const existing = await this.vitals.findByPatientDayPeriod(patient.id, today, input.period);
@@ -132,6 +151,34 @@ export class RegisterVitalSignsUseCase {
       statusByVital: evaluation.byVital as Record<string, never>,
     });
 
+    // Armazena a foto da ferida (se enviada) de forma segura e vincula ao registro.
+    // Formato/tamanho já foram validados acima; aqui só pode falhar a escrita (I/O).
+    // Como a medição já foi persistida, NÃO desfazemos o envio dos sinais vitais
+    // por uma falha de foto — apenas registramos a ocorrência em auditoria.
+    let photoAttached = false;
+    if (photo) {
+      try {
+        const stored = await this.photos.save({ patientId: patient.id, recordId: record.id, photo });
+        await this.vitals.attachWoundPhoto(record.id, stored);
+        photoAttached = true;
+        await this.audit.log({
+          action: 'WOUND_PHOTO_UPLOAD',
+          entityType: 'VitalSignRecord',
+          entityId: record.id,
+          metadata: { patientId: patient.id, day, period: input.period, size: photo.size },
+          ip,
+        });
+      } catch {
+        await this.audit.log({
+          action: 'WOUND_PHOTO_UPLOAD_FAILED',
+          entityType: 'VitalSignRecord',
+          entityId: record.id,
+          metadata: { patientId: patient.id, day, period: input.period },
+          ip,
+        });
+      }
+    }
+
     // Atualiza status do paciente e RESETA o atendimento (nova medição chegou).
     await this.patients.updateStatusAfterMeasurement(patient.id, evaluation.overall, new Date());
     await this.patients.setAttendance(patient.id, null, null);
@@ -140,7 +187,7 @@ export class RegisterVitalSignsUseCase {
       action: 'VITALS_SUBMIT',
       entityType: 'VitalSignRecord',
       entityId: record.id,
-      metadata: { patientId: patient.id, day, period: input.period, status: evaluation.overall },
+      metadata: { patientId: patient.id, day, period: input.period, status: evaluation.overall, photoAttached },
       ip,
     });
 
@@ -155,7 +202,7 @@ export class RegisterVitalSignsUseCase {
       });
     }
 
-    return { status: evaluation.overall, monitoringDay: day, period: input.period };
+    return { status: evaluation.overall, monitoringDay: day, period: input.period, photoAttached };
   }
 
   /** Validação autoritativa no servidor (nunca confiar só no frontend). */

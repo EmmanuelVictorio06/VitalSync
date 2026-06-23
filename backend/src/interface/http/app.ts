@@ -1,7 +1,9 @@
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
+import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { WOUND_PHOTO } from '@vitalsync/shared';
 import { env } from '../../config/env.js';
 import type { Container } from '../../container.js';
 import { errorHandler } from './errorHandler.js';
@@ -22,6 +24,11 @@ export async function buildApp(container: Container): Promise<FastifyInstance> {
   await app.register(helmet, { contentSecurityPolicy: false });
   await app.register(cors, { origin: [env.PUBLIC_WEB_URL], credentials: true });
   await app.register(rateLimit, { max: 200, timeWindow: '1 minute' });
+
+  // Upload da foto da ferida (1 arquivo por envio, limite de tamanho seguro).
+  await app.register(multipart, {
+    limits: { fileSize: WOUND_PHOTO.maxBytes, files: 1, fields: 25 },
+  });
 
   app.setErrorHandler(errorHandler);
 

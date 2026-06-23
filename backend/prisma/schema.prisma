@@ -208,6 +208,16 @@ model VitalSignRecord {
   /// Status por dimensão (JSON) — preserva o detalhe sem inflar colunas.
   statusByVital Json
 
+  /// Foto da ferida operatória ou do dreno (opcional). Dado sensível de saúde:
+  /// o arquivo NÃO fica em URL pública — é servido por rota protegida + auditoria.
+  /// `woundPhotoUrl` guarda o caminho da rota protegida (relativo a /api).
+  woundPhotoUrl         String?
+  woundPhotoStoragePath String? // caminho no armazenamento (disco), nunca exposto
+  woundPhotoFileName    String?
+  woundPhotoMimeType    String?
+  woundPhotoSize        Int?
+  woundPhotoUploadedAt  DateTime?
+
   submittedAt DateTime @default(now())
 
   clinicalAlerts ClinicalAlert[]

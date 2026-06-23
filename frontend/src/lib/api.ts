@@ -46,6 +46,9 @@ export const api = {
   get: <T>(path: string, auth = true) => request<T>(path, { method: 'GET' }, auth),
   post: <T>(path: string, body?: unknown, auth = true) =>
     request<T>(path, { method: 'POST', body: body != null ? JSON.stringify(body) : undefined }, auth),
+  /** POST de multipart/form-data (uploads). Não define Content-Type (o browser o faz). */
+  postForm: <T>(path: string, form: FormData, auth = true) =>
+    request<T>(path, { method: 'POST', body: form }, auth),
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PATCH', body: body != null ? JSON.stringify(body) : undefined }),
   del: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
@@ -65,6 +68,19 @@ export async function downloadFile(path: string, fallbackName: string): Promise<
   a.download = match?.[1] ?? fallbackName;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Busca uma imagem protegida (requer JWT) e devolve uma object URL utilizável em
+ * `<img src>`. A foto da ferida nunca fica em URL pública; o acesso é autenticado.
+ * Lembre-se de revogar a URL retornada (URL.revokeObjectURL) ao desmontar.
+ */
+export async function fetchProtectedImage(path: string): Promise<string> {
+  const token = tokenStore.get();
+  const res = await fetch(BASE + path, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!res.ok) throw new ApiError(res.status, 'Não foi possível carregar a foto.');
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
 }
 
 export { BASE as API_BASE };

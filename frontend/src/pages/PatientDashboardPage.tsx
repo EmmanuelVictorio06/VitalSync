@@ -30,6 +30,7 @@ import {
   VitalLineChart,
   type DayPoint,
 } from '../components/charts';
+import { PatientMeasurementPhotoSection } from '../components/photo';
 import { Button, Loading, StatusBadge, cn, statusBorder } from '../components/ui';
 import { api, ApiError } from '../lib/api';
 import type { PatientDashboard, VitalRecord } from '../lib/dto';
@@ -119,6 +120,14 @@ export function PatientDashboardPage() {
     const recs = data?.records ?? [];
     return recs.length ? recs[recs.length - 1] : null;
   }, [data]);
+
+  // Registros do período selecionado (para a seção de fotos da ferida).
+  const periodRecords = useMemo(() => {
+    const recs = data?.records ?? [];
+    if (period === 'MORNING') return recs.filter((r) => r.period === Period.MORNING);
+    if (period === 'NIGHT') return recs.filter((r) => r.period === Period.NIGHT);
+    return recs;
+  }, [data, period]);
 
   async function markAttended() {
     if (!id || !attendant) {
@@ -276,6 +285,9 @@ export function PatientDashboardPage() {
               </div>
             </>
           )}
+
+          {/* Foto da ferida operatória ou do dreno (período selecionado) */}
+          <PatientMeasurementPhotoSection records={periodRecords} />
         </>
       )}
     </div>

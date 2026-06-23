@@ -30,7 +30,43 @@ export function canExportData(role: Role | undefined): boolean {
   return role === Role.ADM;
 }
 
-/** Gestão de equipes: ADM (todas) e cirurgião principal (a própria). */
+/**
+ * Gestão GERAL de equipes ("Gerenciar Equipes"): criar/editar/excluir/inativar
+ * qualquer equipe e definir o cirurgião responsável. Exclusivo do Administrador.
+ */
 export function canManageTeams(role: Role | undefined): boolean {
+  return role === Role.ADM;
+}
+
+/**
+ * "Minhas Equipes" (somente leitura): médico ASSOCIADO visualiza as equipes em
+ * que está vinculado e acessa pacientes/alertas delas. Sem ações administrativas.
+ * O backend revalida o vínculo a cada requisição.
+ */
+export function canViewMyTeams(role: Role | undefined): boolean {
+  return role === Role.ASSOCIATE;
+}
+
+/**
+ * "Minha Equipe": o CIRURGIÃO PRINCIPAL visualiza e gerencia apenas a própria
+ * equipe (não cria equipes do zero nem acessa equipes de outros cirurgiões).
+ */
+export function canManageOwnTeam(role: Role | undefined): boolean {
+  return role === Role.SURGEON;
+}
+
+/**
+ * Dentro de "Minha Equipe", permite ao cirurgião adicionar/editar/remover
+ * médicos associados. Gate explícito ("se permitido"): quando o backend expuser
+ * a autorização (flag no usuário/equipe), basta passá-la aqui. O servidor
+ * sempre revalida a ação e a posse da equipe.
+ */
+const SURGEON_CAN_MANAGE_MEMBERS = true;
+export function canManageTeamMembers(role: Role | undefined): boolean {
+  return role === Role.SURGEON && SURGEON_CAN_MANAGE_MEMBERS;
+}
+
+/** Cadastro de pacientes: Administrador e Cirurgião Principal (não o Associado). */
+export function canRegisterPatients(role: Role | undefined): boolean {
   return role === Role.ADM || role === Role.SURGEON;
 }
