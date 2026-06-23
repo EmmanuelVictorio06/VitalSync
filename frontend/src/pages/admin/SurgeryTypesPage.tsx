@@ -14,33 +14,33 @@ import {
   ToggleSwitch,
 } from '../../components/admin';
 import { Button, ConfirmModal, Field, SelectField, TextInput } from '../../components/ui';
-import { AdminApiError, surgeryTypesApi } from '../../lib/admin-api';
-import type { EntityStatus, SurgeryTypeAdmin, SurgeryTypeInput } from '../../lib/admin-types';
+import { surgeryTypeService } from '../../services/surgeryTypeService';
+import type { EntityStatus, SurgeryType } from '../../services/types';
 
 type StatusFilter = 'ALL' | EntityStatus;
-
-const EMPTY_FORM: SurgeryTypeInput = { name: '', specialty: '', description: '', status: 'ACTIVE' };
+interface SurgeryForm { name: string; specialty: string; description: string; status: EntityStatus }
+const EMPTY_FORM: SurgeryForm = { name: '', specialty: '', description: '', status: 'ACTIVE' };
 
 export function SurgeryTypesPage() {
   const toast = useToast();
-  const [items, setItems] = useState<SurgeryTypeAdmin[] | null>(null);
+  const [items, setItems] = useState<SurgeryType[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [specialty, setSpecialty] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
 
-  const [editing, setEditing] = useState<SurgeryTypeAdmin | 'new' | null>(null);
-  const [toToggle, setToToggle] = useState<SurgeryTypeAdmin | null>(null);
-  const [toDelete, setToDelete] = useState<SurgeryTypeAdmin | null>(null);
+  const [editing, setEditing] = useState<SurgeryType | 'new' | null>(null);
+  const [toToggle, setToToggle] = useState<SurgeryType | null>(null);
+  const [toDelete, setToDelete] = useState<SurgeryType | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function load() {
     setError(null);
     setItems(null);
     try {
-      setItems(await surgeryTypesApi.list());
-    } catch {
-      setError('Erro ao carregar tipos de cirurgia.');
+      setItems(await surgeryTypeService.list());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao carregar tipos de cirurgia.');
     }
   }
   useEffect(() => {
@@ -67,12 +67,12 @@ export function SurgeryTypesPage() {
     if (!toToggle) return;
     setBusy(true);
     try {
-      await surgeryTypesApi.toggleStatus(toToggle.id);
+      await surgeryTypeService.update(toToggle.id, { status: toToggle.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' });
       toast.success(toToggle.status === 'ACTIVE' ? 'Tipo de cirurgia inativado.' : 'Tipo de cirurgia reativado.');
       setToToggle(null);
       await load();
     } catch (err) {
-      toast.error(err instanceof AdminApiError ? err.message : 'Erro ao alterar status.');
+      toast.error(err instanceof Error ? err.message : 'Erro ao alterar status.');
     } finally {
       setBusy(false);
     }
@@ -82,18 +82,19 @@ export function SurgeryTypesPage() {
     if (!toDelete) return;
     setBusy(true);
     try {
-      const res = await surgeryTypesApi.remove(toDelete.id);
-      toast.success(
-        res.inactivated
-          ? 'Este tipo de cirurgia já está vinculado a pacientes. Ele foi inativado em vez de excluído.'
-          : 'Tipo de cirurgia excluído.',
-      );
-      setToDelete(null);
-      await load();
-    } catch (err) {
-      toast.error(err instanceof AdminApiError ? err.message : 'Erro ao excluir tipo de cirurgia.');
+      await surgeryTypeService.remove(toDelete.id);
+      toast.success('Tipo de cirurgia excluído.');
+    } catch {
+      try {
+        await surgeryTypeService.update(toDelete.id, { status: 'INACTIVE' });
+        toast.success('Tipo vinculado a pacientes — foi inativado em vez de excluído.');
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Erro ao excluir tipo de cirurgia.');
+      }
     } finally {
+      setToDelete(null);
       setBusy(false);
+      await load();
     }
   }
 
@@ -101,7 +102,7 @@ export function SurgeryTypesPage() {
     <div className="p-4 md:p-8 max-w-6xl mx-auto w-full space-y-6">
       <AdminPageHeader
         title="Tipos de Cirurgia"
-        subtitle="Gerencie os tipos de procedimentos cirúrgicos utilizados no cadastro e monitoramento dos pacientes. Tipos inativos não aparecem no cadastro de novos pacientes."
+        subtitle="Gerencie os tipos de procedimentos usados no cadastro dos pacientes. Tipos inativos não aparecem em novos cadastros."
         actionLabel="Novo Tipo de Cirurgia"
         onAction={() => setEditing('new')}
       />
@@ -111,9 +112,7 @@ export function SurgeryTypesPage() {
         <select className="input md:!w-56" value={specialty} onChange={(e) => setSpecialty(e.target.value)}>
           <option value="">Todas as especialidades</option>
           {specialties.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
+            <option key={s} value={s}>{s}</option>
           ))}
         </select>
         <SegmentedFilter
@@ -145,19 +144,12 @@ export function SurgeryTypesPage() {
                   <div className="min-w-0">
                     <p className="font-semibold truncate">{s.name}</p>
                     {s.description && <p className="text-[11px] text-muted-foreground truncate">{s.description}</p>}
-                    {s.linkedPatients > 0 && (
-                      <p className="text-[10px] text-muted-foreground">{s.linkedPatients} paciente(s) vinculado(s)</p>
-                    )}
                   </div>
                 ),
               },
               { header: 'Especialidade', render: (s) => s.specialty || '—' },
               { header: 'Status', render: (s) => <StatusPill status={s.status} /> },
-              {
-                header: 'Cadastro',
-                hideOnMobile: true,
-                render: (s) => <span className="text-muted-foreground font-mono text-xs">{s.createdAt}</span>,
-              },
+              { header: 'Cadastro', hideOnMobile: true, render: (s) => <span className="text-muted-foreground font-mono text-xs">{s.created_at.slice(0, 10)}</span> },
             ]}
             actions={(s) => (
               <>
@@ -194,8 +186,8 @@ export function SurgeryTypesPage() {
           title={toToggle.status === 'ACTIVE' ? `Inativar ${toToggle.name}?` : `Reativar ${toToggle.name}?`}
           message={
             toToggle.status === 'ACTIVE'
-              ? 'Tipos inativos deixam de aparecer no cadastro de novos pacientes. Registros antigos não são afetados.'
-              : 'O tipo de cirurgia voltará a aparecer no cadastro de novos pacientes.'
+              ? 'Tipos inativos deixam de aparecer no cadastro de novos pacientes.'
+              : 'O tipo voltará a aparecer no cadastro de novos pacientes.'
           }
           confirmLabel={toToggle.status === 'ACTIVE' ? 'Inativar' : 'Reativar'}
           busy={busy}
@@ -207,12 +199,8 @@ export function SurgeryTypesPage() {
       {toDelete && (
         <ConfirmModal
           title={`Excluir ${toDelete.name}?`}
-          message={
-            toDelete.linkedPatients > 0
-              ? 'Este tipo de cirurgia já está vinculado a pacientes. Ele será inativado em vez de excluído.'
-              : 'O tipo de cirurgia será removido definitivamente. Esta ação não pode ser desfeita.'
-          }
-          confirmLabel={toDelete.linkedPatients > 0 ? 'Inativar tipo' : 'Excluir tipo'}
+          message="Se estiver vinculado a pacientes, será inativado em vez de excluído."
+          confirmLabel="Excluir tipo"
           busy={busy}
           onCancel={() => setToDelete(null)}
           onConfirm={remove}
@@ -228,23 +216,22 @@ function SurgeryTypeFormModal({
   onClose,
   onSaved,
 }: {
-  surgeryType: SurgeryTypeAdmin | null;
+  surgeryType: SurgeryType | null;
   specialties: string[];
   onClose: () => void;
   onSaved: (message: string) => void;
 }) {
   const toast = useToast();
-  const [form, setForm] = useState<SurgeryTypeInput>(
+  const [form, setForm] = useState<SurgeryForm>(
     surgeryType
       ? { name: surgeryType.name, specialty: surgeryType.specialty ?? '', description: surgeryType.description ?? '', status: surgeryType.status }
       : EMPTY_FORM,
   );
   const [busy, setBusy] = useState(false);
   const [nameError, setNameError] = useState('');
-  const knownSpecialties = ['Cirurgia Geral', 'Ortopedia', 'Obstetrícia', 'Cardiologia', 'Urologia'];
-  const allSpecialties = Array.from(new Set([...knownSpecialties, ...specialties]));
+  const allSpecialties = Array.from(new Set(['Cirurgia Geral', 'Ortopedia', 'Obstetrícia', 'Cardiologia', 'Urologia', ...specialties]));
 
-  function set<K extends keyof SurgeryTypeInput>(k: K, v: SurgeryTypeInput[K]) {
+  function set<K extends keyof SurgeryForm>(k: K, v: SurgeryForm[K]) {
     setForm((f) => ({ ...f, [k]: v }));
   }
 
@@ -257,37 +244,23 @@ function SurgeryTypeFormModal({
     setBusy(true);
     try {
       if (surgeryType) {
-        await surgeryTypesApi.update(surgeryType.id, form);
+        await surgeryTypeService.update(surgeryType.id, { name: form.name, specialty: form.specialty, description: form.description, status: form.status });
         onSaved('Tipo de cirurgia atualizado com sucesso.');
       } else {
-        await surgeryTypesApi.create(form);
+        await surgeryTypeService.create({ name: form.name, specialty: form.specialty, description: form.description });
         onSaved('Tipo de cirurgia cadastrado com sucesso.');
       }
     } catch (err) {
-      toast.error(
-        err instanceof AdminApiError ? err.message : 'Erro ao salvar tipo de cirurgia. Verifique os campos obrigatórios.',
-      );
+      toast.error(err instanceof Error ? err.message : 'Erro ao salvar tipo de cirurgia.');
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
-    >
-      <form
-        onSubmit={save}
-        onClick={(e) => e.stopPropagation()}
-        className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-lg space-y-4 animate-entry my-8"
-      >
-        <h2 className="text-lg font-extrabold tracking-tight">
-          {surgeryType ? `Editar ${surgeryType.name}` : 'Novo Tipo de Cirurgia'}
-        </h2>
-
+    <div className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" role="dialog" aria-modal="true" onClick={onClose}>
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-lg space-y-4 animate-entry my-8">
+        <h2 className="text-lg font-extrabold tracking-tight">{surgeryType ? `Editar ${surgeryType.name}` : 'Novo Tipo de Cirurgia'}</h2>
         <TextInput
           label="Nome da cirurgia"
           required
@@ -301,27 +274,19 @@ function SurgeryTypeFormModal({
         />
         <SelectField
           label="Especialidade médica (opcional)"
-          value={form.specialty ?? ''}
+          value={form.specialty}
           onChange={(e) => set('specialty', e.target.value)}
           options={allSpecialties.map((s) => ({ value: s, label: s }))}
           placeholder="Sem especialidade"
         />
         <Field label="Descrição curta (opcional)">
-          <textarea
-            className="input min-h-20 resize-y"
-            placeholder="Breve descrição do procedimento"
-            value={form.description ?? ''}
-            onChange={(e) => set('description', e.target.value)}
-          />
+          <textarea className="input min-h-20 resize-y" placeholder="Breve descrição do procedimento" value={form.description} onChange={(e) => set('description', e.target.value)} />
         </Field>
-        <Field label="Status">
-          <ToggleSwitch
-            checked={form.status === 'ACTIVE'}
-            onChange={(v) => set('status', v ? 'ACTIVE' : 'INACTIVE')}
-            label={form.status === 'ACTIVE' ? 'Ativo' : 'Inativo'}
-          />
-        </Field>
-
+        {surgeryType && (
+          <Field label="Status">
+            <ToggleSwitch checked={form.status === 'ACTIVE'} onChange={(v) => set('status', v ? 'ACTIVE' : 'INACTIVE')} label={form.status === 'ACTIVE' ? 'Ativo' : 'Inativo'} />
+          </Field>
+        )}
         <div className="flex items-center justify-between gap-3 pt-2">
           <Button type="button" variant="ghost" onClick={onClose}>
             Cancelar
