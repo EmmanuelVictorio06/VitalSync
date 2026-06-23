@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Calendar, Copy, Eye, FileDown, MessageCircle, Search, Trash2, X } from 'lucide-react';
-import { ClinicalStatus, formatCivilDate } from '@vitalsync/shared';
-import { Role, useAuth } from '../auth/AuthContext';
+import { Calendar, Copy, Eye, MessageCircle, Search, Trash2, X } from 'lucide-react';
+import { ClinicalStatus, formatCivilDate, whatsappLink } from '@vitalsync/shared';
 import { useToast } from '../components/Toast';
-import { Button, ConfirmModal, StatusBadge, cn, statusBorder } from '../components/ui';
-import { api, ApiError, downloadFile } from '../lib/api';
-import type { Paginated, PatientCardData } from '../lib/dto';
+import { ConfirmModal, StatusBadge, cn, statusBorder } from '../components/ui';
+import { patientService, type PatientWithNames } from '../services/patientService';
 
-const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
+const STATUS_OPTIONS: Array<{ value: '' | ClinicalStatus; label: string }> = [
   { value: '', label: 'Todos' },
   { value: ClinicalStatus.GREEN, label: 'Estável' },
   { value: ClinicalStatus.YELLOW, label: 'Atenção' },
@@ -21,7 +19,6 @@ async function copyToClipboard(text: string): Promise<void> {
     await navigator.clipboard.writeText(text);
     return;
   }
-  // Fallback (http/LAN sem Clipboard API): textarea temporário + execCommand.
   const ta = document.createElement('textarea');
   ta.value = text;
   ta.setAttribute('readonly', '');
@@ -34,41 +31,41 @@ async function copyToClipboard(text: string): Promise<void> {
   if (!ok) throw new Error('Não foi possível copiar o link.');
 }
 
+function patientLink(p: PatientWithNames): string {
+  return `${window.location.origin}/r/${p.secure_token}`;
+}
+
 export function MonitoringPage() {
   const toast = useToast();
   const navigate = useNavigate();
-  const { hasRole } = useAuth();
 
-  // Aceita ?search= (busca da topbar) e ?team= (vindo de "Minhas Equipes").
   const [searchParams, setSearchParams] = useSearchParams();
-  const [data, setData] = useState<Paginated<PatientCardData> | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [patients, setPatients] = useState<PatientWithNames[] | null>(null);
   const [search, setSearch] = useState(searchParams.get('search') ?? '');
-  const team = searchParams.get('team') ?? '';
-  const [status, setStatus] = useState('');
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
-  const [page, setPage] = useState(1);
-  const [toDelete, setToDelete] = useState<PatientCardData | null>(null);
+  const [status, setStatus] = useState<'' | ClinicalStatus>('');
+  const [toDelete, setToDelete] = useState<PatientWithNames | null>(null);
   const [confirmText, setConfirmText] = useState('');
+  const team = searchParams.get('team') ?? '';
 
   const load = useCallback(async () => {
-    setLoading(true);
+    setPatients(null);
     try {
-      const params = new URLSearchParams({ page: String(page), pageSize: '12' });
-      if (search) params.set('search', search);
-      if (status) params.set('status', status);
-      if (fromDate) params.set('fromDate', fromDate);
-      if (toDate) params.set('toDate', toDate);
-      // O backend filtra (e revalida) os pacientes pela equipe informada.
-      if (team) params.set('team', team);
-      setData(await api.get<Paginated<PatientCardData>>(`/patients?${params}`));
+      const items = await patientService.list({ status: status || undefined, search: search || undefined });
+      setPatients(items);
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Erro ao carregar pacientes.');
-    } finally {
-      setLoading(false);
+      toast.error(err instanceof Error ? err.message : 'Erro ao carregar pacientes.');
+      setPatients([]);
     }
-  }, [page, search, status, fromDate, toDate, team]);
+  }, [search, status]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  // Filtro por equipe (vindo de "Minhas Equipes"/"Minha Equipe") — client-side.
+  const visible = (patients ?? []).filter(
+    (p) => !team || String(p.medical_team?.team_number ?? '') === team || String(p.medical_team?.team_number ?? '').padStart(2, '0') === team,
+  );
 
   function clearTeam() {
     const next = new URLSearchParams(searchParams);
@@ -76,139 +73,68 @@ export function MonitoringPage() {
     setSearchParams(next, { replace: true });
   }
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  async function shareLink(p: PatientCardData, mode: 'copy' | 'whatsapp') {
-    // A aba do WhatsApp precisa ser aberta DENTRO do gesto de clique (antes do
-    // await), senão o navegador bloqueia o popup. Preenchemos a URL depois.
-    const win = mode === 'whatsapp' ? window.open('', '_blank') : null;
+  async function share(p: PatientWithNames, mode: 'copy' | 'whatsapp') {
+    const link = patientLink(p);
     try {
-      const res = await api.post<{ link: string; whatsappUrl: string }>(`/patients/${p.id}/link`);
       if (mode === 'copy') {
-        await copyToClipboard(res.link);
+        await copyToClipboard(link);
         toast.info('Link copiado.');
-      } else if (win) {
-        win.location.href = res.whatsappUrl;
       } else {
-        // Popup bloqueado: abre na mesma aba como alternativa.
-        window.location.href = res.whatsappUrl;
+        window.open(whatsappLink(p.phone ?? '', `Olá, ${p.name}! Registre seus sinais vitais neste link seguro: ${link}`), '_blank');
       }
     } catch (err) {
-      win?.close();
-      const msg = err instanceof ApiError || err instanceof Error ? err.message : 'Erro ao gerar link.';
-      toast.error(msg);
+      toast.error(err instanceof Error ? err.message : 'Erro ao compartilhar o link.');
     }
   }
 
   async function remove() {
     if (!toDelete) return;
     try {
-      await api.del(`/patients/${toDelete.id}`);
+      await patientService.remove(toDelete.id);
       toast.success('Paciente removido do monitoramento.');
       setToDelete(null);
       setConfirmText('');
       await load();
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Erro ao excluir paciente.');
-    }
-  }
-
-  async function exportData(format: 'csv' | 'xlsx') {
-    try {
-      const params = new URLSearchParams({ format });
-      if (search) params.set('search', search);
-      if (status) params.set('status', status);
-      if (fromDate) params.set('fromDate', fromDate);
-      if (toDate) params.set('toDate', toDate);
-      await downloadFile(`/export?${params}`, `vitalsync.${format}`);
-      toast.success('Exportação iniciada.');
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Erro ao exportar.');
+      toast.error(err instanceof Error ? err.message : 'Erro ao excluir paciente.');
     }
   }
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto w-full space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-end gap-3 animate-entry">
-        <div className="flex-1">
-          <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">Pacientes em monitoramento</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Pacientes ativos em monitoramento domiciliar pós-alta. Filtre por nome, status ou período.
-          </p>
-        </div>
-        {hasRole(Role.ADM) && (
-          <div className="flex gap-2">
-            <Button variant="ghost" size="sm" onClick={() => exportData('xlsx')}>
-              <FileDown className="size-3.5" /> XLSX
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => exportData('csv')}>
-              <FileDown className="size-3.5" /> CSV
-            </Button>
-          </div>
-        )}
+      <div className="animate-entry">
+        <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">Pacientes em monitoramento</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Pacientes ativos em monitoramento domiciliar pós-alta. Filtre por nome ou status.
+        </p>
       </div>
 
       {team && (
         <div className="flex items-center gap-2 animate-entry">
           <span className="inline-flex items-center gap-2 bg-primary/10 text-primary text-xs font-semibold rounded-full pl-3 pr-1.5 py-1">
             Filtrando pela Equipe nº {team.padStart(2, '0')}
-            <button
-              onClick={clearTeam}
-              className="size-5 rounded-full hover:bg-primary/20 flex items-center justify-center"
-              aria-label="Remover filtro de equipe"
-            >
+            <button onClick={clearTeam} className="size-5 rounded-full hover:bg-primary/20 flex items-center justify-center" aria-label="Remover filtro de equipe">
               <X className="size-3.5" />
             </button>
           </span>
         </div>
       )}
 
-      {/* Filtro avançado */}
       <div className="bg-card border border-border shadow-sm rounded-xl p-4 flex flex-col lg:flex-row gap-3 animate-entry [animation-delay:100ms]">
         <div className="flex-1 flex items-center gap-2 px-3 py-2 bg-muted rounded-lg text-sm">
           <Search className="size-4 text-muted-foreground" />
           <input
             value={search}
-            onChange={(e) => {
-              setPage(1);
-              setSearch(e.target.value);
-            }}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por nome do paciente..."
             className="bg-transparent outline-none flex-1 placeholder:text-muted-foreground"
-          />
-        </div>
-        <div className="flex gap-2">
-          <input
-            type="date"
-            className="input !w-auto"
-            title="Cirurgia a partir de"
-            value={fromDate}
-            onChange={(e) => {
-              setPage(1);
-              setFromDate(e.target.value);
-            }}
-          />
-          <input
-            type="date"
-            className="input !w-auto"
-            title="Cirurgia até"
-            value={toDate}
-            onChange={(e) => {
-              setPage(1);
-              setToDate(e.target.value);
-            }}
           />
         </div>
         <div className="flex gap-1 bg-muted rounded-lg p-1 self-start lg:self-auto">
           {STATUS_OPTIONS.map((s) => (
             <button
               key={s.value}
-              onClick={() => {
-                setPage(1);
-                setStatus(s.value);
-              }}
+              onClick={() => setStatus(s.value)}
               className={cn(
                 'px-3 py-1.5 rounded-md text-xs font-semibold transition-colors',
                 status === s.value ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground',
@@ -220,51 +146,32 @@ export function MonitoringPage() {
         </div>
       </div>
 
-      {loading ? (
+      {patients === null ? (
         <p className="text-center text-muted-foreground py-10 animate-pulse">Carregando…</p>
-      ) : !data || data.items.length === 0 ? (
+      ) : visible.length === 0 ? (
         <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground">
           <p className="font-semibold">Nenhum paciente encontrado</p>
-          <p className="text-sm mt-1">Ajuste os filtros para ver mais resultados.</p>
+          <p className="text-sm mt-1">Ajuste os filtros ou cadastre um novo paciente.</p>
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 animate-entry [animation-delay:150ms]">
-          {data.items.map((p) => (
+          {visible.map((p) => (
             <PatientCard
               key={p.id}
               p={p}
               onOpen={() => navigate(`/patients/${p.id}`)}
-              onCopy={() => shareLink(p, 'copy')}
-              onWhats={() => shareLink(p, 'whatsapp')}
+              onCopy={() => share(p, 'copy')}
+              onWhats={() => share(p, 'whatsapp')}
               onDelete={() => setToDelete(p)}
             />
           ))}
         </div>
       )}
 
-      {data && data.total > data.pageSize && (
-        <div className="flex justify-center items-center gap-3">
-          <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-            ← Anterior
-          </Button>
-          <span className="text-xs text-muted-foreground font-semibold">
-            Página {data.page} de {Math.ceil(data.total / data.pageSize)}
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={page >= Math.ceil(data.total / data.pageSize)}
-            onClick={() => setPage((p) => p + 1)}
-          >
-            Próxima →
-          </Button>
-        </div>
-      )}
-
       {toDelete && (
         <ConfirmModal
           title={`Excluir ${toDelete.name}?`}
-          message="O paciente será removido do monitoramento e o link será invalidado."
+          message="O paciente será removido do monitoramento."
           confirmLabel="Excluir paciente"
           requireText="EXCLUIR"
           confirmInput={confirmText}
@@ -280,35 +187,28 @@ export function MonitoringPage() {
   );
 }
 
-const fmt = formatCivilDate;
-
 function PatientCard({
   p, onOpen, onCopy, onWhats, onDelete,
 }: {
-  p: PatientCardData;
+  p: PatientWithNames;
   onOpen: () => void;
   onCopy: () => void;
   onWhats: () => void;
   onDelete: () => void;
 }) {
   return (
-    <article
-      className={cn(
-        'bg-card border border-border rounded-xl p-4 md:p-5 shadow-sm border-l-4 flex flex-col gap-4',
-        statusBorder(p.currentStatus),
-      )}
-    >
+    <article className={cn('bg-card border border-border rounded-xl p-4 md:p-5 shadow-sm border-l-4 flex flex-col gap-4', statusBorder(p.current_status))}>
       <header className="flex items-start justify-between gap-3 min-w-0">
         <div className="min-w-0 flex-1">
           <h3 className="font-bold text-base leading-tight truncate cursor-pointer hover:text-primary" onClick={onOpen}>
             {p.name}
           </h3>
           <p className="text-xs text-muted-foreground mt-0.5 truncate">
-            {p.surgeryTypeName}
-            {p.surgeonName ? ` · ${p.surgeonName}` : ''}
+            {p.surgery_type?.name ?? '—'}
+            {p.medical_team ? ` · Equipe ${String(p.medical_team.team_number).padStart(2, '0')}` : ''}
           </p>
         </div>
-        <StatusBadge status={p.currentStatus} />
+        <StatusBadge status={p.current_status} />
       </header>
 
       <dl className="grid grid-cols-2 gap-3 text-xs">
@@ -316,46 +216,29 @@ function PatientCard({
           <dt className="text-muted-foreground uppercase tracking-wider text-[10px] font-bold">Cirurgia</dt>
           <dd className="flex items-center gap-1 mt-0.5 font-medium">
             <Calendar className="size-3" />
-            {fmt(p.surgeryDate)}
+            {p.surgery_date ? formatCivilDate(p.surgery_date) : '—'}
           </dd>
         </div>
         <div>
           <dt className="text-muted-foreground uppercase tracking-wider text-[10px] font-bold">Alta</dt>
           <dd className="flex items-center gap-1 mt-0.5 font-medium">
             <Calendar className="size-3" />
-            {fmt(p.dischargeDate)}
+            {p.hospital_discharge_date ? formatCivilDate(p.hospital_discharge_date) : '—'}
           </dd>
         </div>
       </dl>
 
-      <label className="flex items-center gap-2 text-xs font-medium select-none bg-muted/60 rounded-lg px-3 py-2">
-        <input type="checkbox" readOnly checked={!!p.attendedById} className="accent-[#2563eb]" />
-        Atendido pela equipe{p.attendedByName ? ` · ${p.attendedByName}` : ''}
-      </label>
-
       <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border">
-        <button
-          onClick={onOpen}
-          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-primary text-primary-foreground rounded-md text-xs font-semibold hover:bg-primary/90 transition-colors"
-        >
+        <button onClick={onOpen} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-primary text-primary-foreground rounded-md text-xs font-semibold hover:bg-primary/90 transition-colors">
           <Eye className="size-3.5" /> Acompanhar
         </button>
-        <button
-          onClick={onWhats}
-          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-border rounded-md text-xs font-semibold hover:bg-muted transition-colors"
-        >
+        <button onClick={onWhats} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-border rounded-md text-xs font-semibold hover:bg-muted transition-colors">
           <MessageCircle className="size-3.5" /> WhatsApp
         </button>
-        <button
-          onClick={onCopy}
-          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-border rounded-md text-xs font-semibold hover:bg-muted transition-colors"
-        >
+        <button onClick={onCopy} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-border rounded-md text-xs font-semibold hover:bg-muted transition-colors">
           <Copy className="size-3.5" /> Copiar link
         </button>
-        <button
-          onClick={onDelete}
-          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-alert/30 text-alert rounded-md text-xs font-semibold hover:bg-alert/5 transition-colors"
-        >
+        <button onClick={onDelete} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-alert/30 text-alert rounded-md text-xs font-semibold hover:bg-alert/5 transition-colors">
           <Trash2 className="size-3.5" /> Excluir
         </button>
       </div>
