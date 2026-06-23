@@ -10,6 +10,7 @@
   ],
   "scripts": {
     "build:shared": "npm run build --workspace @vitalsync/shared",
+    "build:frontend": "npm run build:shared && npm run build --workspace @vitalsync/frontend",
     "dev:backend": "npm run dev --workspace @vitalsync/backend",
     "dev:frontend": "npm run dev --workspace @vitalsync/frontend",
     "dev": "npm run build:shared && concurrently -n backend,frontend -c blue,green \"npm:dev:backend\" \"npm:dev:frontend\"",
