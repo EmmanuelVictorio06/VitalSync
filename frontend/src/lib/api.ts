@@ -1,5 +1,6 @@
 /** Cliente HTTP central. Anexa o token JWT e padroniza tratamento de erros. */
-const BASE = (import.meta.env.VITE_API_URL ?? 'http://localhost:3333') + '/api';
+// Remove barra(s) final(is) do VITE_API_URL para evitar caminhos com "//api".
+const BASE = (import.meta.env.VITE_API_URL ?? 'http://localhost:3333').replace(/\/+$/, '') + '/api';
 
 const TOKEN_KEY = 'vitalsync.token';
 
