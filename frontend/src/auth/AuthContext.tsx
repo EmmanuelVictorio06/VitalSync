@@ -1,45 +1,83 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Role } from '@vitalsync/shared';
-import { api, tokenStore } from '../lib/api';
-import type { AuthUser, LoginResponse } from '../lib/dto';
+import { authService } from '../services/authService';
+import { profileService } from '../services/profileService';
+import type { Profile, UserRole } from '../services/types';
+import type { AuthUser } from '../lib/dto';
 
 interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   /** true se o perfil do usuário está entre os informados. */
   hasRole: (...roles: Role[]) => boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/**
+ * Mapeia o papel do Supabase (profiles.role) para o enum Role usado em todo o
+ * app, mantendo PermissionGuard / sidebar / rotas inalterados (adaptador único).
+ */
+const ROLE_MAP: Record<UserRole, Role> = {
+  ADMIN: Role.ADM,
+  MAIN_SURGEON: Role.SURGEON,
+  ASSOCIATED_DOCTOR: Role.ASSOCIATE,
+};
+
+function toAuthUser(profile: Profile): AuthUser {
+  return { id: profile.id, name: profile.name, role: ROLE_MAP[profile.role] ?? Role.ASSOCIATE, teamId: null };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Reidrata a sessão a partir do token salvo.
-  useEffect(() => {
-    const token = tokenStore.get();
-    if (!token) {
-      setLoading(false);
-      return;
+  // Carrega o profile a partir do id da sessão (sem chamar getUser dentro do
+  // callback de onAuthStateChange — evita deadlock do supabase-js).
+  const loadProfileFor = useCallback(async (userId: string) => {
+    try {
+      const profile = await profileService.getProfile(userId);
+      setUser(profile ? toAuthUser(profile) : null);
+    } catch {
+      setUser(null);
     }
-    api
-      .get<{ user: AuthUser }>('/auth/me')
-      .then((r) => setUser(r.user))
-      .catch(() => tokenStore.clear())
-      .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    void authService.getSession().then(async (session) => {
+      if (session?.user) await loadProfileFor(session.user.id);
+      if (active) setLoading(false);
+    });
+
+    const { data: sub } = authService.onAuthChange((session) => {
+      if (session?.user) {
+        const uid = session.user.id;
+        // Adiar para fora do callback (boa prática do supabase-js).
+        setTimeout(() => void loadProfileFor(uid), 0);
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => {
+      active = false;
+      sub.subscription.unsubscribe();
+    };
+  }, [loadProfileFor]);
 
   const login = useCallback(async (email: string, password: string) => {
-    const res = await api.post<LoginResponse>('/auth/login', { email, password }, false);
-    tokenStore.set(res.token);
-    setUser(res.user);
+    await authService.signIn(email, password);
+    const profile = await profileService.getMyProfile();
+    if (!profile) throw new Error('Seu perfil não foi encontrado. Contate o administrador.');
+    setUser(toAuthUser(profile));
   }, []);
 
-  const logout = useCallback(() => {
-    tokenStore.clear();
+  const logout = useCallback(async () => {
+    await authService.signOut();
     setUser(null);
   }, []);
 

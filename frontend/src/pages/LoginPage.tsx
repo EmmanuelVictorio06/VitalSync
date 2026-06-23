@@ -3,7 +3,6 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { Activity, Heart, Lock, Mail, ShieldCheck, Stethoscope } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
-import { ApiError } from '../lib/api';
 
 export function LoginPage() {
   const { user, login } = useAuth();
@@ -24,7 +23,12 @@ export function LoginPage() {
       navigate('/monitoring');
     } catch (err) {
       // Mensagem clara, sem termos técnicos (heurística de Nielsen).
-      toast.error(err instanceof ApiError ? err.message : 'Não foi possível entrar. Tente novamente.');
+      const msg = err instanceof Error ? err.message : '';
+      toast.error(
+        /invalid login credentials/i.test(msg)
+          ? 'E-mail ou senha incorretos.'
+          : msg || 'Não foi possível entrar. Tente novamente.',
+      );
     } finally {
       setBusy(false);
     }
