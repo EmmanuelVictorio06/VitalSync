@@ -20,9 +20,20 @@ export async function buildApp(container: Container): Promise<FastifyInstance> {
     trustProxy: true, // IP correto atrás de proxy (auditoria/rate-limit)
   });
 
-  // Segurança: cabeçalhos seguros (XSS/clickjacking), CORS restrito, rate-limit.
+  // Segurança: cabeçalhos seguros (XSS/clickjacking), CORS, rate-limit.
   await app.register(helmet, { contentSecurityPolicy: false });
-  await app.register(cors, { origin: [env.PUBLIC_WEB_URL], credentials: true });
+  // CORS: libera a(s) origem(ns) de PUBLIC_WEB_URL (separadas por vírgula) e
+  // qualquer deploy *.vercel.app — as URLs da Vercel mudam a cada publicação.
+  const allowedOrigins = env.PUBLIC_WEB_URL.split(',').map((o) => o.trim()).filter(Boolean);
+  await app.register(cors, {
+    origin: (origin, cb) => {
+      // Sem origin = curl/health check/same-origin → permitido.
+      if (!origin) return cb(null, true);
+      if (allowedOrigins.includes(origin) || /\.vercel\.app$/.test(origin)) return cb(null, true);
+      cb(null, false);
+    },
+    credentials: true,
+  });
   await app.register(rateLimit, { max: 200, timeWindow: '1 minute' });
 
   // Upload da foto da ferida (1 arquivo por envio, limite de tamanho seguro).
