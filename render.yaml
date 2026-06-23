@@ -13,7 +13,7 @@ services:
     name: vitalsync-api
     runtime: node
     plan: free
-    region: oregon
+    region: ohio
     branch: main
     rootDir: .
     autoDeploy: true
