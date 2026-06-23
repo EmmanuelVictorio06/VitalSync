@@ -21,8 +21,8 @@
     "db:generate": "prisma generate --schema backend/prisma/schema.prisma",
     "db:migrate": "prisma migrate dev --schema backend/prisma/schema.prisma",
     "db:deploy": "prisma migrate deploy --schema backend/prisma/schema.prisma",
-    "db:seed": "tsx backend/prisma/seed.ts",
-    "db:seed:demo": "tsx backend/prisma/seed-demo.ts",
+    "db:seed": "npm run seed --workspace @vitalsync/backend",
+    "db:seed:demo": "npm run seed:demo --workspace @vitalsync/backend",
     "db:reset": "prisma migrate reset --schema backend/prisma/schema.prisma",
     "build": "npm run build:shared && npm run build --workspace @vitalsync/backend && npm run build --workspace @vitalsync/frontend"
   },
