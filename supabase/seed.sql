@@ -1,21 +1,45 @@
 -- ============================================================================
--- VitalSync — Seed de demonstração
+-- VitalSync — Seed de demonstração (robusto)
 --
 -- PRÉ-REQUISITO: crie 3 usuários no Supabase (Authentication → Users → Add user,
 -- "Auto Confirm User") com senha `senha123`:
---   admin@vitalsync.com        (Admin)
---   cirurgiao@vitalsync.com    (Cirurgião principal)
---   medico@vitalsync.com       (Médico associado)
--- O trigger handle_new_user cria os profiles automaticamente. Depois rode ESTE
--- script (idempotente) para definir papéis e popular os dados de exemplo.
+--   admin@vitalsync.com · cirurgiao@vitalsync.com · medico@vitalsync.com
+--
+-- Este seed CRIA os profiles a partir de auth.users (não depende do trigger
+-- nem da ordem em que você rodou as migrações). Idempotente.
 -- ============================================================================
 
--- Papéis dos usuários de teste.
-update public.profiles set role = 'ADMIN',             name = 'Administrador'   where email = 'admin@vitalsync.com';
-update public.profiles set role = 'MAIN_SURGEON',      name = 'Dra. Ana Souza'  where email = 'cirurgiao@vitalsync.com';
-update public.profiles set role = 'ASSOCIATED_DOCTOR', name = 'Dr. Bruno Tavares' where email = 'medico@vitalsync.com';
+-- 1) Profiles dos 3 usuários (lidos de auth.users) com os papéis corretos.
+insert into public.profiles (id, name, email, role)
+select u.id,
+       case u.email
+         when 'admin@vitalsync.com'     then 'Administrador'
+         when 'cirurgiao@vitalsync.com' then 'Dra. Ana Souza'
+         when 'medico@vitalsync.com'    then 'Dr. Bruno Tavares'
+       end,
+       u.email,
+       (case u.email
+          when 'admin@vitalsync.com'     then 'ADMIN'
+          when 'cirurgiao@vitalsync.com' then 'MAIN_SURGEON'
+          when 'medico@vitalsync.com'    then 'ASSOCIATED_DOCTOR'
+        end)::public.user_role
+from auth.users u
+where u.email in ('admin@vitalsync.com', 'cirurgiao@vitalsync.com', 'medico@vitalsync.com')
+on conflict (id) do update set role = excluded.role, name = excluded.name, email = excluded.email;
 
--- Catálogos.
+-- Verificação amigável: aborta com mensagem clara se faltar algum usuário.
+do $$
+declare missing text;
+begin
+  select string_agg(e, ', ') into missing
+  from (select unnest(array['admin@vitalsync.com','cirurgiao@vitalsync.com','medico@vitalsync.com']) e) x
+  where not exists (select 1 from public.profiles p where p.email = x.e);
+  if missing is not null then
+    raise exception 'Faltam usuários no Auth: %. Crie-os em Authentication → Users e rode o seed de novo.', missing;
+  end if;
+end $$;
+
+-- 2) Catálogos.
 insert into public.hospitals (name, city, state) values
   ('Hospital Santa Vida', 'Curitiba', 'PR'),
   ('Hospital São Lucas', 'Curitiba', 'PR')
@@ -27,20 +51,20 @@ insert into public.surgery_types (name, specialty) values
   ('Artroplastia de Quadril', 'Ortopedia')
 on conflict do nothing;
 
--- Equipes (cirurgião responsável = cirurgiao@vitalsync.com).
+-- 3) Equipes (cirurgião responsável = cirurgiao@vitalsync.com).
 insert into public.medical_teams (team_number, main_surgeon_id)
 select v.num, (select id from public.profiles where email = 'cirurgiao@vitalsync.com')
 from (values (1), (3), (7)) as v(num)
 on conflict (team_number) do nothing;
 
--- Vincula o médico associado à equipe 01.
+-- 4) Vincula o médico associado à equipe 01.
 insert into public.team_members (team_id, doctor_id, role_in_team)
 select (select id from public.medical_teams where team_number = 1),
        (select id from public.profiles where email = 'medico@vitalsync.com'),
        'ASSOCIATED_DOCTOR'
 on conflict (team_id, doctor_id) do nothing;
 
--- Pacientes na equipe 01 (com status clínico variado).
+-- 5) Pacientes na equipe 01 (status clínico variado).
 insert into public.patients (name, phone, surgery_type_id, surgery_date, hospital_discharge_date, hospital_id, team_id, current_status)
 select p.name, p.phone,
        (select id from public.surgery_types where name = p.stype),
@@ -56,7 +80,7 @@ from (values
 ) as p(name, phone, stype, sdate, ddate, cstatus)
 where not exists (select 1 from public.patients x where x.name = p.name);
 
--- Uma medição por paciente (espelha o status clínico atual).
+-- 6) Uma medição por paciente (espelha o status clínico atual).
 insert into public.vital_sign_records (patient_id, period, monitoring_day, temperature, oxygen_saturation, systolic_pressure, diastolic_pressure, heart_rate, pain_level, dyspnea_level, clinical_status)
 select x.id, 'MORNING', 3, t.temp, t.spo2, t.sys, t.dia, t.hr, t.pain, t.dysp, x.current_status
 from public.patients x
@@ -68,7 +92,7 @@ join (values
 where x.team_id = (select id from public.medical_teams where team_number = 1)
   and not exists (select 1 from public.vital_sign_records v where v.patient_id = x.id);
 
--- Alertas (não atendidos) para os pacientes amarelo/vermelho.
+-- 7) Alertas (não atendidos) para os pacientes amarelo/vermelho.
 insert into public.clinical_alerts (patient_id, team_id, status, description, attended)
 select x.id, x.team_id, x.current_status,
        case x.current_status when 'RED' then 'Alerta vermelho: sinais vitais críticos.'

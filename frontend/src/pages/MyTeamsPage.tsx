@@ -1,80 +1,50 @@
 /**
- * "Minhas Equipes" — visão do profissional (Médico Associado / Cirurgião).
- *
- * Mostra SOMENTE as equipes em que o médico logado está vinculado (filtragem
- * revalidada no servidor — ver lib/teams-api.ts). Daqui ele acessa pacientes e
- * alertas de cada equipe, sem permissão para editar dados administrativos.
+ * "Minhas Equipes" — Médico Associado (somente leitura). Dados reais do
+ * Supabase (RLS restringe às equipes em que o médico participa).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../auth/AuthContext';
-import { EmptyState, ErrorState, LoadingState } from '../components/admin';
-import { TeamCard, TeamFilterBar, TeamStatusSummary, type TeamFilters } from '../components/teams';
-import { myTeamsApi, TeamsApiError } from '../lib/teams-api';
-import type { MyTeam, MyTeamsSummary } from '../lib/teams-types';
-
-const EMPTY_FILTERS: TeamFilters = { number: '', surgeon: '', status: 'ALL', onlyUnattended: false };
-
-/** Indica se a equipe tem ao menos um paciente no status filtrado. */
-function teamHasStatus(team: MyTeam, status: TeamFilters['status']): boolean {
-  if (status === 'ALL') return true;
-  if (status === 'GREEN') return team.stats.stable > 0;
-  if (status === 'YELLOW') return team.stats.attention > 0;
-  return team.stats.alert > 0;
-}
+import { Activity, AlertTriangle, BellRing, ShieldAlert, Stethoscope, Users } from 'lucide-react';
+import { Loading, cn } from '../components/ui';
+import { teamViewService, type TeamSummary } from '../services/teamViewService';
 
 export function MyTeamsPage() {
-  const { user } = useAuth();
   const navigate = useNavigate();
-
-  const [teams, setTeams] = useState<MyTeam[]>([]);
-  const [summary, setSummary] = useState<MyTeamsSummary | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [teams, setTeams] = useState<TeamSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] = useState<TeamFilters>(EMPTY_FILTERS);
+  const [number, setNumber] = useState('');
+  const [onlyUnattended, setOnlyUnattended] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    setTeams(null);
     setError(null);
     try {
-      const res = await myTeamsApi.list(user ? { id: user.id, role: user.role } : undefined);
-      setTeams(res.teams);
-      setSummary(res.summary);
+      setTeams(await teamViewService.listMyTeams());
     } catch (err) {
-      setError(err instanceof TeamsApiError ? err.message : 'Não foi possível carregar suas equipes. Tente novamente.');
-    } finally {
-      setLoading(false);
+      setError(err instanceof Error ? err.message : 'Não foi possível carregar suas equipes.');
     }
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const filtered = useMemo(() => {
-    const num = filters.number.trim();
-    const surgeon = filters.surgeon.trim().toLowerCase();
-    return teams.filter((t) => {
-      if (num) {
-        const raw = String(t.number);
-        const padded = raw.padStart(2, '0');
-        const q = num.replace(/^0+/, '') || num; // "01" e "1" equivalem
-        if (!raw.includes(q) && !padded.includes(num)) return false;
-      }
-      if (surgeon && !t.surgeonName.toLowerCase().includes(surgeon)) return false;
-      if (filters.onlyUnattended && t.stats.unattendedAlerts === 0) return false;
-      if (!teamHasStatus(t, filters.status)) return false;
-      return true;
-    });
-  }, [teams, filters]);
+  const summary = useMemo(() => {
+    const t = teams ?? [];
+    return {
+      teams: t.length,
+      monitoring: t.reduce((a, x) => a + x.stats.monitoring, 0),
+      attention: t.reduce((a, x) => a + x.stats.attention, 0),
+      alert: t.reduce((a, x) => a + x.stats.alert, 0),
+      unattended: t.reduce((a, x) => a + x.stats.unattendedAlerts, 0),
+    };
+  }, [teams]);
 
-  function patchFilters(patch: Partial<TeamFilters>) {
-    setFilters((prev) => ({ ...prev, ...patch }));
-  }
-
-  // Navegação dos botões dos cards (somente leitura — sem ações administrativas).
-  const viewPatients = (t: MyTeam) => navigate(`/monitoring?team=${t.number}`);
-  const viewAlerts = (t: MyTeam) => navigate(`/alerts?team=${t.number}`);
+  const filtered = (teams ?? []).filter(
+    (t) =>
+      (!number || String(t.number).includes(number.replace(/^0+/, '') || number)) &&
+      (!onlyUnattended || t.stats.unattendedAlerts > 0),
+  );
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto w-full space-y-6">
@@ -85,35 +55,116 @@ export function MyTeamsPage() {
         </p>
       </div>
 
-      {summary && !loading && !error && <TeamStatusSummary summary={summary} />}
-
-      {!loading && !error && teams.length > 0 && (
-        <TeamFilterBar filters={filters} onChange={patchFilters} />
+      {teams && !error && (
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4">
+          <SummaryCard label="Equipes vinculadas" value={summary.teams} icon={Users} tone="primary" />
+          <SummaryCard label="Em monitoramento" value={summary.monitoring} icon={Activity} tone="primary" />
+          <SummaryCard label="Em atenção" value={summary.attention} icon={AlertTriangle} tone="warning" />
+          <SummaryCard label="Em alerta" value={summary.alert} icon={ShieldAlert} tone="alert" />
+          <SummaryCard label="Alertas não atendidos" value={summary.unattended} icon={BellRing} tone="alert" />
+        </div>
       )}
 
-      {loading ? (
-        <LoadingState label="Carregando suas equipes…" />
+      {teams && teams.length > 0 && (
+        <div className="bg-card border border-border shadow-sm rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+          <input
+            value={number}
+            inputMode="numeric"
+            onChange={(e) => setNumber(e.target.value)}
+            placeholder="Buscar por nº da equipe…"
+            className="input !w-auto sm:w-44"
+          />
+          <label className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground cursor-pointer select-none">
+            <input type="checkbox" className="accent-[#2563eb] size-4" checked={onlyUnattended} onChange={(e) => setOnlyUnattended(e.target.checked)} />
+            Só com alertas não atendidos
+          </label>
+        </div>
+      )}
+
+      {teams === null ? (
+        <Loading label="Carregando suas equipes…" />
       ) : error ? (
-        <ErrorState message={error} onRetry={() => void load()} />
-      ) : teams.length === 0 ? (
-        <EmptyState
-          title="Você ainda não está associado a nenhuma equipe médica."
-          hint="Quando um administrador vincular você a uma equipe, ela aparecerá aqui."
-        />
+        <div className="bg-card border border-alert/30 rounded-xl p-10 text-center">
+          <p className="font-semibold">{error}</p>
+          <button onClick={() => void load()} className="mt-4 px-4 py-2 border border-border rounded-lg text-sm font-semibold hover:bg-muted">
+            Tentar novamente
+          </button>
+        </div>
       ) : filtered.length === 0 ? (
-        <EmptyState title="Nenhuma equipe corresponde aos filtros." hint="Ajuste a busca para ver mais resultados." />
+        <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground">
+          <p className="font-semibold">Você ainda não está associado a nenhuma equipe médica.</p>
+        </div>
       ) : (
-        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4 animate-entry [animation-delay:150ms]">
+        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4 animate-entry">
           {filtered.map((t) => (
-            <TeamCard
-              key={t.id}
-              team={t}
-              onViewPatients={() => viewPatients(t)}
-              onViewAlerts={() => viewAlerts(t)}
-            />
+            <article key={t.id} className="bg-card border border-border rounded-xl shadow-sm p-5 flex flex-col gap-4 border-l-4 border-l-primary">
+              <header>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Equipe nº {String(t.number).padStart(2, '0')}
+                </p>
+                <h3 className="font-bold text-lg leading-tight mt-0.5 inline-flex items-center gap-1.5">
+                  <Stethoscope className="size-4 text-primary shrink-0" /> {t.surgeonName}
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1">Você é Médico Associado</p>
+              </header>
+
+              <ul className="text-sm space-y-1.5 border-y border-border py-3">
+                <li className="flex items-center gap-2">
+                  <Activity className="size-4 text-primary shrink-0" />
+                  <span><strong className="font-extrabold">{t.stats.monitoring}</strong> pacientes em monitoramento</span>
+                </li>
+                <li className="flex items-center gap-2 text-warning">
+                  <AlertTriangle className="size-4 shrink-0" /> <span><strong className="font-extrabold">{t.stats.attention}</strong> em atenção</span>
+                </li>
+                <li className="flex items-center gap-2 text-alert">
+                  <ShieldAlert className="size-4 shrink-0" /> <span><strong className="font-extrabold">{t.stats.alert}</strong> em alerta</span>
+                </li>
+              </ul>
+
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider border self-start',
+                  t.stats.unattendedAlerts === 0 ? 'bg-stable/10 text-stable border-stable/20' : 'bg-alert/10 text-alert border-alert/20',
+                )}
+              >
+                <BellRing className="size-3" />
+                {t.stats.unattendedAlerts === 0 ? 'Sem pendências' : `${t.stats.unattendedAlerts} não atendido(s)`}
+              </span>
+
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button onClick={() => navigate(`/monitoring?team=${t.number}`)} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-primary text-primary-foreground rounded-md text-xs font-semibold hover:bg-primary/90 transition-colors">
+                  <Activity className="size-3.5" /> Ver pacientes
+                </button>
+                <button onClick={() => navigate(`/alerts?team=${t.number}`)} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-border rounded-md text-xs font-semibold hover:bg-muted transition-colors">
+                  <BellRing className="size-3.5" /> Ver alertas
+                </button>
+              </div>
+            </article>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function SummaryCard({
+  label, value, icon: Icon, tone,
+}: {
+  label: string;
+  value: number;
+  icon: React.ComponentType<{ className?: string }>;
+  tone: 'primary' | 'warning' | 'alert';
+}) {
+  const cls = { primary: 'bg-primary/10 text-primary', warning: 'bg-warning/10 text-warning', alert: 'bg-alert/10 text-alert' }[tone];
+  return (
+    <div className="bg-card border border-border rounded-xl shadow-sm p-4 flex items-center gap-3">
+      <span className={cn('size-10 rounded-lg flex items-center justify-center shrink-0', cls)}>
+        <Icon className="size-5" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-2xl font-extrabold leading-none">{value}</p>
+        <p className="text-[11px] text-muted-foreground mt-1 leading-tight">{label}</p>
+      </div>
     </div>
   );
 }
