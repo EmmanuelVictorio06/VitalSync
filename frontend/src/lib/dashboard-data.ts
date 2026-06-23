@@ -109,3 +109,17 @@ const TEAM: DashboardData = {
 export function getDashboardData(scope: DashboardScope): DashboardData {
   return scope === 'system' ? SYSTEM : TEAM;
 }
+
+/* ---------------- API real (backend agrega por equipe via token) ---------------- */
+import { api } from './api';
+
+/** Painel real: KPIs, gráfico semanal, lista crítica e alertas recentes. */
+export function fetchDashboard(): Promise<DashboardData> {
+  return api.get<DashboardData>('/dashboard');
+}
+
+/** Central de alertas real (mais recentes primeiro). */
+export async function fetchAlerts(): Promise<RecentAlert[]> {
+  const res = await api.get<{ items: RecentAlert[] }>('/alerts');
+  return res.items;
+}
