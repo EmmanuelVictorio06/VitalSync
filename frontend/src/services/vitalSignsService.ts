@@ -1,12 +1,23 @@
 /**
- * Sinais vitais. Leitura (autenticada) por equipe via RLS.
- *
- * A SUBMISSÃO do paciente é ANÔNIMA (acesso por secure_token), então vai por
- * Edge Function (`process-vital-record`, service_role) que valida o token,
- * grava a medição, calcula o status e cria o alerta — sem expor a tabela ao anon.
+ * Sinais vitais.
+ *  - Leitura por equipe: autenticada, via RLS.
+ *  - Fluxo do PACIENTE (anônimo, por secure_token): via funções RPC
+ *    SECURITY DEFINER (get_patient_by_token / submit_vital_record), que validam
+ *    o token e operam com privilégio sem expor as tabelas ao papel anon.
  */
 import { supabase } from '../lib/supabase';
-import type { VitalSignRecord } from './types';
+import type { ClinicalStatus, VitalSignRecord } from './types';
+
+export interface PatientLinkInfo {
+  id: string;
+  name: string;
+  birth_date: string | null;
+  surgery_date: string | null;
+  hospital_discharge_date: string | null;
+  current_status: ClinicalStatus;
+  monitoring_day: number | null;
+  within_window: boolean;
+}
 
 export interface VitalSubmission {
   secure_token: string;
@@ -36,10 +47,34 @@ export const vitalSignsService = {
     return (data as VitalSignRecord[]) ?? [];
   },
 
-  /** Envio do paciente (anônimo) — processado por Edge Function protegida. */
-  async submitByToken(input: VitalSubmission): Promise<{ clinical_status: string }> {
-    const { data, error } = await supabase.functions.invoke('process-vital-record', { body: input });
+  /** Resolve o paciente pelo token (anônimo). */
+  async getByToken(token: string): Promise<PatientLinkInfo> {
+    const { data, error } = await supabase.rpc('get_patient_by_token', { p_token: token });
     if (error) throw new Error(error.message);
-    return data as { clinical_status: string };
+    const row = (Array.isArray(data) ? data[0] : data) as PatientLinkInfo | undefined;
+    if (!row) throw new Error('Link inválido ou expirado.');
+    return row;
+  },
+
+  /** Envio do paciente (anônimo) — função RPC valida o token e cria o alerta. */
+  async submitByToken(input: VitalSubmission): Promise<{ clinical_status: string }> {
+    const { data, error } = await supabase.rpc('submit_vital_record', {
+      p_token: input.secure_token,
+      p_period: input.period,
+      p_temperature: input.temperature ?? null,
+      p_oxygen_saturation: input.oxygen_saturation ?? null,
+      p_systolic: input.systolic_pressure ?? null,
+      p_diastolic: input.diastolic_pressure ?? null,
+      p_heart_rate: input.heart_rate ?? null,
+      p_pain: input.pain_level ?? null,
+      p_dyspnea: input.dyspnea_level ?? null,
+      p_urination_count: input.urination_count ?? null,
+      p_vomiting_count: input.vomiting_count ?? null,
+      p_has_bleeding: input.has_bleeding ?? false,
+      p_steps: input.steps ?? null,
+      p_wound_photo_path: input.wound_photo_path ?? null,
+    });
+    if (error) throw new Error(error.message);
+    return { clinical_status: data as string };
   },
 };
