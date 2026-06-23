@@ -14,20 +14,33 @@ import {
   Thermometer,
   Wind,
 } from 'lucide-react';
-import { Period, formatCivilDate } from '@vitalsync/shared';
+import { Period, calculateAge, formatCivilDate } from '@vitalsync/shared';
 import { useToast } from '../components/Toast';
 import { PhotoUploadField } from '../components/photo';
 import { Field, IntensityScale, Loading, YesNo, cn } from '../components/ui';
-import { api, ApiError } from '../lib/api';
-import type { PatientLinkInfo } from '../lib/dto';
+import { storageService } from '../services/storageService';
+import { vitalSignsService, type PatientLinkInfo } from '../services/vitalSignsService';
 
 type Step = 'choose' | 'form' | 'success';
 type IconType = React.ComponentType<{ className?: string }>;
 
+interface InputRange { min: number; max: number; example: string; unit: string; PENDING_MEDICAL_VALIDATION: boolean }
+type InputRanges = Record<'temperature' | 'spo2' | 'systolic' | 'diastolic' | 'heartRate' | 'steps', InputRange>;
+
+/** Faixas de entrada (UX). TODO: confirmar com a equipe médica. */
+const INPUT_RANGES: InputRanges = {
+  temperature: { min: 34, max: 42, example: '36,5', unit: '°C', PENDING_MEDICAL_VALIDATION: false },
+  spo2: { min: 70, max: 100, example: '98', unit: '%', PENDING_MEDICAL_VALIDATION: false },
+  systolic: { min: 70, max: 220, example: '120', unit: 'mmHg', PENDING_MEDICAL_VALIDATION: false },
+  diastolic: { min: 40, max: 140, example: '80', unit: 'mmHg', PENDING_MEDICAL_VALIDATION: false },
+  heartRate: { min: 30, max: 200, example: '72', unit: 'bpm', PENDING_MEDICAL_VALIDATION: false },
+  steps: { min: 0, max: 100000, example: '2000', unit: 'passos', PENDING_MEDICAL_VALIDATION: false },
+};
+
 export function VitalsRegisterPage() {
   const { token } = useParams<{ token: string }>();
   const toast = useToast();
-  const [info, setInfo] = useState<PatientLinkInfo | null>(null);
+  const [link, setLink] = useState<PatientLinkInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<Step>('choose');
@@ -36,10 +49,10 @@ export function VitalsRegisterPage() {
 
   useEffect(() => {
     if (!token) return;
-    api
-      .get<PatientLinkInfo>(`/public/link/${token}`, false)
-      .then(setInfo)
-      .catch((err) => setError(err instanceof ApiError ? err.message : 'Link inválido.'))
+    vitalSignsService
+      .getByToken(token)
+      .then(setLink)
+      .catch((err) => setError(err instanceof Error ? err.message : 'Link inválido.'))
       .finally(() => setLoading(false));
   }, [token]);
 
@@ -50,7 +63,7 @@ export function VitalsRegisterPage() {
       </div>
     );
   }
-  if (error || !info) {
+  if (error || !link) {
     return (
       <div className="min-h-screen bg-background grid place-items-center p-6">
         <div className="bg-card border border-border rounded-2xl shadow-sm p-8 w-full max-w-sm text-center animate-entry">
@@ -65,7 +78,15 @@ export function VitalsRegisterPage() {
     );
   }
 
-  const p = info.patient;
+  const p = {
+    id: link.id,
+    name: link.name,
+    age: link.birth_date ? calculateAge(new Date(link.birth_date)) : null,
+    surgeryDate: link.surgery_date,
+    dischargeDate: link.hospital_discharge_date,
+    monitoringDay: link.monitoring_day,
+    withinWindow: link.within_window,
+  };
 
   if (step === 'success') {
     return <SuccessScreen photoSent={photoSent} />;
@@ -104,10 +125,10 @@ export function VitalsRegisterPage() {
         {/* Resumo do paciente */}
         <div className="bg-card border border-border rounded-2xl shadow-sm p-5 animate-entry">
           <dl className="grid grid-cols-2 gap-3 text-xs">
-            <SummaryItem label="Idade" value={`${p.age} anos`} />
+            <SummaryItem label="Idade" value={p.age != null ? `${p.age} anos` : '—'} />
             <SummaryItem label="Monitoramento" value={p.monitoringDay ? `${p.monitoringDay}º dia` : '—'} />
-            <SummaryItem label="Cirurgia" value={fmt(p.surgeryDate)} />
-            <SummaryItem label="Alta" value={fmt(p.dischargeDate)} />
+            <SummaryItem label="Cirurgia" value={p.surgeryDate ? fmt(p.surgeryDate) : '—'} />
+            <SummaryItem label="Alta" value={p.dischargeDate ? fmt(p.dischargeDate) : '—'} />
           </dl>
         </div>
 
@@ -146,8 +167,9 @@ export function VitalsRegisterPage() {
         ) : (
           <MeasurementForm
             token={token!}
+            patientId={p.id}
             period={period}
-            ranges={info.inputRanges}
+            ranges={INPUT_RANGES}
             onBack={() => setStep('choose')}
             onSuccess={(photoAttached) => {
               setPhotoSent(photoAttached);
@@ -161,11 +183,12 @@ export function VitalsRegisterPage() {
 }
 
 function MeasurementForm({
-  token, period, ranges, onBack, onSuccess,
+  token, patientId, period, ranges, onBack, onSuccess,
 }: {
   token: string;
+  patientId: string;
   period: Period;
-  ranges: PatientLinkInfo['inputRanges'];
+  ranges: InputRanges;
   onBack: () => void;
   onSuccess: (photoAttached: boolean) => void;
 }) {
@@ -221,35 +244,29 @@ function MeasurementForm({
     }
     setBusy(true);
     try {
-      const payload = {
+      // Foto opcional: sobe ao Storage (bucket privado) e guarda só o caminho.
+      let woundPhotoPath: string | undefined;
+      if (photo) woundPhotoPath = await storageService.uploadPatientPhoto(photo, patientId);
+
+      await vitalSignsService.submitByToken({
+        secure_token: token,
         period,
         temperature: num(temperature),
-        spo2: num(spo2),
-        systolic: num(systolic),
-        diastolic: num(diastolic),
-        heartRate: num(heartRate),
-        pain,
-        dyspnea,
-        urinatedNormally,
-        urinationCount: urinatedNormally && urinationCount ? Number(urinationCount) : null,
-        hadVomit,
-        vomitCount: hadVomit && vomitCount ? Number(vomitCount) : null,
-        hadBleeding,
-        stepsCount: isNight && steps ? Number(steps) : null,
-      };
-      // Envio em multipart: dados (JSON) + foto opcional.
-      const form = new FormData();
-      form.append('data', JSON.stringify(payload));
-      if (photo) form.append('photo', photo, photo.name);
-
-      const result = await api.postForm<{ photoAttached?: boolean }>(
-        `/public/link/${token}/records`,
-        form,
-        false,
-      );
-      onSuccess(result?.photoAttached ?? Boolean(photo));
+        oxygen_saturation: num(spo2),
+        systolic_pressure: num(systolic),
+        diastolic_pressure: num(diastolic),
+        heart_rate: num(heartRate),
+        pain_level: pain ?? undefined,
+        dyspnea_level: dyspnea ?? undefined,
+        urination_count: urinatedNormally && urinationCount ? Number(urinationCount) : undefined,
+        vomiting_count: hadVomit && vomitCount ? Number(vomitCount) : undefined,
+        has_bleeding: hadBleeding ?? false,
+        steps: isNight && steps ? Number(steps) : undefined,
+        wound_photo_path: woundPhotoPath,
+      });
+      onSuccess(Boolean(photo));
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Erro ao enviar. Tente novamente.');
+      toast.error(err instanceof Error ? err.message : 'Erro ao enviar. Tente novamente.');
     } finally {
       setBusy(false);
     }
