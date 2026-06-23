@@ -1,13 +1,14 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { type ReactElement } from 'react';
-import { Role, useAuth } from './auth/AuthContext';
+import { Role } from './auth/AuthContext';
 import { Layout } from './components/Layout';
-import { Loading } from './components/ui';
+import { PermissionGuard } from './components/PermissionGuard';
 import { adminRoles } from './lib/permissions';
 import { AlertsPage } from './pages/AlertsPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { LoginPage } from './pages/LoginPage';
 import { MonitoringPage } from './pages/MonitoringPage';
+import { MyTeamPage } from './pages/MyTeamPage';
+import { MyTeamsPage } from './pages/MyTeamsPage';
 import { PatientDashboardPage } from './pages/PatientDashboardPage';
 import { PatientRegisterPage } from './pages/PatientRegisterPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
@@ -17,14 +18,6 @@ import { ExportsPage } from './pages/admin/ExportsPage';
 import { HospitalsPage } from './pages/admin/HospitalsPage';
 import { SettingsPage } from './pages/admin/SettingsPage';
 import { SurgeryTypesPage } from './pages/admin/SurgeryTypesPage';
-
-function RequireAuth({ children, roles }: { children: ReactElement; roles?: Role[] }) {
-  const { user, loading } = useAuth();
-  if (loading) return <div className="min-h-screen grid place-items-center bg-background"><Loading label="Carregando CuraPath…" /></div>;
-  if (!user) return <Navigate to="/login" replace />;
-  if (roles && !roles.includes(user.role)) return <Navigate to="/dashboard" replace />;
-  return children;
-}
 
 export function App() {
   return (
@@ -37,25 +30,53 @@ export function App() {
       {/* Internas (autenticadas) */}
       <Route
         element={
-          <RequireAuth>
+          <PermissionGuard>
             <Layout />
-          </RequireAuth>
+          </PermissionGuard>
         }
       >
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/monitoring" element={<MonitoringPage />} />
-        <Route path="/patients/new" element={<PatientRegisterPage />} />
+        {/* Cadastro de pacientes: Administrador e Cirurgião Principal */}
+        <Route
+          path="/patients/new"
+          element={
+            <PermissionGuard roles={[Role.ADM, Role.SURGEON]}>
+              <PatientRegisterPage />
+            </PermissionGuard>
+          }
+        />
         <Route path="/patients/:id" element={<PatientDashboardPage />} />
         <Route path="/alerts" element={<AlertsPage />} />
 
-        {/* Equipes: ADM gerencia todas; cirurgião principal vê a sua ("Minha Equipe") */}
+        {/* Gerenciar Equipes — exclusivo do Administrador (todas as equipes) */}
         <Route
           path="/teams"
           element={
-            <RequireAuth roles={[Role.ADM, Role.SURGEON]}>
+            <PermissionGuard roles={[Role.ADM]}>
               <TeamsPage />
-            </RequireAuth>
+            </PermissionGuard>
+          }
+        />
+
+        {/* Minha Equipe — exclusivo do Cirurgião Principal (a própria equipe) */}
+        <Route
+          path="/my-team"
+          element={
+            <PermissionGuard roles={[Role.SURGEON]}>
+              <MyTeamPage />
+            </PermissionGuard>
+          }
+        />
+
+        {/* Minhas Equipes — exclusivo do Médico Associado (somente leitura) */}
+        <Route
+          path="/my-teams"
+          element={
+            <PermissionGuard roles={[Role.ASSOCIATE]}>
+              <MyTeamsPage />
+            </PermissionGuard>
           }
         />
 
@@ -63,23 +84,23 @@ export function App() {
         <Route
           path="/my-care"
           element={
-            <RequireAuth roles={[Role.SURGEON, Role.ASSOCIATE]}>
+            <PermissionGuard roles={[Role.SURGEON, Role.ASSOCIATE]}>
               <PlaceholderPage
                 title="Meus Atendimentos"
                 description="Histórico dos pacientes atendidos por você, com data, status e medições relacionadas."
               />
-            </RequireAuth>
+            </PermissionGuard>
           }
         />
         <Route
           path="/profile"
           element={
-            <RequireAuth roles={[Role.SURGEON, Role.ASSOCIATE]}>
+            <PermissionGuard roles={[Role.SURGEON, Role.ASSOCIATE]}>
               <PlaceholderPage
                 title="Meu Perfil"
                 description="Seus dados profissionais, contato de WhatsApp para alertas e preferências de notificação."
               />
-            </RequireAuth>
+            </PermissionGuard>
           }
         />
 
@@ -87,33 +108,33 @@ export function App() {
         <Route
           path="/admin/hospitals"
           element={
-            <RequireAuth roles={adminRoles()}>
+            <PermissionGuard roles={adminRoles()}>
               <HospitalsPage />
-            </RequireAuth>
+            </PermissionGuard>
           }
         />
         <Route
           path="/admin/surgery-types"
           element={
-            <RequireAuth roles={adminRoles()}>
+            <PermissionGuard roles={adminRoles()}>
               <SurgeryTypesPage />
-            </RequireAuth>
+            </PermissionGuard>
           }
         />
         <Route
           path="/admin/exports"
           element={
-            <RequireAuth roles={[Role.ADM]}>
+            <PermissionGuard roles={[Role.ADM]}>
               <ExportsPage />
-            </RequireAuth>
+            </PermissionGuard>
           }
         />
         <Route
           path="/admin/settings"
           element={
-            <RequireAuth roles={adminRoles()}>
+            <PermissionGuard roles={adminRoles()}>
               <SettingsPage />
-            </RequireAuth>
+            </PermissionGuard>
           }
         />
       </Route>

@@ -24,6 +24,7 @@ import type {
   TeamRepository,
   UserRepository,
   VitalSignRepository,
+  WoundPhotoData,
 } from '../../domain/repositories.js';
 import { prisma } from './client.js';
 
@@ -370,6 +371,12 @@ function mapRecord(r: Prisma.VitalSignRecordGetPayload<object>): VitalSignRecord
     stepsCount: r.stepsCount,
     overallStatus: r.overallStatus as ClinicalStatus,
     statusByVital: (r.statusByVital ?? {}) as Record<string, ClinicalStatus>,
+    woundPhotoUrl: r.woundPhotoUrl,
+    woundPhotoStoragePath: r.woundPhotoStoragePath,
+    woundPhotoFileName: r.woundPhotoFileName,
+    woundPhotoMimeType: r.woundPhotoMimeType,
+    woundPhotoSize: r.woundPhotoSize,
+    woundPhotoUploadedAt: r.woundPhotoUploadedAt,
     submittedAt: r.submittedAt,
   };
 }
@@ -400,6 +407,25 @@ export class PrismaVitalSignRepository implements VitalSignRepository {
       },
     });
     return mapRecord(r);
+  }
+
+  async findById(id: string): Promise<VitalSignRecord | null> {
+    const r = await prisma.vitalSignRecord.findUnique({ where: { id } });
+    return r ? mapRecord(r) : null;
+  }
+
+  async attachWoundPhoto(recordId: string, photo: WoundPhotoData): Promise<void> {
+    await prisma.vitalSignRecord.update({
+      where: { id: recordId },
+      data: {
+        woundPhotoUrl: photo.url,
+        woundPhotoStoragePath: photo.storagePath,
+        woundPhotoFileName: photo.fileName,
+        woundPhotoMimeType: photo.mimeType,
+        woundPhotoSize: photo.size,
+        woundPhotoUploadedAt: photo.uploadedAt,
+      },
+    });
   }
 
   async findByPatientDayPeriod(

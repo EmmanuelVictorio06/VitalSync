@@ -53,6 +53,37 @@ export type VitalKind = (typeof VitalKind)[keyof typeof VitalKind];
 export const MONITORING_DAYS = 10;
 
 /**
+ * Regras da foto da ferida operatória / dreno (dado sensível de saúde).
+ * Fonte única para validação no frontend (UX) e no backend (autoritativo).
+ */
+export const WOUND_PHOTO = {
+  /** Tamanho máximo aceito (10 MB). */
+  maxBytes: 10 * 1024 * 1024,
+  /** Tipos MIME aceitos. */
+  acceptedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'] as const,
+  /** Extensões aceitas (usadas no `accept` do input e ao salvar). */
+  acceptedExtensions: ['jpg', 'jpeg', 'png', 'webp'] as const,
+  /** Mensagens claras e sem termos técnicos (reuso front/back). */
+  messages: {
+    tooLarge: 'A imagem é muito grande. Envie uma foto menor ou tente novamente.',
+    invalidFormat: 'Formato inválido. Envie uma imagem JPG, PNG ou WEBP.',
+    uploadFailed: 'Não foi possível enviar a foto. Verifique sua conexão e tente novamente.',
+  },
+} as const;
+
+export type WoundPhotoMimeType = (typeof WOUND_PHOTO.acceptedMimeTypes)[number];
+
+/** Valida o tipo MIME de uma foto da ferida (true se aceito). */
+export function isAcceptedWoundPhotoType(mimeType: string): mimeType is WoundPhotoMimeType {
+  return (WOUND_PHOTO.acceptedMimeTypes as readonly string[]).includes(mimeType);
+}
+
+/** Extensão de arquivo correspondente ao tipo MIME aceito. */
+export function woundPhotoExtension(mimeType: string): string {
+  return mimeType === 'image/jpeg' ? 'jpg' : mimeType === 'image/png' ? 'png' : 'webp';
+}
+
+/**
  * Payload bruto de uma medição enviada pelo paciente.
  * `stepsCount` só é esperado no período da NOITE.
  */

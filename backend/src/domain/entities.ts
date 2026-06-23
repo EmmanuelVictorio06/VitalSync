@@ -72,6 +72,13 @@ export interface VitalSignRecord {
   stepsCount: number | null;
   overallStatus: ClinicalStatus;
   statusByVital: Record<string, ClinicalStatus>;
+  /** Foto da ferida operatória / dreno (opcional). */
+  woundPhotoUrl: string | null;
+  woundPhotoStoragePath: string | null;
+  woundPhotoFileName: string | null;
+  woundPhotoMimeType: string | null;
+  woundPhotoSize: number | null;
+  woundPhotoUploadedAt: Date | null;
   submittedAt: Date;
 }
 

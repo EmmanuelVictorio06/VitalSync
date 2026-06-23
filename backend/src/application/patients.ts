@@ -21,7 +21,7 @@ import type {
   VitalSignRepository,
 } from '../domain/repositories.js';
 import { AccessControl } from './auth.js';
-import type { AuditLogger, LinkTokenService } from './ports.js';
+import type { AuditLogger, LinkTokenService, PhotoStorageService } from './ports.js';
 
 /** Somente ADM e médicos cadastrados acessam os menus de pacientes. */
 function assertCanAccessPatients(user: AuthenticatedUser): void {
@@ -248,6 +248,53 @@ export class GetPatientDashboardUseCase {
       records,
       teamMembers: teamMembers.map((m) => ({ id: m.id, name: m.name })),
       thresholds: ALERT_THRESHOLDS, // limiares para desenhar as faixas nos gráficos
+    };
+  }
+}
+
+/**
+ * Visualização da foto da ferida pelo profissional. Valida no backend que o
+ * usuário pertence à equipe do paciente (não basta a checagem do frontend) e
+ * registra a visualização em auditoria (dado sensível de saúde).
+ */
+export class ViewWoundPhotoUseCase {
+  constructor(
+    private readonly patients: PatientRepository,
+    private readonly vitals: VitalSignRepository,
+    private readonly photos: PhotoStorageService,
+    private readonly audit: AuditLogger,
+  ) {}
+
+  async execute(
+    actor: AuthenticatedUser,
+    recordId: string,
+  ): Promise<{ buffer: Buffer; mimeType: string; fileName: string | null }> {
+    assertCanAccessPatients(actor);
+
+    const record = await this.vitals.findById(recordId);
+    if (!record || !record.woundPhotoStoragePath) {
+      throw new NotFoundError('Foto não encontrada para este registro.');
+    }
+
+    const patient = await this.patients.findById(record.patientId);
+    if (!patient) throw new NotFoundError('Paciente não encontrado.');
+    AccessControl.assertCanAccessTeam(actor, patient.teamId);
+
+    const file = await this.photos.read(record.woundPhotoStoragePath);
+    if (!file) throw new NotFoundError('Foto não encontrada.');
+
+    await this.audit.log({
+      userId: actor.id,
+      action: 'WOUND_PHOTO_VIEW',
+      entityType: 'VitalSignRecord',
+      entityId: recordId,
+      metadata: { patientId: patient.id },
+    });
+
+    return {
+      buffer: file.buffer,
+      mimeType: record.woundPhotoMimeType ?? file.mimeType,
+      fileName: record.woundPhotoFileName,
     };
   }
 }

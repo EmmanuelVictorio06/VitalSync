@@ -95,7 +95,7 @@ export function ExportsPage() {
   async function runExport(format: ExportFormat, query?: string) {
     const q = query ?? buildQuery(format);
     const date = new Date().toISOString().slice(0, 10);
-    const fallback = `curapath_${DATASET_FILE[dataset]}_${date}.${format}`;
+    const fallback = `vitalsync_${DATASET_FILE[dataset]}_${date}.${format}`;
     setBusyFormat(format);
     toast.info('Exportação iniciada.');
     try {

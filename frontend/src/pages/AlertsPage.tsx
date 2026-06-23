@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Bell } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Bell, X } from 'lucide-react';
 import { Role, useAuth } from '../auth/AuthContext';
 import { cn } from '../components/ui';
 import { getDashboardData, type AlertSeverity } from '../lib/dashboard-data';
@@ -15,6 +15,15 @@ const FILTERS: Array<{ value: AlertSeverity | 'ALL'; label: string }> = [
 export function AlertsPage() {
   const { hasRole } = useAuth();
   const [filter, setFilter] = useState<AlertSeverity | 'ALL'>('ALL');
+  // ?team= vem de "Minhas Equipes" — o backend restringe aos alertas da equipe.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const team = searchParams.get('team') ?? '';
+
+  function clearTeam() {
+    const next = new URLSearchParams(searchParams);
+    next.delete('team');
+    setSearchParams(next, { replace: true });
+  }
 
   const { alerts } = getDashboardData(hasRole(Role.ADM) ? 'system' : 'team');
   const filtered = alerts.filter((a) => filter === 'ALL' || a.severity === filter);
@@ -44,10 +53,27 @@ export function AlertsPage() {
         </div>
       </div>
 
+      {team && (
+        <div className="flex items-center gap-2 animate-entry">
+          <span className="inline-flex items-center gap-2 bg-primary/10 text-primary text-xs font-semibold rounded-full pl-3 pr-1.5 py-1">
+            Alertas da Equipe nº {team.padStart(2, '0')}
+            <button
+              onClick={clearTeam}
+              className="size-5 rounded-full hover:bg-primary/20 flex items-center justify-center"
+              aria-label="Remover filtro de equipe"
+            >
+              <X className="size-3.5" />
+            </button>
+          </span>
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground animate-entry">
           <Bell className="size-8 mx-auto mb-3 opacity-40" />
-          <p className="font-semibold">Nenhum alerta neste filtro</p>
+          <p className="font-semibold">
+            {team ? 'Nenhum alerta pendente nas suas equipes.' : 'Nenhum alerta neste filtro'}
+          </p>
         </div>
       ) : (
         <ul className="space-y-3 animate-entry [animation-delay:100ms]">

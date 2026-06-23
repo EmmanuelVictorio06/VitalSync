@@ -167,8 +167,8 @@ export const surgeryTypesApi = {
    ===================================================================== */
 
 let general: GeneralSettings = {
-  systemName: 'CuraPath',
-  supportEmail: 'suporte@curapath.com.br',
+  systemName: 'VitalSync',
+  supportEmail: 'suporte@vitalsync.com.br',
   supportPhone: '(41) 3000-0000',
   monitoringDays: 10,
   timezone: 'America/Sao_Paulo',

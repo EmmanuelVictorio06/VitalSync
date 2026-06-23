@@ -16,6 +16,10 @@ build/
 # Prisma
 backend/prisma/*.db
 
+# Uploads (fotos da ferida — dados sensíveis, nunca versionar)
+uploads/
+backend/uploads/
+
 # Logs
 *.log
 npm-debug.log*

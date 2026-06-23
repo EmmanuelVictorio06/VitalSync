@@ -53,6 +53,37 @@ export interface AuditLogger {
   }): Promise<void>;
 }
 
+/** Foto recebida do paciente (já em memória), antes de ser persistida. */
+export interface IncomingPhoto {
+  buffer: Buffer;
+  fileName: string;
+  mimeType: string;
+  size: number;
+}
+
+/** Metadados de uma foto já armazenada com segurança. */
+export interface StoredPhoto {
+  /** Caminho da rota protegida (relativo a /api) usado pelo frontend. */
+  url: string;
+  /** Caminho físico no armazenamento — nunca exposto ao cliente. */
+  storagePath: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  uploadedAt: Date;
+}
+
+/**
+ * Armazenamento de fotos sensíveis (ferida/dreno). Desacoplado da infraestrutura:
+ * hoje grava em disco local; trocar por S3/GCS = nova implementação, sem tocar
+ * nas use cases. O arquivo nunca é exposto em URL pública.
+ */
+export interface PhotoStorageService {
+  save(input: { patientId: string; recordId: string; photo: IncomingPhoto }): Promise<StoredPhoto>;
+  read(storagePath: string): Promise<{ buffer: Buffer; mimeType: string } | null>;
+  delete(storagePath: string): Promise<void>;
+}
+
 export type ExportFormat = 'csv' | 'xlsx';
 
 export interface ExportFile {

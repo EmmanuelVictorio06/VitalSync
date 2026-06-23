@@ -1,37 +1,10 @@
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
-import {
-  Activity,
-  Bell,
-  Building2,
-  ClipboardList,
-  FileDown,
-  Heart,
-  LayoutDashboard,
-  LogOut,
-  Plus,
-  Scissors,
-  Search,
-  Settings,
-  Stethoscope,
-  User,
-  UserPlus,
-  Users,
-} from 'lucide-react';
-import { Role, useAuth } from '../auth/AuthContext';
-import { getDashboardData } from '../lib/dashboard-data';
-import { canAccessAdmin } from '../lib/permissions';
+import { Heart, LogOut, Plus, Search, Stethoscope } from 'lucide-react';
+import { useAuth } from '../auth/AuthContext';
+import { useRoleMenus, type NavItem } from './RoleBasedSidebar';
+import { canRegisterPatients } from '../lib/permissions';
 import { cn } from './ui';
-
-type IconType = React.ComponentType<{ className?: string }>;
-
-interface NavItem {
-  to: string;
-  label: string;
-  short: string;
-  icon: IconType;
-  badge?: number;
-}
 
 const ROLE_LABEL: Record<string, string> = {
   ADM: 'Administrador Geral',
@@ -44,7 +17,9 @@ const PAGE_TITLES: Array<{ match: (path: string) => boolean; title: string }> = 
   { match: (p) => p.startsWith('/monitoring'), title: 'Pacientes em Monitoramento' },
   { match: (p) => p === '/patients/new', title: 'Cadastro de Pacientes' },
   { match: (p) => p.startsWith('/patients/'), title: 'Acompanhamento Individual' },
-  { match: (p) => p.startsWith('/teams'), title: 'Equipes Médicas' },
+  { match: (p) => p.startsWith('/teams'), title: 'Gerenciar Equipes' },
+  { match: (p) => p.startsWith('/my-teams'), title: 'Minhas Equipes' },
+  { match: (p) => p.startsWith('/my-team'), title: 'Minha Equipe' },
   { match: (p) => p.startsWith('/alerts'), title: 'Alertas' },
   { match: (p) => p.startsWith('/my-care'), title: 'Meus Atendimentos' },
   { match: (p) => p.startsWith('/profile'), title: 'Meu Perfil' },
@@ -58,53 +33,6 @@ function initials(name?: string): string {
   if (!name) return '?';
   const parts = name.trim().split(/\s+/);
   return ((parts[0]?.[0] ?? '') + (parts[parts.length - 1]?.[0] ?? '')).toUpperCase();
-}
-
-/** Menus por perfil (renderização condicional de permissões). */
-function useRoleMenus(): { main: NavItem[]; admin: NavItem[] } {
-  const { user, hasRole } = useAuth();
-  const isAdmin = hasRole(Role.ADM);
-  const unattended = getDashboardData(isAdmin ? 'system' : 'team').kpis.unattendedAlerts;
-
-  // Seção Administração: ADM sempre; cirurgião principal apenas se autorizado
-  // (ver lib/permissions). Exportações gerais continuam exclusivas do ADM.
-  const admin: NavItem[] = canAccessAdmin(user?.role)
-    ? [
-        { to: '/admin/hospitals', label: 'Hospitais', short: 'Hospitais', icon: Building2 },
-        { to: '/admin/surgery-types', label: 'Tipos de Cirurgia', short: 'Cirurgias', icon: Scissors },
-        ...(isAdmin
-          ? [{ to: '/admin/exports', label: 'Exportações', short: 'Exportar', icon: FileDown } satisfies NavItem]
-          : []),
-        { to: '/admin/settings', label: 'Configurações', short: 'Config.', icon: Settings },
-      ]
-    : [];
-
-  if (isAdmin) {
-    return {
-      main: [
-        { to: '/dashboard', label: 'Dashboard', short: 'Início', icon: LayoutDashboard },
-        { to: '/teams', label: 'Gerenciar Equipes', short: 'Equipes', icon: Users },
-        { to: '/patients/new', label: 'Cadastro de Pacientes', short: 'Cadastrar', icon: UserPlus },
-        { to: '/monitoring', label: 'Pacientes em Monitoramento', short: 'Pacientes', icon: Activity },
-        { to: '/alerts', label: 'Alertas', short: 'Alertas', icon: Bell, badge: unattended },
-      ],
-      admin,
-    };
-  }
-
-  const main: NavItem[] = [
-    { to: '/dashboard', label: 'Dashboard', short: 'Início', icon: LayoutDashboard },
-    { to: '/patients/new', label: 'Cadastro de Pacientes', short: 'Cadastrar', icon: UserPlus },
-    { to: '/monitoring', label: 'Pacientes em Monitoramento', short: 'Pacientes', icon: Activity },
-    { to: '/alerts', label: 'Alertas', short: 'Alertas', icon: Bell, badge: unattended },
-    { to: '/my-care', label: 'Meus Atendimentos', short: 'Atendim.', icon: ClipboardList },
-  ];
-  // Cirurgião principal também gerencia a própria equipe.
-  if (hasRole(Role.SURGEON)) {
-    main.push({ to: '/teams', label: 'Minha Equipe', short: 'Equipe', icon: Users });
-  }
-  main.push({ to: '/profile', label: 'Meu Perfil', short: 'Perfil', icon: User });
-  return { main, admin };
 }
 
 function SidebarLink({ item }: { item: NavItem }) {
@@ -138,7 +66,7 @@ export function Layout() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
-  const title = PAGE_TITLES.find((t) => t.match(pathname))?.title ?? 'CuraPath';
+  const title = PAGE_TITLES.find((t) => t.match(pathname))?.title ?? 'VitalSync';
   const { main, admin } = useRoleMenus();
 
   function submitSearch(e: React.FormEvent) {
@@ -159,7 +87,7 @@ export function Layout() {
           </div>
           <div className="leading-tight">
             <span className="font-extrabold tracking-tight text-lg block">
-              CURA<span className="font-normal text-muted-foreground">PATH</span>
+              Vital<span className="font-normal text-muted-foreground">Sync</span>
             </span>
             <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Post-Op Care</span>
           </div>
@@ -223,13 +151,15 @@ export function Layout() {
             />
           </form>
 
-          <Link
-            to="/patients/new"
-            className="inline-flex items-center gap-2 px-3 md:px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors"
-          >
-            <Plus className="size-4" />
-            <span className="hidden sm:inline">Novo Paciente</span>
-          </Link>
+          {canRegisterPatients(user?.role) && (
+            <Link
+              to="/patients/new"
+              className="inline-flex items-center gap-2 px-3 md:px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              <Plus className="size-4" />
+              <span className="hidden sm:inline">Novo Paciente</span>
+            </Link>
+          )}
         </header>
 
         <main className="flex-1">
