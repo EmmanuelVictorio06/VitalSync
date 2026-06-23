@@ -170,6 +170,13 @@ export function useProtectedImage(path: string | null) {
       setSrc(null);
       return;
     }
+    // URL já assinada (Supabase Storage) — usa direto, sem buscar via Fastify.
+    if (/^https?:\/\//.test(path)) {
+      setSrc(path);
+      setLoading(false);
+      setError(false);
+      return;
+    }
     let active = true;
     let created: string | null = null;
     setLoading(true);
