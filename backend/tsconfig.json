@@ -5,7 +5,7 @@
     "outDir": "./dist",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "types": ["node"]
+    "types": ["node", "bcryptjs", "jsonwebtoken"]
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]
