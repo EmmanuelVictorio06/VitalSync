@@ -39,10 +39,11 @@ async function main(): Promise<void> {
   const passwordHash = await bcrypt.hash(adminPassword, 10);
   await prisma.user.upsert({
     where: { email: adminEmail },
-    update: {},
+    // Mantém a senha do ADM sincronizada com ADMIN_PASSWORD a cada seed.
+    update: { passwordHash, name: adminName, role: 'ADM' },
     create: { name: adminName, email: adminEmail, passwordHash, role: 'ADM' },
   });
-  console.info(`✔ ADM garantido: ${adminEmail}`);
+  console.info(`✔ ADM garantido (senha sincronizada): ${adminEmail}`);
 
   for (const name of SURGERY_TYPES) {
     await prisma.surgeryType.upsert({ where: { name }, update: {}, create: { name } });
