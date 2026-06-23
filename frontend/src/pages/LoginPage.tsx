@@ -20,7 +20,7 @@ export function LoginPage() {
     setBusy(true);
     try {
       await login(email.trim(), password);
-      toast.success('Bem-vindo(a) ao CuraPath!');
+      toast.success('Bem-vindo(a) ao VitalSync!');
       navigate('/monitoring');
     } catch (err) {
       // Mensagem clara, sem termos técnicos (heurística de Nielsen).
@@ -46,7 +46,7 @@ export function LoginPage() {
             <Heart className="size-5" fill="currentColor" />
           </div>
           <span className="text-xl font-extrabold tracking-tight">
-            CURA<span className="font-normal opacity-70">PATH</span>
+            Vital<span className="font-normal opacity-70">Sync</span>
           </span>
         </div>
         <div className="relative space-y-6 max-w-md">
@@ -74,7 +74,7 @@ export function LoginPage() {
             ))}
           </div>
         </div>
-        <p className="relative text-xs opacity-70">© 2026 CuraPath. Todos os direitos reservados.</p>
+        <p className="relative text-xs opacity-70">© 2026 VitalSync. Todos os direitos reservados.</p>
       </aside>
 
       {/* Formulário de login */}
@@ -85,7 +85,7 @@ export function LoginPage() {
               <Heart className="size-5" fill="currentColor" />
             </div>
             <span className="text-lg font-extrabold tracking-tight">
-              CURA<span className="font-normal text-muted-foreground">PATH</span>
+              Vital<span className="font-normal text-muted-foreground">Sync</span>
             </span>
           </div>
 

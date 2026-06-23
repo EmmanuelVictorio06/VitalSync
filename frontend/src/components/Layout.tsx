@@ -66,7 +66,7 @@ export function Layout() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
-  const title = PAGE_TITLES.find((t) => t.match(pathname))?.title ?? 'CuraPath';
+  const title = PAGE_TITLES.find((t) => t.match(pathname))?.title ?? 'VitalSync';
   const { main, admin } = useRoleMenus();
 
   function submitSearch(e: React.FormEvent) {
@@ -87,7 +87,7 @@ export function Layout() {
           </div>
           <div className="leading-tight">
             <span className="font-extrabold tracking-tight text-lg block">
-              CURA<span className="font-normal text-muted-foreground">PATH</span>
+              Vital<span className="font-normal text-muted-foreground">Sync</span>
             </span>
             <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Post-Op Care</span>
           </div>

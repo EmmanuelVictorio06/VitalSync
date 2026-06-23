@@ -15,7 +15,7 @@ export function PermissionGuard({ children, roles }: { children: ReactElement; r
   if (loading) {
     return (
       <div className="min-h-screen grid place-items-center bg-background">
-        <Loading label="Carregando CuraPath…" />
+        <Loading label="Carregando VitalSync…" />
       </div>
     );
   }
