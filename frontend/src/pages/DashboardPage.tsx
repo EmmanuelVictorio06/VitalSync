@@ -22,7 +22,8 @@ import {
   WeeklyBarChart,
 } from '../components/dashboard';
 import { Loading } from '../components/ui';
-import { fetchDashboard, type DashboardData } from '../lib/dashboard-data';
+import { dashboardService } from '../services/dashboardService';
+import type { DashboardData } from '../lib/dashboard-data';
 
 export function DashboardPage() {
   const { user, hasRole } = useAuth();
@@ -34,7 +35,8 @@ export function DashboardPage() {
 
   useEffect(() => {
     let alive = true;
-    fetchDashboard()
+    dashboardService
+      .getDashboard()
       .then((d) => alive && setData(d))
       .catch(() => alive && setData(null))
       .finally(() => alive && setLoading(false));

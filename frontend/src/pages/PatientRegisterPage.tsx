@@ -3,8 +3,11 @@ import { CheckCircle2, Copy, MessageCircle, UserPlus } from 'lucide-react';
 import { calculateAge, whatsappLink } from '@vitalsync/shared';
 import { useToast } from '../components/Toast';
 import { Button, Field, PhoneInput, SelectField, TextInput } from '../components/ui';
-import { api, ApiError } from '../lib/api';
-import type { SelectItem, SurgeonItem } from '../lib/dto';
+import { hospitalService } from '../services/hospitalService';
+import { surgeryTypeService } from '../services/surgeryTypeService';
+import { teamService } from '../services/teamService';
+import { patientService } from '../services/patientService';
+import type { Hospital, MedicalTeam, SurgeryType } from '../services/types';
 
 interface FormState {
   name: string;
@@ -14,31 +17,27 @@ interface FormState {
   surgeryDate: string;
   dischargeDate: string;
   hospitalId: string;
-  surgeonId: string;
+  teamId: string;
 }
 const empty: FormState = {
-  name: '', birthDate: '', phone: '', surgeryTypeId: '', surgeryDate: '', dischargeDate: '', hospitalId: '', surgeonId: '',
+  name: '', birthDate: '', phone: '', surgeryTypeId: '', surgeryDate: '', dischargeDate: '', hospitalId: '', teamId: '',
 };
 
 export function PatientRegisterPage() {
   const toast = useToast();
   const [form, setForm] = useState<FormState>(empty);
-  const [surgeryTypes, setSurgeryTypes] = useState<SelectItem[]>([]);
-  const [hospitals, setHospitals] = useState<SelectItem[]>([]);
-  const [surgeons, setSurgeons] = useState<SurgeonItem[]>([]);
+  const [surgeryTypes, setSurgeryTypes] = useState<SurgeryType[]>([]);
+  const [hospitals, setHospitals] = useState<Hospital[]>([]);
+  const [teams, setTeams] = useState<MedicalTeam[]>([]);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ link: string; phone: string; name: string } | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      api.get<{ items: SelectItem[] }>('/catalog/surgery-types'),
-      api.get<{ items: SelectItem[] }>('/catalog/hospitals'),
-      api.get<{ items: SurgeonItem[] }>('/catalog/surgeons'),
-    ])
-      .then(([st, h, s]) => {
-        setSurgeryTypes(st.items);
-        setHospitals(h.items);
-        setSurgeons(s.items);
+    Promise.all([surgeryTypeService.list(), hospitalService.list(), teamService.list()])
+      .then(([st, h, t]) => {
+        setSurgeryTypes(st.filter((x) => x.status === 'ACTIVE'));
+        setHospitals(h.filter((x) => x.status === 'ACTIVE'));
+        setTeams(t);
       })
       .catch(() => toast.error('Erro ao carregar as listas de cadastro.'));
   }, []);
@@ -56,15 +55,22 @@ export function PatientRegisterPage() {
   async function submit() {
     setBusy(true);
     try {
-      const res = await api.post<{ patient: { id: string }; link: string }>('/patients', {
-        ...form,
-        phone: form.phone,
+      const patient = await patientService.create({
+        name: form.name,
+        birth_date: form.birthDate || undefined,
+        phone: form.phone || undefined,
+        surgery_type_id: form.surgeryTypeId,
+        surgery_date: form.surgeryDate || undefined,
+        hospital_discharge_date: form.dischargeDate || undefined,
+        hospital_id: form.hospitalId,
+        team_id: form.teamId,
       });
+      const link = `${window.location.origin}/r/${patient.secure_token}`;
       toast.success('Paciente cadastrado e link gerado!');
-      setResult({ link: res.link, phone: form.phone, name: form.name });
+      setResult({ link, phone: form.phone, name: form.name });
       setForm(empty);
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Erro ao cadastrar paciente.');
+      toast.error(err instanceof Error ? err.message : 'Erro ao cadastrar paciente.');
     } finally {
       setBusy(false);
     }
@@ -113,11 +119,11 @@ export function PatientRegisterPage() {
 
         <Block index={3} title="Equipe Médica">
           <SelectField
-            label="Cirurgião principal"
-            hint="Os médicos associados a este cirurgião serão vinculados automaticamente para receber alertas."
-            value={form.surgeonId}
-            onChange={(e) => set('surgeonId', e.target.value)}
-            options={surgeons.map((s) => ({ value: s.id, label: s.teamNumber ? `${s.name} (Equipe ${s.teamNumber})` : s.name }))}
+            label="Equipe responsável"
+            hint="O paciente fica vinculado a esta equipe; os médicos dela receberão os alertas."
+            value={form.teamId}
+            onChange={(e) => set('teamId', e.target.value)}
+            options={teams.map((t) => ({ value: t.id, label: `Equipe ${String(t.team_number).padStart(2, '0')}` }))}
             required
           />
         </Block>
