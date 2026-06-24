@@ -356,6 +356,7 @@ export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, 
   const [timeline, setTimeline] = useState<AttendanceConfirmation[] | null>(null);
   const [logs, setLogs] = useState<NotificationLog[] | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [drainPhotoUrl, setDrainPhotoUrl] = useState<string | null>(null);
   const [busyResend, setBusyResend] = useState(false);
   const r = alert.vital_record;
   const resolved = alert.attendance_status === 'ATTENDED' || alert.attendance_status === 'IGNORED';
@@ -369,8 +370,11 @@ export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, 
     if (r?.wound_photo_path) {
       storageService.getPatientPhotoUrl(r.wound_photo_path).then((u) => active && setPhotoUrl(u)).catch(() => {});
     }
+    if (r?.drain_photo_path) {
+      storageService.getPatientPhotoUrl(r.drain_photo_path).then((u) => active && setDrainPhotoUrl(u)).catch(() => {});
+    }
     return () => { active = false; };
-  }, [alert.id, r?.wound_photo_path]);
+  }, [alert.id, r?.wound_photo_path, r?.drain_photo_path]);
 
   async function copySummary() {
     await navigator.clipboard.writeText(alertSummaryText(alert));
@@ -439,10 +443,28 @@ export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, 
               ['Sangramento', r?.has_bleeding ? 'Sim' : 'Não'],
               ['Passos', r?.steps != null ? String(r.steps) : '—'],
             ]} />
-            {photoUrl && (
-              <div className="mt-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Foto da ferida/dreno</p>
-                <img src={photoUrl} alt="Foto enviada pelo paciente" className="rounded-lg border border-border max-h-56 object-cover" />
+            {r && (
+              <p className="mt-3 text-xs">
+                <span className="font-bold">Possui dreno:</span>{' '}
+                <span className={r.has_drain ? 'text-primary font-semibold' : 'text-muted-foreground'}>
+                  {r.has_drain ? 'Sim' : 'Não'}
+                </span>
+              </p>
+            )}
+            {(photoUrl || drainPhotoUrl) && (
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                {photoUrl && (
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Cicatriz operatória</p>
+                    <img src={photoUrl} alt="Foto da cicatriz operatória" className="rounded-lg border border-border max-h-56 w-full object-cover" />
+                  </div>
+                )}
+                {drainPhotoUrl && (
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Dreno</p>
+                    <img src={drainPhotoUrl} alt="Foto do dreno" className="rounded-lg border border-border max-h-56 w-full object-cover" />
+                  </div>
+                )}
               </div>
             )}
           </DSection>

@@ -8,7 +8,6 @@ import {
   Gauge,
   Heart,
   HeartPulse,
-  ImageIcon,
   Moon,
   Sun,
   Thermometer,
@@ -16,7 +15,7 @@ import {
 } from 'lucide-react';
 import { Period, calculateAge, formatCivilDate } from '@vitalsync/shared';
 import { useToast } from '../components/Toast';
-import { PhotoUploadField } from '../components/photo';
+import { PatientPhotoUploadSection } from '../components/photo';
 import { Field, IntensityScale, Loading, YesNo, cn } from '../components/ui';
 import { storageService } from '../services/storageService';
 import { vitalSignsService, type PatientLinkInfo } from '../services/vitalSignsService';
@@ -221,9 +220,14 @@ function MeasurementForm({
   const [vomitCount, setVomitCount] = useState('');
   const [hadBleeding, setHadBleeding] = useState<boolean | null>(null);
   const [steps, setSteps] = useState('');
-  const [photo, setPhoto] = useState<File | null>(null);
+  const [hasDrain, setHasDrain] = useState<boolean | null>(null);
+  const [woundPhoto, setWoundPhoto] = useState<File | null>(null);
+  const [drainPhoto, setDrainPhoto] = useState<File | null>(null);
 
   const isNight = period === Period.NIGHT;
+  // Só conta a foto do dreno quando o paciente informou possuir dreno.
+  const effectiveDrainPhoto = hasDrain ? drainPhoto : null;
+  const anyPhoto = Boolean(woundPhoto || effectiveDrainPhoto);
 
   function num(v: string): number {
     return Number(v.replace(',', '.'));
@@ -236,6 +240,7 @@ function MeasurementForm({
     if (urinatedNormally === null) return 'Responda sobre a diurese.';
     if (hadVomit === null) return 'Responda sobre vômitos.';
     if (hadBleeding === null) return 'Responda sobre sangramentos.';
+    if (hasDrain === null) return 'Responda se você possui dreno.';
     const checks: Array<[string, number, { min: number; max: number }]> = [
       ['Temperatura', num(temperature), ranges.temperature],
       ['Saturação', num(spo2), ranges.spo2],
@@ -258,9 +263,13 @@ function MeasurementForm({
     }
     setBusy(true);
     try {
-      // Foto opcional: sobe ao Storage (bucket privado) e guarda só o caminho.
+      // Fotos opcionais: sobem ao Storage (bucket privado) e guardam só o caminho.
+      // A foto do dreno só é enviada quando o paciente informou possuir dreno.
       let woundPhotoPath: string | undefined;
-      if (photo) woundPhotoPath = await storageService.uploadPatientPhoto(photo, patientId);
+      if (woundPhoto) woundPhotoPath = await storageService.uploadPatientPhoto(woundPhoto, patientId, 'wound');
+      let drainPhotoPath: string | undefined;
+      if (effectiveDrainPhoto)
+        drainPhotoPath = await storageService.uploadPatientPhoto(effectiveDrainPhoto, patientId, 'drain');
 
       await vitalSignsService.submitByToken({
         secure_token: token,
@@ -277,8 +286,10 @@ function MeasurementForm({
         has_bleeding: hadBleeding ?? false,
         steps: isNight && steps ? Number(steps) : undefined,
         wound_photo_path: woundPhotoPath,
+        has_drain: hasDrain ?? false,
+        drain_photo_path: drainPhotoPath,
       });
-      onSuccess(Boolean(photo));
+      onSuccess(anyPhoto);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao enviar. Tente novamente.');
     } finally {
@@ -354,14 +365,31 @@ function MeasurementForm({
         </Section>
       )}
 
-      {/* Foto de acompanhamento (opcional) */}
-      <PhotoUploadField value={photo} onChange={setPhoto} onError={(msg) => toast.error(msg)} />
+      {/* Fotos de acompanhamento (opcional) — pergunta do dreno + uploads */}
+      <PatientPhotoUploadSection
+        hasDrain={hasDrain}
+        onHasDrainChange={setHasDrain}
+        woundPhoto={woundPhoto}
+        onWoundPhotoChange={setWoundPhoto}
+        drainPhoto={drainPhoto}
+        onDrainPhotoChange={setDrainPhoto}
+        onError={(msg) => toast.error(msg)}
+      />
 
       {/* Revisão rápida antes do envio */}
-      <div className="bg-card border border-border rounded-2xl shadow-sm p-4 flex items-center gap-2 text-sm">
-        <ImageIcon className={cn('size-4', photo ? 'text-stable' : 'text-muted-foreground')} />
-        <span className="font-semibold">{photo ? 'Foto anexada' : 'Nenhuma foto anexada'}</span>
-        {photo && <CheckCircle2 className="size-4 text-stable ml-auto" />}
+      <div className="bg-card border border-border rounded-2xl shadow-sm p-4 space-y-2.5 text-sm">
+        <p className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Revisão</p>
+        <ReviewLine
+          ok={hasDrain !== null}
+          label={hasDrain === null ? 'Possui dreno: não informado' : `Possui dreno: ${hasDrain ? 'Sim' : 'Não'}`}
+        />
+        <ReviewLine ok={Boolean(woundPhoto)} label={woundPhoto ? 'Foto da cicatriz operatória anexada' : 'Nenhuma foto da cicatriz anexada'} />
+        {hasDrain && (
+          <ReviewLine
+            ok={Boolean(effectiveDrainPhoto)}
+            label={effectiveDrainPhoto ? 'Foto do dreno anexada' : 'Nenhuma foto do dreno anexada'}
+          />
+        )}
       </div>
 
       <div className="flex flex-col gap-3 pt-2">
@@ -451,6 +479,19 @@ function SummaryItem({ label, value }: { label: string; value: string }) {
   );
 }
 
+function ReviewLine({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      {ok ? (
+        <CheckCircle2 className="size-4 text-stable shrink-0" />
+      ) : (
+        <span className="size-4 rounded-full border-2 border-muted-foreground/40 shrink-0" />
+      )}
+      <span className={cn('font-semibold', ok ? 'text-foreground' : 'text-muted-foreground')}>{label}</span>
+    </div>
+  );
+}
+
 function SuccessScreen({ photoSent }: { photoSent?: boolean }) {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
@@ -465,7 +506,7 @@ function SuccessScreen({ photoSent }: { photoSent?: boolean }) {
       </p>
       {photoSent && (
         <p className="text-sm font-semibold text-stable mt-3 max-w-sm animate-entry [animation-delay:230ms]">
-          A foto foi enviada para análise da equipe médica.
+          As fotos foram enviadas para análise da equipe médica.
         </p>
       )}
       <p className="text-xs text-muted-foreground mt-2 max-w-sm animate-entry [animation-delay:250ms]">
