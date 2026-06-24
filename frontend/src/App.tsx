@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { Role } from './auth/AuthContext';
+import { AlertCountProvider } from './components/AlertCount';
 import { Layout } from './components/Layout';
 import { PermissionGuard } from './components/PermissionGuard';
 import { adminRoles } from './lib/permissions';
@@ -40,7 +41,9 @@ export function App() {
       <Route
         element={
           <PermissionGuard>
-            <Layout />
+            <AlertCountProvider>
+              <Layout />
+            </AlertCountProvider>
           </PermissionGuard>
         }
       >

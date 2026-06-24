@@ -124,6 +124,19 @@ export const alertService = {
     };
   },
 
+  /**
+   * Conta os alertas NÃO atendidos (Pendente + Em análise) visíveis ao usuário
+   * (RLS). Alimenta o badge da sidebar — diminui à medida que são atendidos.
+   */
+  async getUnattendedCount(): Promise<number> {
+    const { count, error } = await supabase
+      .from('clinical_alerts')
+      .select('id', { count: 'exact', head: true })
+      .in('attendance_status', ['PENDING', 'IN_ANALYSIS']);
+    if (error) return 0;
+    return count ?? 0;
+  },
+
   /** Conta notificações com falha entre os alertas visíveis (card do Admin). */
   async getFailedNotificationCount(): Promise<number> {
     const { count, error } = await supabase
