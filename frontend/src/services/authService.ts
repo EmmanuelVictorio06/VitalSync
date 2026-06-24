@@ -1,9 +1,16 @@
 /** Autenticação via Supabase Auth (login de médicos/admin). */
 import type { Session, User } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { isSupabaseConfigured, supabase } from '../lib/supabase';
+
+/** Mensagem amigável quando faltam as variáveis de ambiente do Supabase. */
+const SUPABASE_NOT_CONFIGURED =
+  'Supabase não configurado. Verifique as variáveis VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.';
 
 export const authService = {
   async signIn(email: string, password: string): Promise<Session> {
+    // Falha rápida e clara — evita o POST para placeholder.supabase.co
+    // (que falharia com ERR_NAME_NOT_RESOLVED) quando o ambiente não está pronto.
+    if (!isSupabaseConfigured) throw new Error(SUPABASE_NOT_CONFIGURED);
     const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     if (error) throw new Error(error.message);
     if (!data.session) throw new Error('Sessão não criada.');
