@@ -99,6 +99,19 @@
   --border: oklch(92.9% 0.013 255.508);
   --input: oklch(92.9% 0.013 255.508);
   --ring: oklch(54.6% 0.214 263);
+  --home-flow-start: color-mix(in oklab, var(--background) 91%, var(--primary) 9%);
+  --home-flow-mid: color-mix(in oklab, var(--secondary) 86%, var(--background) 14%);
+  --home-flow-soft: color-mix(in oklab, var(--surface) 68%, var(--secondary) 32%);
+  --home-flow-clear: color-mix(in oklab, var(--surface) 88%, var(--primary) 12%);
+  background:
+    linear-gradient(
+      180deg,
+      var(--home-flow-start) 0%,
+      var(--home-flow-soft) 20%,
+      var(--home-flow-mid) 44%,
+      var(--home-flow-clear) 68%,
+      var(--home-flow-soft) 100%
+    );
 }
 
 .scroll-reveal {
@@ -116,6 +129,55 @@
 .scroll-reveal.is-visible {
   opacity: 1;
   transform: translate3d(0, 0, 0);
+}
+
+.home-section {
+  position: relative;
+  background: var(--home-section-bg, transparent);
+}
+
+.home-section-hero {
+  --home-section-bg: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--background) 88%, var(--primary) 12%) 0%,
+    color-mix(in oklab, var(--background) 96%, var(--primary) 4%) 58%,
+    color-mix(in oklab, var(--secondary) 68%, var(--background) 32%) 100%
+  );
+}
+
+.home-section-soft {
+  --home-section-bg: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--secondary) 82%, var(--surface) 18%) 0%,
+    color-mix(in oklab, var(--background) 88%, var(--primary) 12%) 48%,
+    color-mix(in oklab, var(--surface) 64%, var(--secondary) 36%) 100%
+  );
+}
+
+.home-section-clear {
+  --home-section-bg: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--surface) 72%, var(--secondary) 28%) 0%,
+    color-mix(in oklab, var(--surface) 92%, var(--primary) 8%) 52%,
+    color-mix(in oklab, var(--secondary) 60%, var(--surface) 40%) 100%
+  );
+}
+
+.home-section-final {
+  --home-section-bg: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--surface) 54%, var(--secondary) 46%) 0%,
+    color-mix(in oklab, var(--background) 86%, var(--primary) 14%) 100%
+  );
+}
+
+.home-footer {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--surface) 88%, var(--secondary) 12%) 0%,
+      var(--surface) 100%
+    );
 }
 
 @keyframes slideUp {
