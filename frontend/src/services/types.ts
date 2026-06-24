@@ -38,6 +38,34 @@ export interface Profile {
   updated_at: string | null;
 }
 
+/** Linha da tela "Gerenciar Usuários" (vem da RPC admin_get_users_overview). */
+export interface UserOverview {
+  id: string;
+  name: string;
+  email: string;
+  whatsapp: string | null;
+  role: UserRole;
+  status: EntityStatus;
+  avatar_url: string | null;
+  specialty: string | null;
+  crm: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string | null;
+  last_sign_in_at: string | null;
+  team_count: number;
+}
+
+/** Vínculo de um usuário com uma equipe (resumo exibido nos detalhes). */
+export interface UserTeamLink {
+  teamId: string;
+  teamNumber: number;
+  roleInTeam: RoleInTeam;
+  surgeonName: string;
+  patientCount: number;
+  teamStatus: EntityStatus;
+}
+
 export interface AccountRequest {
   id: string;
   profile_id: string;

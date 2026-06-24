@@ -24,7 +24,7 @@ import {
   X,
 } from 'lucide-react';
 import { onlyDigits } from '@vitalsync/shared';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
 import { Button, ConfirmModal, SelectField, StatusBadge, TextInput } from '../components/ui';
@@ -52,6 +52,7 @@ type StatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
 export function TeamsPage() {
   const { user } = useAuth();
   const toast = useToast();
+  const { teamId: deepLinkTeamId } = useParams<{ teamId?: string }>();
 
   const [summary, setSummary] = useState<AdminTeamSummary | null>(null);
   const [teams, setTeams] = useState<TeamDetail[] | null>(null);
@@ -96,6 +97,11 @@ export function TeamsPage() {
   useEffect(() => {
     if (permissionService.canManageTeams(user)) void load();
   }, [load, user]);
+
+  // Deep-link a partir de "Gerenciar Usuários": /admin/teams/:teamId abre os detalhes.
+  useEffect(() => {
+    if (deepLinkTeamId && teams?.some((t) => t.summary.id === deepLinkTeamId)) setOpenId(deepLinkTeamId);
+  }, [deepLinkTeamId, teams]);
 
   const filtered = useMemo(() => {
     if (!teams) return [];
