@@ -1,20 +1,20 @@
 /**
  * "Gerenciar Equipes" — Administrador. Dados reais do Supabase.
  *
- * Cria equipes (escolhendo um cirurgião responsável já cadastrado) e vincula
- * médicos associados (perfis existentes). Criar CONTAS de médico (auth.users)
- * exige privilégio de admin e será feito por Edge Function — por ora, os
- * profissionais devem existir (criados no painel Authentication do Supabase).
+ * Cadastra médicos (conta de login + telefone para WhatsApp), cria equipes sob
+ * um cirurgião responsável e vincula médicos associados. O cadastro de contas
+ * usa a RPC `admin_create_doctor` (SECURITY DEFINER, só admin).
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Trash2, Users2 } from 'lucide-react';
+import { Plus, Trash2, UserPlus, Users2 } from 'lucide-react';
+import { onlyDigits } from '@vitalsync/shared';
 import { useToast } from '../components/Toast';
-import { Button, SelectField, TextInput } from '../components/ui';
+import { Button, PhoneInput, SelectField, TextInput } from '../components/ui';
 import { EmptyState, LoadingState } from '../components/admin';
 import { profileService } from '../services/profileService';
 import { teamService } from '../services/teamService';
 import { teamViewService, type TeamDetail } from '../services/teamViewService';
-import type { Profile } from '../services/types';
+import type { Profile, RoleInTeam } from '../services/types';
 
 export function TeamsPage() {
   const toast = useToast();
@@ -25,6 +25,7 @@ export function TeamsPage() {
   const [number, setNumber] = useState('');
   const [surgeonId, setSurgeonId] = useState('');
   const [saving, setSaving] = useState(false);
+  const [creatingDoctor, setCreatingDoctor] = useState(false);
 
   const load = useCallback(async () => {
     setTeams(null);
@@ -89,12 +90,20 @@ export function TeamsPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto w-full space-y-8">
-      <div className="animate-entry">
-        <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">Gerenciar Equipes</h2>
-        <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-          Crie equipes sob um cirurgião responsável e vincule médicos associados. Os profissionais devem já estar
-          cadastrados (Authentication do Supabase).
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-end gap-3 animate-entry">
+        <div className="flex-1">
+          <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">Gerenciar Equipes</h2>
+          <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
+            Cadastre médicos (com login e telefone para WhatsApp), crie equipes sob um cirurgião responsável e vincule
+            os associados.
+          </p>
+        </div>
+        <button
+          onClick={() => setCreatingDoctor(true)}
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 self-start sm:self-auto"
+        >
+          <UserPlus className="size-4" /> Cadastrar médico
+        </button>
       </div>
 
       {/* Nova equipe */}
@@ -137,6 +146,72 @@ export function TeamsPage() {
           ))}
         </div>
       )}
+
+      {creatingDoctor && (
+        <DoctorFormModal
+          onClose={() => setCreatingDoctor(false)}
+          onSaved={async () => {
+            setCreatingDoctor(false);
+            await load();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function DoctorFormModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const toast = useToast();
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
+  const [role, setRole] = useState<RoleInTeam>('ASSOCIATED_DOCTOR');
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    if (!name.trim() || !email.trim() || password.length < 6) {
+      toast.error('Preencha nome, e-mail e senha (mínimo 6 caracteres).');
+      return;
+    }
+    setBusy(true);
+    try {
+      await teamService.createDoctor({ name: name.trim(), email: email.trim(), password, whatsapp: onlyDigits(whatsapp), role });
+      toast.success('Médico cadastrado. Ele já pode fazer login com o e-mail e senha.');
+      onSaved();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao cadastrar médico.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-md space-y-4 animate-entry my-8" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-extrabold tracking-tight">Cadastrar médico</h2>
+        <p className="text-xs text-muted-foreground -mt-2">
+          O e-mail e a senha servem para o login no site; o telefone recebe os alertas por WhatsApp.
+        </p>
+        <SelectField
+          label="Função"
+          value={role}
+          onChange={(e) => setRole(e.target.value as RoleInTeam)}
+          options={[
+            { value: 'ASSOCIATED_DOCTOR', label: 'Médico Associado' },
+            { value: 'MAIN_SURGEON', label: 'Cirurgião Responsável' },
+          ]}
+          placeholder="Selecione"
+        />
+        <TextInput label="Nome" placeholder="Ex. Dr. João Silva" value={name} onChange={(e) => setName(e.target.value)} required />
+        <TextInput label="E-mail (login)" type="email" placeholder="medico@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <TextInput label="Senha" type="password" placeholder="••••••••" hint="Mínimo 6 caracteres." value={password} onChange={(e) => setPassword(e.target.value)} required />
+        <PhoneInput label="Telefone (WhatsApp)" value={whatsapp} onChange={setWhatsapp} />
+        <div className="flex items-center justify-between gap-3 pt-2">
+          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          <Button onClick={save} loading={busy}>Cadastrar médico</Button>
+        </div>
+      </div>
     </div>
   );
 }
