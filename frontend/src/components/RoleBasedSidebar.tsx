@@ -24,7 +24,7 @@ import {
   Users2,
 } from 'lucide-react';
 import { Role, useAuth } from '../auth/AuthContext';
-import { getDashboardData } from '../lib/dashboard-data';
+import { useAlertCount } from './AlertCount';
 import { canAccessAdmin } from '../lib/permissions';
 
 type IconType = React.ComponentType<{ className?: string }>;
@@ -41,7 +41,8 @@ export interface NavItem {
 export function useRoleMenus(): { main: NavItem[]; admin: NavItem[] } {
   const { user, hasRole } = useAuth();
   const isAdmin = hasRole(Role.ADM);
-  const unattended = getDashboardData(isAdmin ? 'system' : 'team').kpis.unattendedAlerts;
+  // Contagem REAL de alertas não atendidos (Supabase, escopo por RLS).
+  const { count: unattended } = useAlertCount();
 
   // Seção Administração: ADM sempre; cirurgião apenas se autorizado (ver
   // lib/permissions). Exportações gerais continuam exclusivas do ADM.

@@ -21,14 +21,17 @@ import {
   IgnoreAlertModal,
   MarkAttendedModal,
   applyAlertFilters,
+  sortAlerts,
   type AlertFiltersState,
 } from '../components/alerts';
+import { useAlertCount } from '../components/AlertCount';
 import { alertService, type AlertRow } from '../services/alertService';
 import { permissionService } from '../services/permissionService';
 
 export function AlertsPage() {
   const { user } = useAuth();
   const toast = useToast();
+  const { refresh: refreshCount } = useAlertCount();
   const [searchParams] = useSearchParams();
 
   const [alerts, setAlerts] = useState<AlertRow[] | null>(null);
@@ -54,6 +57,7 @@ export function AlertsPage() {
     try {
       const data = await alertService.getAlerts();
       setAlerts(data);
+      refreshCount(); // atualiza o badge da sidebar (não atendidos restantes)
       if (permissionService.isAdmin(user)) {
         setFailedCount(await alertService.getFailedNotificationCount());
       }
@@ -61,7 +65,7 @@ export function AlertsPage() {
       setError(true);
       setAlerts([]);
     }
-  }, [user]);
+  }, [user, refreshCount]);
 
   useEffect(() => {
     void load();
@@ -92,7 +96,7 @@ export function AlertsPage() {
     return [...map.entries()].sort().map(([value, label]) => ({ value, label }));
   }, [alerts]);
 
-  const filtered = useMemo(() => applyAlertFilters(alerts ?? [], filters), [alerts, filters]);
+  const filtered = useMemo(() => sortAlerts(applyAlertFilters(alerts ?? [], filters)), [alerts, filters]);
 
   async function handleInAnalysis(alert: AlertRow) {
     try {
@@ -149,6 +153,13 @@ export function AlertsPage() {
           hint={(alerts.length > 0) ? 'Ajuste os filtros para ver outros alertas.' : 'Novos alertas aparecem quando um paciente registra sinais alterados.'}
         />
       ) : (
+        <>
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground px-1">
+          <span><b className="text-foreground">{filtered.length}</b> alerta(s)</span>
+          {filters.attendance === 'ACTIVE' && !filters.search.trim() && (
+            <span>Atendidos e ignorados ficam ocultos — filtre por “Atendido” ou busque por nome para vê-los.</span>
+          )}
+        </div>
         <ul className="space-y-3">
           {filtered.map((a) => (
             <AlertCard
@@ -161,6 +172,7 @@ export function AlertsPage() {
             />
           ))}
         </ul>
+        </>
       )}
 
       {selected && (

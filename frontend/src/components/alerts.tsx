@@ -162,15 +162,18 @@ export function AlertSummaryCards({ summary, role }: { summary: AlertSummary; ro
 export interface AlertFiltersState {
   search: string;
   severity: 'ALL' | 'RED' | 'YELLOW';
-  attendance: 'ALL' | AttendanceStatus;
+  /** 'ACTIVE' (padrão) esconde Atendido/Ignorado; 'ALL' mostra tudo. */
+  attendance: 'ALL' | 'ACTIVE' | AttendanceStatus;
   period: 'ALL' | 'TODAY' | '7D' | '30D';
   signal: string; // 'ALL' | label
   measurement: 'ALL' | 'MORNING' | 'NIGHT';
   team: string; // 'ALL' | teamNumber as string (só Admin)
 }
 
+// Por padrão a lista mostra só os ATIVOS (não atendidos). Os atendidos/ignorados
+// somem e voltam ao escolher "Atendido"/"Todos" no filtro ou ao buscar por nome.
 export const EMPTY_FILTERS: AlertFiltersState = {
-  search: '', severity: 'ALL', attendance: 'ALL', period: 'ALL', signal: 'ALL', measurement: 'ALL', team: 'ALL',
+  search: '', severity: 'ALL', attendance: 'ACTIVE', period: 'ALL', signal: 'ALL', measurement: 'ALL', team: 'ALL',
 };
 
 const SIGNAL_OPTIONS = ['Temperatura', 'Saturação', 'Pressão', 'Frequência Cardíaca', 'Dor', 'Dispneia', 'Diurese', 'Vômitos', 'Sangramento', 'Passos'];
@@ -210,7 +213,7 @@ export function AlertFilters({ value, onChange, isAdmin, teamOptions }: {
         <Sel label="Status do alerta" value={value.severity} onChange={(v) => set('severity', v as AlertFiltersState['severity'])}
           options={[{ value: 'ALL', label: 'Todos' }, { value: 'RED', label: 'Alerta' }, { value: 'YELLOW', label: 'Atenção' }]} />
         <Sel label="Atendimento" value={value.attendance} onChange={(v) => set('attendance', v as AlertFiltersState['attendance'])}
-          options={[{ value: 'ALL', label: 'Todos' }, { value: 'PENDING', label: 'Pendente' }, { value: 'IN_ANALYSIS', label: 'Em análise' }, { value: 'ATTENDED', label: 'Atendido' }, { value: 'IGNORED', label: 'Ignorado' }]} />
+          options={[{ value: 'ACTIVE', label: 'Ativos (não atendidos)' }, { value: 'PENDING', label: 'Pendente' }, { value: 'IN_ANALYSIS', label: 'Em análise' }, { value: 'ATTENDED', label: 'Atendido' }, { value: 'IGNORED', label: 'Ignorado' }, { value: 'ALL', label: 'Todos' }]} />
         <Sel label="Período" value={value.period} onChange={(v) => set('period', v as AlertFiltersState['period'])}
           options={[{ value: 'ALL', label: 'Todos' }, { value: 'TODAY', label: 'Hoje' }, { value: '7D', label: 'Últimos 7 dias' }, { value: '30D', label: 'Últimos 30 dias' }]} />
         <Sel label="Sinal vital" value={value.signal} onChange={(v) => set('signal', v)}
@@ -229,14 +232,25 @@ export function AlertFilters({ value, onChange, isAdmin, teamOptions }: {
   );
 }
 
+function isResolved(a: AlertRow): boolean {
+  return a.attendance_status === 'ATTENDED' || a.attendance_status === 'IGNORED';
+}
+
 /** Aplica os filtros sobre a lista carregada (RLS já limitou o escopo). */
 export function applyAlertFilters(alerts: AlertRow[], f: AlertFiltersState): AlertRow[] {
   const now = Date.now();
   const within: Record<string, number> = { TODAY: 1, '7D': 7, '30D': 30 };
+  const searching = f.search.trim().length > 0;
   return alerts.filter((a) => {
-    if (f.search && !(a.patient?.name ?? '').toLowerCase().includes(f.search.toLowerCase())) return false;
+    if (searching && !(a.patient?.name ?? '').toLowerCase().includes(f.search.trim().toLowerCase())) return false;
+    // Atendimento: 'ACTIVE' esconde resolvidos — exceto durante uma busca por nome,
+    // que revela também os atendidos/ignorados daquele paciente.
+    if (f.attendance === 'ACTIVE') {
+      if (isResolved(a) && !searching) return false;
+    } else if (f.attendance !== 'ALL' && a.attendance_status !== f.attendance) {
+      return false;
+    }
     if (f.severity !== 'ALL' && a.status !== f.severity) return false;
-    if (f.attendance !== 'ALL' && a.attendance_status !== f.attendance) return false;
     if (f.signal !== 'ALL' && (a.type ?? '').toLowerCase() !== f.signal.toLowerCase()) return false;
     if (f.measurement !== 'ALL' && a.vital_record?.period !== f.measurement) return false;
     if (f.team !== 'ALL' && String(a.team?.team_number ?? '') !== f.team) return false;
@@ -246,6 +260,20 @@ export function applyAlertFilters(alerts: AlertRow[], f: AlertFiltersState): Ale
       if (days > 0 && ageMs > days * 24 * 60 * 60 * 1000) return false;
     }
     return true;
+  });
+}
+
+/** Ordena: não resolvidos primeiro; vermelhos antes de amarelos; mais recentes no topo. */
+export function sortAlerts(alerts: AlertRow[]): AlertRow[] {
+  const sev: Record<string, number> = { RED: 0, YELLOW: 1, GREEN: 2 };
+  return [...alerts].sort((a, b) => {
+    const ra = isResolved(a) ? 1 : 0;
+    const rb = isResolved(b) ? 1 : 0;
+    if (ra !== rb) return ra - rb;
+    const sa = sev[a.status] ?? 3;
+    const sb = sev[b.status] ?? 3;
+    if (sa !== sb) return sa - sb;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 }
 
