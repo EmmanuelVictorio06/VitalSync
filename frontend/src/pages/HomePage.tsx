@@ -125,7 +125,7 @@ export function HomePage() {
     <div
       onClick={handleHomeClick}
       className={cn(
-        'vitalsync-home min-h-screen bg-background text-foreground font-sans antialiased transition-all duration-200 ease-out',
+        'vitalsync-home min-h-screen text-foreground font-sans antialiased transition-all duration-200 ease-out',
         leaving ? 'opacity-0 -translate-y-1' : 'opacity-100 translate-y-0',
       )}
     >
@@ -135,7 +135,6 @@ export function HomePage() {
         <HowItWorksSection />
         <BenefitsSection />
         <FeaturesSection />
-        <UsabilitySection />
         <SecuritySection />
         <PanelSection />
         <MobileSection />
@@ -237,12 +236,7 @@ function BrandMark({ href }: { href: string }) {
 
 function HeroSection() {
   return (
-    <section id="inicio" className="relative overflow-hidden">
-      <div className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute -top-32 -right-32 h-96 w-96 rounded-full bg-primary/10 blur-3xl" />
-        <div className="absolute -bottom-32 -left-32 h-96 w-96 rounded-full bg-success/10 blur-3xl" />
-      </div>
-
+    <section id="inicio" className="home-section home-section-hero relative overflow-hidden">
       <div className="mx-auto grid max-w-7xl gap-12 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:gap-16 lg:px-8 lg:py-24">
         <div className="flex flex-col justify-center">
           <ScrollReveal delay={60}>
@@ -407,7 +401,7 @@ function SectionHeading({
 }
 
 function HomeCard({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={`rounded-2xl border border-border bg-surface p-6 shadow-sm transition-shadow hover:shadow-md ${className}`}>{children}</div>;
+  return <div className={`flex flex-col rounded-2xl border border-border bg-surface p-6 shadow-sm transition-shadow hover:shadow-md h-full ${className}`}>{children}</div>;
 }
 
 function IconBadge({ children, tone = 'primary' }: { children: ReactNode; tone?: CardTone }) {
@@ -444,7 +438,7 @@ function HowItWorksSection() {
   ];
 
   return (
-    <section id="como-funciona" className="py-20 sm:py-24">
+    <section id="como-funciona" className="home-section home-section-soft py-20 sm:py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading
           eyebrow="Fluxo"
@@ -497,7 +491,7 @@ function BenefitsSection() {
   ];
 
   return (
-    <section id="beneficios" className="bg-surface py-20 sm:py-24">
+    <section id="beneficios" className="home-section home-section-clear py-20 sm:py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading
           eyebrow="Benefícios"
@@ -564,7 +558,7 @@ function FeaturesSection() {
   ];
 
   return (
-    <section id="recursos" className="py-20 sm:py-24">
+    <section id="recursos" className="home-section home-section-soft py-20 sm:py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading
           eyebrow="Recursos"
@@ -578,56 +572,6 @@ function FeaturesSection() {
                 <IconBadge>{feature.icon}</IconBadge>
                 <h3 className="mt-4 text-lg font-bold">{feature.title}</h3>
                 <p className="mt-2 text-sm text-muted-foreground">{feature.text}</p>
-              </HomeCard>
-            </ScrollReveal>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function UsabilitySection() {
-  const items = [
-    {
-      title: 'Visibilidade do estado do sistema',
-      text: 'Status verde, amarelo e vermelho indicam rapidamente a situação clínica do paciente.',
-    },
-    {
-      title: 'Prevenção de erros',
-      text: 'Campos com validação, máscaras e confirmações ajudam a evitar registros incorretos.',
-    },
-    {
-      title: 'Reconhecimento em vez de memorização',
-      text: 'Menus, cards e botões claros reduzem a necessidade de lembrar caminhos.',
-    },
-    {
-      title: 'Design estético e minimalista',
-      text: 'As telas priorizam informações importantes, evitando excesso visual.',
-    },
-    {
-      title: 'Ajuda e recuperação de erros',
-      text: 'Mensagens simples orientam o usuário quando algo precisa ser corrigido.',
-    },
-  ];
-
-  return (
-    <section className="bg-surface py-20 sm:py-24">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <SectionHeading
-          eyebrow="Usabilidade"
-          title="Uma experiência simples, clara e eficiente"
-          description="O VitalSync foi projetado com foco em usabilidade, reduzindo esforço, prevenindo erros e tornando informações clínicas fáceis de interpretar."
-        />
-        <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((item, index) => (
-            <ScrollReveal key={item.title} delay={(index % 3) * 90}>
-              <HomeCard>
-                <span className="inline-flex items-center gap-2 rounded-full bg-accent px-3 py-1 text-xs font-semibold text-accent-foreground">
-                  Heurística
-                </span>
-                <h3 className="mt-3 text-base font-bold">{item.title}</h3>
-                <p className="mt-2 text-sm text-muted-foreground">{item.text}</p>
               </HomeCard>
             </ScrollReveal>
           ))}
@@ -672,7 +616,7 @@ function SecuritySection() {
   ];
 
   return (
-    <section id="seguranca" className="py-20 sm:py-24">
+    <section id="seguranca" className="home-section home-section-clear py-20 sm:py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading
           eyebrow="Segurança"
@@ -684,7 +628,7 @@ function SecuritySection() {
             <ScrollReveal key={item.title} delay={(index % 3) * 90}>
               <HomeCard>
                 <IconBadge tone="primary">{item.icon}</IconBadge>
-                <h3 className="mt-4 text-base font-bold">{item.title}</h3>
+                <h3 className="mt-4 text-lg font-bold">{item.title}</h3>
                 <p className="mt-2 text-sm text-muted-foreground">{item.text}</p>
               </HomeCard>
             </ScrollReveal>
@@ -697,7 +641,7 @@ function SecuritySection() {
 
 function PanelSection() {
   return (
-    <section className="bg-surface py-20 sm:py-24">
+    <section className="home-section home-section-soft py-20 sm:py-24">
       <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:items-center lg:px-8">
         <div>
           <SectionHeading
@@ -738,7 +682,7 @@ function PanelSection() {
 
 function MobileSection() {
   return (
-    <section className="py-20 sm:py-24">
+    <section className="home-section home-section-clear py-20 sm:py-24">
       <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:items-center lg:px-8">
         <ScrollReveal direction="right" delay={120} className="order-2 lg:order-1 flex justify-center">
           <PhonePreview />
@@ -817,7 +761,7 @@ function PhoneValue({ label, value, success }: { label: string; value: string; s
 
 function ContactSection() {
   return (
-    <section id="contato" className="px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
+    <section id="contato" className="home-section home-section-final px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
       <ScrollReveal>
         <div className="mx-auto max-w-5xl overflow-hidden rounded-3xl bg-primary p-8 text-primary-foreground shadow-xl sm:p-14">
         <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr] lg:items-center">
@@ -853,7 +797,7 @@ function ContactSection() {
 
 function Footer() {
   return (
-    <footer className="border-t border-border bg-surface">
+    <footer className="home-footer border-t border-border">
       <ScrollReveal direction="none">
         <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:px-6 md:grid-cols-[1.5fr_1fr_1fr] lg:px-8">
         <div>
