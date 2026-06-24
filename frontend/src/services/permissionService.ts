@@ -57,4 +57,25 @@ export const permissionService = {
   canDeactivateUser(user: AuthUser | null | undefined): boolean {
     return this.isAdmin(user);
   },
+
+  /* ------------------------------- Alertas -------------------------------- */
+
+  /** Ver a aba Alertas: Admin, Cirurgião Principal e Médico Associado. */
+  canViewAlerts(user: AuthUser | null | undefined): boolean {
+    return !!user && [Role.ADM, Role.SURGEON, Role.ASSOCIATE].includes(user.role);
+  },
+
+  /**
+   * Realizar atendimento clínico (em análise / atendido / ignorado): apenas
+   * profissionais clínicos. O Admin NÃO substitui a responsabilidade clínica
+   * da equipe (vê tudo, mas não conclui o atendimento).
+   */
+  canAttendAlerts(user: AuthUser | null | undefined): boolean {
+    return user?.role === Role.SURGEON || user?.role === Role.ASSOCIATE;
+  },
+
+  /** Reenviar a notificação à equipe: Admin e Cirurgião Principal. */
+  canResendAlertNotification(user: AuthUser | null | undefined): boolean {
+    return user?.role === Role.ADM || user?.role === Role.SURGEON;
+  },
 };

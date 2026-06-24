@@ -56,7 +56,7 @@ export function ExportsPage() {
   async function exportAlerts() {
     setBusy('alerts');
     try {
-      const items = await alertService.list();
+      const items = await alertService.getAlerts();
       const rows: Array<Array<string | number | null>> = [
         ['Paciente', 'Status', 'Descrição', 'Atendido', 'Data'],
         ...items.map((a) => [
