@@ -150,15 +150,51 @@ export interface VitalSignRecord {
   created_at: string;
 }
 
+/** Status do ATENDIMENTO do alerta (diferente do status clínico GREEN/YELLOW/RED). */
+export type AttendanceStatus = 'PENDING' | 'IN_ANALYSIS' | 'ATTENDED' | 'IGNORED';
+
 export interface ClinicalAlert {
   id: string;
   patient_id: string;
   team_id: string;
   vital_record_id: string | null;
   status: ClinicalStatus;
+  /** Tipo do sinal que disparou (Temperatura, Saturação, Dor, Sangramento…). */
+  type: string | null;
   description: string;
   attended: boolean;
+  attendance_status: AttendanceStatus;
+  ignored_reason: string | null;
   attended_by: string | null;
   attended_at: string | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
+/** Registro de notificação (WhatsApp simulado até existir provedor real). */
+export interface NotificationLog {
+  id: string;
+  patient_id: string | null;
+  alert_id: string | null;
+  recipient_profile_id: string | null;
+  recipient_phone: string | null;
+  channel: string;
+  status: string; // pending | sent | delivered | failed
+  message: string | null;
+  provider_message_id: string | null;
+  error_message: string | null;
+  created_at: string;
+  sent_at: string | null;
+  delivered_at: string | null;
+}
+
+/** Evento de atendimento (linha do tempo do alerta). */
+export interface AttendanceConfirmation {
+  id: string;
+  patient_id: string;
+  alert_id: string | null;
+  attended_by: string;
+  status: string | null; // IN_ANALYSIS | ATTENDED | IGNORED
+  observation: string | null;
   created_at: string;
 }

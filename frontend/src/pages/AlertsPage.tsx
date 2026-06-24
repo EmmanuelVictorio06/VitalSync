@@ -1,134 +1,192 @@
-import { useCallback, useEffect, useState } from 'react';
+/**
+ * Aba "Alertas" — central de acompanhamento clínico.
+ *
+ * O escopo por perfil vem do Supabase (RLS): Admin vê todos; Cirurgião/Associado
+ * só das suas equipes. Aqui adaptamos o resumo, os filtros e as ações conforme o
+ * papel (permissionService). As mudanças de status passam por RPCs.
+ */
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Bell, Check, X } from 'lucide-react';
-import { Loading, cn } from '../components/ui';
+import { Role, useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
-import { alertService, type AlertWithPatient } from '../services/alertService';
+import { Loading } from '../components/ui';
+import {
+  AlertCard,
+  AlertDetailsDrawer,
+  AlertFilters,
+  AlertSummaryCards,
+  EMPTY_FILTERS,
+  EmptyState,
+  ErrorState,
+  IgnoreAlertModal,
+  MarkAttendedModal,
+  applyAlertFilters,
+  type AlertFiltersState,
+} from '../components/alerts';
+import { alertService, type AlertRow } from '../services/alertService';
+import { permissionService } from '../services/permissionService';
 
-type SeverityFilter = 'ALL' | 'RED' | 'YELLOW';
-const FILTERS: Array<{ value: SeverityFilter; label: string }> = [
-  { value: 'ALL', label: 'Todos' },
-  { value: 'RED', label: 'Alerta' },
-  { value: 'YELLOW', label: 'Atenção' },
-];
-
-/** Central de alertas — dados reais do Supabase (escopo por equipe via RLS). */
 export function AlertsPage() {
+  const { user } = useAuth();
   const toast = useToast();
-  const [filter, setFilter] = useState<SeverityFilter>('ALL');
-  const [alerts, setAlerts] = useState<AlertWithPatient[] | null>(null);
-  const [searchParams, setSearchParams] = useSearchParams();
-  const team = searchParams.get('team') ?? '';
+  const [searchParams] = useSearchParams();
+
+  const [alerts, setAlerts] = useState<AlertRow[] | null>(null);
+  const [error, setError] = useState(false);
+  const [failedCount, setFailedCount] = useState(0);
+  const [filters, setFilters] = useState<AlertFiltersState>({
+    ...EMPTY_FILTERS,
+    team: searchParams.get('team') ?? 'ALL',
+  });
+  const [selected, setSelected] = useState<AlertRow | null>(null);
+  const [attendTarget, setAttendTarget] = useState<AlertRow | null>(null);
+  const [ignoreTarget, setIgnoreTarget] = useState<AlertRow | null>(null);
+
+  const isAdmin = permissionService.isAdmin(user);
+  const canAttend = permissionService.canAttendAlerts(user);
+  const canResend = permissionService.canResendAlertNotification(user);
+  const roleKey: 'ADM' | 'SURGEON' | 'ASSOCIATE' =
+    user?.role === Role.ADM ? 'ADM' : user?.role === Role.SURGEON ? 'SURGEON' : 'ASSOCIATE';
 
   const load = useCallback(async () => {
+    setError(false);
     setAlerts(null);
     try {
-      setAlerts(await alertService.list());
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao carregar alertas.');
+      const data = await alertService.getAlerts();
+      setAlerts(data);
+      if (permissionService.isAdmin(user)) {
+        setFailedCount(await alertService.getFailedNotificationCount());
+      }
+    } catch {
+      setError(true);
       setAlerts([]);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  function clearTeam() {
-    const next = new URLSearchParams(searchParams);
-    next.delete('team');
-    setSearchParams(next, { replace: true });
-  }
+  // Mantém o alerta aberto no drawer sincronizado após recarregar.
+  useEffect(() => {
+    if (selected && alerts) {
+      const fresh = alerts.find((a) => a.id === selected.id) ?? null;
+      if (fresh !== selected) setSelected(fresh);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alerts]);
 
-  async function markAttended(id: string) {
+  const summary = useMemo(() => {
+    const base = alertService.summarize(alerts ?? []);
+    return { ...base, failedNotifications: failedCount };
+  }, [alerts, failedCount]);
+
+  const teamOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const a of alerts ?? []) {
+      if (a.team?.team_number != null) {
+        const v = String(a.team.team_number);
+        map.set(v, `Equipe ${v.padStart(2, '0')}`);
+      }
+    }
+    return [...map.entries()].sort().map(([value, label]) => ({ value, label }));
+  }, [alerts]);
+
+  const filtered = useMemo(() => applyAlertFilters(alerts ?? [], filters), [alerts, filters]);
+
+  async function handleInAnalysis(alert: AlertRow) {
     try {
-      await alertService.markAttended(id);
-      toast.success('Alerta marcado como atendido.');
+      await alertService.markInAnalysis(alert.id);
+      toast.success('Alerta marcado como em análise.');
       await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao atualizar o alerta.');
     }
   }
 
-  const filtered = (alerts ?? []).filter((a) => filter === 'ALL' || a.status === filter);
+  async function handleAttendConfirm(alert: AlertRow, professionalId: string | null, observation: string) {
+    await alertService.markAttended(alert.id, professionalId, observation);
+    toast.success('Atendimento registrado.');
+    setAttendTarget(null);
+    await load();
+  }
+
+  async function handleIgnoreConfirm(alert: AlertRow, reason: string) {
+    await alertService.ignore(alert.id, reason);
+    toast.info('Alerta ignorado com justificativa.');
+    setIgnoreTarget(null);
+    await load();
+  }
+
+  if (!permissionService.canViewAlerts(user)) {
+    return (
+      <div className="p-8 max-w-2xl mx-auto">
+        <EmptyState title="Você não tem permissão para visualizar estes alertas." />
+      </div>
+    );
+  }
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto w-full space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-end gap-3 animate-entry">
-        <div className="flex-1">
-          <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">Alertas</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Eventos clínicos que exigem atenção da equipe, do mais recente ao mais antigo.
-          </p>
-        </div>
-        <div className="flex gap-1 bg-muted rounded-lg p-1 self-start">
-          {FILTERS.map((f) => (
-            <button
-              key={f.value}
-              onClick={() => setFilter(f.value)}
-              className={cn(
-                'px-3 py-1.5 rounded-md text-xs font-semibold transition-colors',
-                filter === f.value ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+    <div className="p-4 md:p-8 max-w-6xl mx-auto w-full space-y-6">
+      <div className="animate-entry">
+        <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">Alertas</h2>
+        <p className="text-sm text-muted-foreground mt-1 max-w-3xl">
+          Acompanhe alterações clínicas geradas pelos registros de sinais vitais dos pacientes em monitoramento.
+        </p>
       </div>
 
-      {team && (
-        <div className="flex items-center gap-2 animate-entry">
-          <span className="inline-flex items-center gap-2 bg-primary/10 text-primary text-xs font-semibold rounded-full pl-3 pr-1.5 py-1">
-            Alertas da Equipe nº {team.padStart(2, '0')}
-            <button onClick={clearTeam} className="size-5 rounded-full hover:bg-primary/20 flex items-center justify-center" aria-label="Remover filtro de equipe">
-              <X className="size-3.5" />
-            </button>
-          </span>
-        </div>
-      )}
+      {alerts && !error && <AlertSummaryCards summary={summary} role={roleKey} />}
 
-      {alerts === null ? (
+      <AlertFilters value={filters} onChange={setFilters} isAdmin={isAdmin} teamOptions={teamOptions} />
+
+      {error ? (
+        <ErrorState onRetry={load} />
+      ) : alerts === null ? (
         <Loading label="Carregando alertas…" />
       ) : filtered.length === 0 ? (
-        <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground animate-entry">
-          <Bell className="size-8 mx-auto mb-3 opacity-40" />
-          <p className="font-semibold">Nenhum alerta no momento</p>
-        </div>
+        <EmptyState
+          title={(alerts.length === 0) ? 'Nenhum alerta no momento.' : 'Nenhum alerta encontrado.'}
+          hint={(alerts.length > 0) ? 'Ajuste os filtros para ver outros alertas.' : 'Novos alertas aparecem quando um paciente registra sinais alterados.'}
+        />
       ) : (
-        <ul className="space-y-3 animate-entry [animation-delay:100ms]">
+        <ul className="space-y-3">
           {filtered.map((a) => (
-            <li
+            <AlertCard
               key={a.id}
-              className={cn(
-                'bg-card border border-border rounded-xl p-4 flex items-center gap-4 border-l-4 shadow-sm',
-                a.status === 'RED' ? 'border-l-alert' : 'border-l-warning',
-                a.attended && 'opacity-60',
-              )}
-            >
-              <span className={cn('size-2.5 rounded-full shrink-0', a.status === 'RED' ? 'bg-alert pulse-alert' : 'bg-warning')} />
-              <div className="flex-1 min-w-0">
-                <p className={cn('text-sm truncate', a.status === 'RED' ? 'font-extrabold' : 'font-bold')}>
-                  {a.patient?.name ?? '—'}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">{a.description}</p>
-              </div>
-              <span className="text-[10px] text-muted-foreground font-mono hidden sm:block">
-                {new Date(a.created_at).toLocaleString('pt-BR')}
-              </span>
-              {a.attended ? (
-                <span className="text-[10px] font-bold uppercase text-stable shrink-0">Atendido</span>
-              ) : (
-                <button
-                  onClick={() => markAttended(a.id)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-semibold hover:bg-primary/90 shrink-0"
-                >
-                  <Check className="size-3.5" /> Atender
-                </button>
-              )}
-            </li>
+              alert={a}
+              canAttend={canAttend}
+              onDetails={() => setSelected(a)}
+              onInAnalysis={() => handleInAnalysis(a)}
+              onAttend={() => setAttendTarget(a)}
+            />
           ))}
         </ul>
+      )}
+
+      {selected && (
+        <AlertDetailsDrawer
+          alert={selected}
+          perms={{ canAttend, canResend }}
+          onClose={() => setSelected(null)}
+          onAction={load}
+          onAttend={() => setAttendTarget(selected)}
+          onIgnore={() => setIgnoreTarget(selected)}
+        />
+      )}
+
+      {attendTarget && (
+        <MarkAttendedModal
+          alert={attendTarget}
+          onCancel={() => setAttendTarget(null)}
+          onConfirm={(professionalId, observation) => handleAttendConfirm(attendTarget, professionalId, observation)}
+        />
+      )}
+
+      {ignoreTarget && (
+        <IgnoreAlertModal
+          onCancel={() => setIgnoreTarget(null)}
+          onConfirm={(reason) => handleIgnoreConfirm(ignoreTarget, reason)}
+        />
       )}
     </div>
   );
