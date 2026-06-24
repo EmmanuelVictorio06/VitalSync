@@ -65,7 +65,8 @@ export function PatientRegisterPage() {
         hospital_id: form.hospitalId,
         team_id: form.teamId,
       });
-      const link = `${window.location.origin}/r/${patient.secure_token}`;
+      // Link público do paciente: rota sem login, validada por token seguro.
+      const link = `${window.location.origin}/registro-sinais/${patient.secure_token}`;
       toast.success('Paciente cadastrado e link gerado!');
       setResult({ link, phone: form.phone, name: form.name });
       setForm(empty);
