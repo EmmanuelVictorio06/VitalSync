@@ -41,4 +41,20 @@ export const teamService = {
     const { error } = await supabase.from('team_members').delete().eq('id', memberId);
     if (error) throw new Error(error.message);
   },
+
+  /**
+   * Cadastra um médico (cria a CONTA de login + perfil). Só ADMIN. O e-mail/senha
+   * servem para login; o telefone fica no perfil para os alertas de WhatsApp.
+   */
+  async createDoctor(input: { name: string; email: string; password: string; whatsapp: string; role: RoleInTeam }): Promise<string> {
+    const { data, error } = await supabase.rpc('admin_create_doctor', {
+      p_name: input.name,
+      p_email: input.email,
+      p_password: input.password,
+      p_whatsapp: input.whatsapp ?? '',
+      p_role: input.role,
+    });
+    if (error) throw new Error(error.message);
+    return data as string;
+  },
 };
