@@ -8,12 +8,14 @@ import { DashboardPage } from './pages/DashboardPage';
 import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
 import { MonitoringPage } from './pages/MonitoringPage';
+import { MyProfilePage } from './pages/MyProfilePage';
 import { MyTeamPage } from './pages/MyTeamPage';
 import { MyTeamsPage } from './pages/MyTeamsPage';
 import { PatientDashboardPage } from './pages/PatientDashboardPage';
 import { PatientRegisterPage } from './pages/PatientRegisterPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 import { TeamsPage } from './pages/TeamsPage';
+import { UsersPage } from './pages/admin/UsersPage';
 import { VitalsRegisterPage } from './pages/VitalsRegisterPage';
 import { ExportsPage } from './pages/admin/ExportsPage';
 import { HospitalsPage } from './pages/admin/HospitalsPage';
@@ -52,9 +54,28 @@ export function App() {
         <Route path="/patients/:id" element={<PatientDashboardPage />} />
         <Route path="/alerts" element={<AlertsPage />} />
 
-        {/* Gerenciar Equipes — exclusivo do Administrador (todas as equipes) */}
+        {/* Gerenciar Usuários — exclusivo do Administrador */}
+        <Route
+          path="/admin/users"
+          element={
+            <PermissionGuard roles={[Role.ADM]}>
+              <UsersPage />
+            </PermissionGuard>
+          }
+        />
+
+        {/* Gerenciar Equipes — exclusivo do Administrador (todas as equipes).
+            /admin/teams/:teamId abre os detalhes de uma equipe (deep-link). */}
         <Route
           path="/teams"
+          element={
+            <PermissionGuard roles={[Role.ADM]}>
+              <TeamsPage />
+            </PermissionGuard>
+          }
+        />
+        <Route
+          path="/admin/teams/:teamId"
           element={
             <PermissionGuard roles={[Role.ADM]}>
               <TeamsPage />
@@ -94,14 +115,12 @@ export function App() {
             </PermissionGuard>
           }
         />
+        {/* Meu Perfil — Administrador, Cirurgião Principal e Médico Associado */}
         <Route
           path="/profile"
           element={
-            <PermissionGuard roles={[Role.SURGEON, Role.ASSOCIATE]}>
-              <PlaceholderPage
-                title="Meu Perfil"
-                description="Seus dados profissionais, contato de WhatsApp para alertas e preferências de notificação."
-              />
+            <PermissionGuard roles={[Role.ADM, Role.SURGEON, Role.ASSOCIATE]}>
+              <MyProfilePage />
             </PermissionGuard>
           }
         />

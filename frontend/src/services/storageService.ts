@@ -7,6 +7,7 @@
 import { supabase } from '../lib/supabase';
 
 const BUCKET = 'patient-photos';
+const AVATAR_BUCKET = 'profile-avatars';
 
 export const storageService = {
   /** Sobe a foto e retorna o caminho salvo (vai em vital_sign_records.wound_photo_path). */
@@ -31,6 +32,31 @@ export const storageService = {
 
   async removePatientPhoto(path: string): Promise<void> {
     const { error } = await supabase.storage.from(BUCKET).remove([path]);
+    if (error) throw new Error(error.message);
+  },
+
+  /* ---------------- Avatares de perfil (bucket público controlado) ----------------
+     O caminho começa por <userId>/ — as políticas de Storage só deixam o dono
+     escrever na própria pasta. Guardamos o CAMINHO em profiles.avatar_url. */
+  async uploadProfileAvatar(file: File, userId: string): Promise<string> {
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+    const path = `${userId}/avatar_${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from(AVATAR_BUCKET).upload(path, file, {
+      cacheControl: '3600',
+      upsert: true,
+      contentType: file.type,
+    });
+    if (error) throw new Error(error.message);
+    return path;
+  },
+
+  /** URL pública do avatar (bucket público) a partir do caminho salvo. */
+  getProfileAvatarUrl(path: string): string {
+    return supabase.storage.from(AVATAR_BUCKET).getPublicUrl(path).data.publicUrl;
+  },
+
+  async deleteProfileAvatar(path: string): Promise<void> {
+    const { error } = await supabase.storage.from(AVATAR_BUCKET).remove([path]);
     if (error) throw new Error(error.message);
   },
 };

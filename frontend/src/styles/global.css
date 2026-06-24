@@ -197,28 +197,57 @@
     scroll-margin-top: 96px;
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    html {
-      scroll-behavior: auto;
-    }
+  /* Evita rolagem horizontal indesejada sem quebrar sticky sidebar/topbar. */
+  body {
+    overflow-x: clip;
+  }
 
-    *,
-    *::before,
-    *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
-      scroll-behavior: auto !important;
-    }
+  /* Mídia flexível: nunca estoura o container. */
+  img,
+  svg,
+  video,
+  canvas {
+    max-width: 100%;
+  }
 
-    .scroll-reveal {
-      opacity: 1;
-      transform: none;
-      transition: none;
-    }
+  img,
+  video {
+    height: auto;
+  }
+}
 
-    .vitalsync-home {
-      transition-duration: 0ms;
-    }
+/* iOS: inputs com fonte < 16px disparam zoom automático ao focar. */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea,
+  .input {
+    font-size: 16px;
+  }
+}
+
+/* Acessibilidade: respeita quem prefere menos movimento. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .scroll-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .vitalsync-home {
+    transition-duration: 0ms;
   }
 }

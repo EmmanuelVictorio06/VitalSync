@@ -125,7 +125,11 @@ export type AuditAction =
   | 'ALERT_GENERATED'
   | 'PATIENT_ATTENDED'
   | 'DATA_EXPORT'
-  | 'SETTINGS_CHANGE';
+  | 'SETTINGS_CHANGE'
+  | 'PROFILE_UPDATE'
+  | 'ACCOUNT_DEACTIVATION_REQUEST'
+  | 'USER_CREATE'
+  | 'USER_ROLE_CHANGE';
 
 export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   LOGIN: 'Login',
@@ -139,6 +143,10 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   PATIENT_ATTENDED: 'Paciente marcado como atendido',
   DATA_EXPORT: 'Exportação de dados',
   SETTINGS_CHANGE: 'Alteração de configurações',
+  PROFILE_UPDATE: 'Alteração de perfil',
+  ACCOUNT_DEACTIVATION_REQUEST: 'Solicitação de desativação de conta',
+  USER_CREATE: 'Cadastro de usuário',
+  USER_ROLE_CHANGE: 'Alteração de papel de usuário',
 };
 
 export interface AuditEvent {
