@@ -29,7 +29,11 @@ export function App() {
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/auth" element={<Navigate to="/login" replace />} />
-      {/* Tela do paciente — acesso somente via link com token (sem login) */}
+      {/* Tela do paciente — acesso público SOMENTE via link com token (sem login).
+          Fica FORA do Layout/PermissionGuard, então nunca exige autenticação nem
+          redireciona para /login. Rota clara `/registro-sinais/:token`; o alias
+          curto `/r/:token` é mantido para os links já enviados pelo WhatsApp. */}
+      <Route path="/registro-sinais/:token" element={<VitalsRegisterPage />} />
       <Route path="/r/:token" element={<VitalsRegisterPage />} />
 
       {/* Internas (autenticadas) */}

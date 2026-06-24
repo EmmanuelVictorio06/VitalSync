@@ -37,6 +37,20 @@ const INPUT_RANGES: InputRanges = {
   steps: { min: 0, max: 100000, example: '2000', unit: 'passos', PENDING_MEDICAL_VALIDATION: false },
 };
 
+/**
+ * Traduz o erro de carregamento em mensagem amigável ao paciente — nunca
+ * vaza erro técnico (ex.: "Failed to fetch") na tela pública.
+ */
+function friendlyLoadError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : '';
+  // Falha de rede/conexão (fetch): o paciente pode estar sem internet.
+  if (/failed to fetch|networkerror|fetch|load failed/i.test(msg)) {
+    return 'Não foi possível carregar suas informações. Verifique sua conexão e tente novamente.';
+  }
+  // Token inexistente/expirado (vindo da RPC) ou qualquer outro caso.
+  return msg || 'Link inválido ou não encontrado. Entre em contato com sua equipe médica.';
+}
+
 export function VitalsRegisterPage() {
   const { token } = useParams<{ token: string }>();
   const toast = useToast();
@@ -52,7 +66,7 @@ export function VitalsRegisterPage() {
     vitalSignsService
       .getByToken(token)
       .then(setLink)
-      .catch((err) => setError(err instanceof Error ? err.message : 'Link inválido.'))
+      .catch((err) => setError(friendlyLoadError(err)))
       .finally(() => setLoading(false));
   }, [token]);
 
