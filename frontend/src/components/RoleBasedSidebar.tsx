@@ -64,6 +64,7 @@ export function useRoleMenus(): { main: NavItem[]; admin: NavItem[] } {
         { to: '/patients/new', label: 'Cadastro de Pacientes', short: 'Cadastrar', icon: UserPlus },
         { to: '/monitoring', label: 'Pacientes em Monitoramento', short: 'Pacientes', icon: Activity },
         { to: '/alerts', label: 'Alertas', short: 'Alertas', icon: Bell, badge: unattended },
+        { to: '/profile', label: 'Meu Perfil', short: 'Perfil', icon: User },
       ],
       admin,
     };
