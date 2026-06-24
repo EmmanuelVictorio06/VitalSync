@@ -32,7 +32,7 @@ import {
 } from '../components/charts';
 import { PatientMeasurementPhotoSection } from '../components/photo';
 import { Button, Loading, StatusBadge, cn, statusBorder } from '../components/ui';
-import { api, ApiError } from '../lib/api';
+import { patientDashboardService } from '../services/patientDashboardService';
 import type { PatientDashboard, VitalRecord } from '../lib/dto';
 
 type PeriodFilter = 'MORNING' | 'NIGHT' | 'BOTH';
@@ -57,9 +57,9 @@ export function PatientDashboardPage() {
     if (!id) return;
     setLoading(true);
     try {
-      setData(await api.get<PatientDashboard>(`/patients/${id}/dashboard`));
+      setData(await patientDashboardService.getDashboard(id));
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Erro ao carregar o paciente.');
+      toast.error(err instanceof Error ? err.message : 'Erro ao carregar o paciente.');
     } finally {
       setLoading(false);
     }
@@ -136,11 +136,11 @@ export function PatientDashboardPage() {
     }
     setMarking(true);
     try {
-      await api.post(`/patients/${id}/attend`, { attendedByUserId: attendant });
-      toast.success('Atendimento registrado. O card foi atualizado para a equipe.');
+      await patientDashboardService.markAttended(id, attendant);
+      toast.success('Alertas do paciente marcados como atendidos.');
       await load();
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Erro ao registrar atendimento.');
+      toast.error(err instanceof Error ? err.message : 'Erro ao registrar atendimento.');
     } finally {
       setMarking(false);
     }

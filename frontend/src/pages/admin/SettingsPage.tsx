@@ -17,7 +17,7 @@ import {
   ToggleSwitch,
 } from '../../components/admin';
 import { Button, ConfirmModal, Field, SelectField, TextInput, cn } from '../../components/ui';
-import { AdminApiError, auditApi, settingsApi } from '../../lib/admin-api';
+import { settingsService } from '../../services/settingsService';
 import {
   AUDIT_ACTION_LABEL,
   type AuditAction,
@@ -84,7 +84,7 @@ function GeneralTab() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    void settingsApi.getGeneral().then(setForm);
+    void settingsService.getGeneral().then(setForm);
   }, []);
 
   if (!form) return <LoadingState label="Carregando configurações…" />;
@@ -97,11 +97,11 @@ function GeneralTab() {
     if (!form) return;
     setBusy(true);
     try {
-      await settingsApi.saveGeneral(form);
+      await settingsService.saveGeneral(form);
       toast.success('Configurações gerais salvas.');
       setConfirming(false);
     } catch (err) {
-      toast.error(err instanceof AdminApiError ? err.message : 'Erro ao salvar configurações.');
+      toast.error(err instanceof Error ? err.message : 'Erro ao salvar configurações.');
     } finally {
       setBusy(false);
     }
@@ -315,7 +315,7 @@ function WhatsAppTab() {
   const [testing, setTesting] = useState(false);
 
   useEffect(() => {
-    void settingsApi.getWhatsApp().then(setSettings);
+    void settingsService.getWhatsApp().then(setSettings);
   }, []);
 
   if (!settings) return <LoadingState label="Carregando integração…" />;
@@ -328,7 +328,7 @@ function WhatsAppTab() {
     if (!settings) return;
     setBusy(true);
     try {
-      const saved = await settingsApi.saveWhatsApp({ ...settings, apiToken: newToken || undefined });
+      const saved = await settingsService.saveWhatsApp({ ...settings, apiToken: newToken || undefined });
       setSettings(saved);
       setNewToken('');
       toast.success('Configurações de WhatsApp salvas.');
@@ -341,7 +341,7 @@ function WhatsAppTab() {
 
   async function test() {
     setTesting(true);
-    const res = await settingsApi.testWhatsApp();
+    const res = await settingsService.testWhatsApp();
     (res.ok ? toast.success : toast.error)(res.detail);
     setTesting(false);
   }
@@ -428,7 +428,7 @@ function SecurityTab() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    void settingsApi.getSecurity().then(setForm);
+    void settingsService.getSecurity().then(setForm);
   }, []);
 
   if (!form) return <LoadingState label="Carregando segurança…" />;
@@ -441,7 +441,7 @@ function SecurityTab() {
     if (!form) return;
     setBusy(true);
     try {
-      await settingsApi.saveSecurity(form);
+      await settingsService.saveSecurity(form);
       toast.success('Configurações de segurança salvas.');
     } catch {
       toast.error('Erro ao salvar configurações de segurança.');
@@ -508,7 +508,7 @@ function AuditTab() {
 
   useEffect(() => {
     setEvents(null);
-    const t = setTimeout(() => void auditApi.list(filters).then(setEvents), 200);
+    const t = setTimeout(() => void settingsService.listAudit(filters).then(setEvents), 200);
     return () => clearTimeout(t);
   }, [filters]);
 

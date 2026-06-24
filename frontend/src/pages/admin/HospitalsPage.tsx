@@ -14,12 +14,12 @@ import {
   ToggleSwitch,
 } from '../../components/admin';
 import { Button, ConfirmModal, Field, TextInput } from '../../components/ui';
-import { AdminApiError, hospitalsApi } from '../../lib/admin-api';
-import type { EntityStatus, Hospital, HospitalInput } from '../../lib/admin-types';
+import { hospitalService } from '../../services/hospitalService';
+import type { EntityStatus, Hospital } from '../../services/types';
 
 type StatusFilter = 'ALL' | EntityStatus;
-
-const EMPTY_FORM: HospitalInput = { name: '', city: '', state: '', address: '', phone: '', status: 'ACTIVE' };
+interface HospitalForm { name: string; city: string; state: string; status: EntityStatus }
+const EMPTY_FORM: HospitalForm = { name: '', city: '', state: '', status: 'ACTIVE' };
 
 export function HospitalsPage() {
   const toast = useToast();
@@ -37,9 +37,9 @@ export function HospitalsPage() {
     setError(null);
     setItems(null);
     try {
-      setItems(await hospitalsApi.list());
-    } catch {
-      setError('Erro ao carregar hospitais.');
+      setItems(await hospitalService.list());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao carregar hospitais.');
     }
   }
   useEffect(() => {
@@ -49,9 +49,7 @@ export function HospitalsPage() {
   const filtered = useMemo(
     () =>
       (items ?? []).filter(
-        (h) =>
-          (statusFilter === 'ALL' || h.status === statusFilter) &&
-          h.name.toLowerCase().includes(search.toLowerCase()),
+        (h) => (statusFilter === 'ALL' || h.status === statusFilter) && h.name.toLowerCase().includes(search.toLowerCase()),
       ),
     [items, search, statusFilter],
   );
@@ -60,12 +58,12 @@ export function HospitalsPage() {
     if (!toToggle) return;
     setBusy(true);
     try {
-      await hospitalsApi.toggleStatus(toToggle.id);
+      await hospitalService.update(toToggle.id, { status: toToggle.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' });
       toast.success(toToggle.status === 'ACTIVE' ? 'Hospital inativado.' : 'Hospital reativado.');
       setToToggle(null);
       await load();
     } catch (err) {
-      toast.error(err instanceof AdminApiError ? err.message : 'Erro ao alterar status do hospital.');
+      toast.error(err instanceof Error ? err.message : 'Erro ao alterar status do hospital.');
     } finally {
       setBusy(false);
     }
@@ -75,18 +73,20 @@ export function HospitalsPage() {
     if (!toDelete) return;
     setBusy(true);
     try {
-      const res = await hospitalsApi.remove(toDelete.id);
-      toast.success(
-        res.inactivated
-          ? 'Este hospital já está vinculado a pacientes. Ele foi inativado em vez de excluído.'
-          : 'Hospital excluído.',
-      );
-      setToDelete(null);
-      await load();
-    } catch (err) {
-      toast.error(err instanceof AdminApiError ? err.message : 'Erro ao excluir hospital.');
+      await hospitalService.remove(toDelete.id);
+      toast.success('Hospital excluído.');
+    } catch {
+      // Provável vínculo com pacientes (FK) → inativa em vez de excluir.
+      try {
+        await hospitalService.update(toDelete.id, { status: 'INACTIVE' });
+        toast.success('Hospital vinculado a pacientes — foi inativado em vez de excluído.');
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Erro ao excluir hospital.');
+      }
     } finally {
+      setToDelete(null);
       setBusy(false);
+      await load();
     }
   }
 
@@ -94,7 +94,7 @@ export function HospitalsPage() {
     <div className="p-4 md:p-8 max-w-6xl mx-auto w-full space-y-6">
       <AdminPageHeader
         title="Hospitais"
-        subtitle="Gerencie os hospitais disponíveis para vínculo nos cadastros de pacientes e procedimentos cirúrgicos. Hospitais inativos não aparecem no cadastro de novos pacientes."
+        subtitle="Gerencie os hospitais disponíveis no cadastro de pacientes. Hospitais inativos não aparecem em novos cadastros."
         actionLabel="Novo Hospital"
         onAction={() => setEditing('new')}
       />
@@ -124,35 +124,18 @@ export function HospitalsPage() {
             rows={filtered}
             keyFor={(h) => h.id}
             columns={[
-              {
-                header: 'Hospital',
-                render: (h) => (
-                  <div className="min-w-0">
-                    <p className="font-semibold truncate">{h.name}</p>
-                    {h.linkedPatients > 0 && (
-                      <p className="text-[10px] text-muted-foreground">{h.linkedPatients} paciente(s) vinculado(s)</p>
-                    )}
-                  </div>
-                ),
-              },
+              { header: 'Hospital', render: (h) => <p className="font-semibold truncate">{h.name}</p> },
               { header: 'Cidade', render: (h) => h.city || '—' },
               { header: 'Estado', render: (h) => h.state || '—' },
               { header: 'Status', render: (h) => <StatusPill status={h.status} /> },
-              {
-                header: 'Cadastro',
-                hideOnMobile: true,
-                render: (h) => <span className="text-muted-foreground font-mono text-xs">{h.createdAt}</span>,
-              },
+              { header: 'Cadastro', hideOnMobile: true, render: (h) => <span className="text-muted-foreground font-mono text-xs">{h.created_at.slice(0, 10)}</span> },
             ]}
             actions={(h) => (
               <>
                 <RowIconButton label="Editar" onClick={() => setEditing(h)}>
                   <Pencil className="size-4" />
                 </RowIconButton>
-                <RowIconButton
-                  label={h.status === 'ACTIVE' ? 'Inativar' : 'Reativar'}
-                  onClick={() => setToToggle(h)}
-                >
+                <RowIconButton label={h.status === 'ACTIVE' ? 'Inativar' : 'Reativar'} onClick={() => setToToggle(h)}>
                   <Power className="size-4" />
                 </RowIconButton>
                 <RowIconButton label="Excluir" danger onClick={() => setToDelete(h)}>
@@ -181,7 +164,7 @@ export function HospitalsPage() {
           title={toToggle.status === 'ACTIVE' ? `Inativar ${toToggle.name}?` : `Reativar ${toToggle.name}?`}
           message={
             toToggle.status === 'ACTIVE'
-              ? 'Hospitais inativos deixam de aparecer no cadastro de novos pacientes. Registros antigos não são afetados.'
+              ? 'Hospitais inativos deixam de aparecer no cadastro de novos pacientes.'
               : 'O hospital voltará a aparecer no cadastro de novos pacientes.'
           }
           confirmLabel={toToggle.status === 'ACTIVE' ? 'Inativar' : 'Reativar'}
@@ -194,12 +177,8 @@ export function HospitalsPage() {
       {toDelete && (
         <ConfirmModal
           title={`Excluir ${toDelete.name}?`}
-          message={
-            toDelete.linkedPatients > 0
-              ? 'Este hospital já está vinculado a pacientes. Ele será inativado em vez de excluído.'
-              : 'O hospital será removido definitivamente. Esta ação não pode ser desfeita.'
-          }
-          confirmLabel={toDelete.linkedPatients > 0 ? 'Inativar hospital' : 'Excluir hospital'}
+          message="Se estiver vinculado a pacientes, será inativado em vez de excluído."
+          confirmLabel="Excluir hospital"
           busy={busy}
           onCancel={() => setToDelete(null)}
           onConfirm={remove}
@@ -219,15 +198,13 @@ function HospitalFormModal({
   onSaved: (message: string) => void;
 }) {
   const toast = useToast();
-  const [form, setForm] = useState<HospitalInput>(
-    hospital
-      ? { name: hospital.name, city: hospital.city, state: hospital.state, address: hospital.address ?? '', phone: hospital.phone ?? '', status: hospital.status }
-      : EMPTY_FORM,
+  const [form, setForm] = useState<HospitalForm>(
+    hospital ? { name: hospital.name, city: hospital.city ?? '', state: hospital.state ?? '', status: hospital.status } : EMPTY_FORM,
   );
   const [busy, setBusy] = useState(false);
   const [nameError, setNameError] = useState('');
 
-  function set<K extends keyof HospitalInput>(k: K, v: HospitalInput[K]) {
+  function set<K extends keyof HospitalForm>(k: K, v: HospitalForm[K]) {
     setForm((f) => ({ ...f, [k]: v }));
   }
 
@@ -240,35 +217,23 @@ function HospitalFormModal({
     setBusy(true);
     try {
       if (hospital) {
-        await hospitalsApi.update(hospital.id, form);
+        await hospitalService.update(hospital.id, { name: form.name, city: form.city, state: form.state, status: form.status });
         onSaved('Hospital atualizado com sucesso.');
       } else {
-        await hospitalsApi.create(form);
+        await hospitalService.create({ name: form.name, city: form.city, state: form.state });
         onSaved('Hospital cadastrado com sucesso.');
       }
     } catch (err) {
-      toast.error(err instanceof AdminApiError ? err.message : 'Erro ao salvar hospital. Verifique os campos obrigatórios.');
+      toast.error(err instanceof Error ? err.message : 'Erro ao salvar hospital.');
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
-    >
-      <form
-        onSubmit={save}
-        onClick={(e) => e.stopPropagation()}
-        className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-lg space-y-4 animate-entry my-8"
-      >
-        <h2 className="text-lg font-extrabold tracking-tight">
-          {hospital ? `Editar ${hospital.name}` : 'Novo Hospital'}
-        </h2>
-
+    <div className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" role="dialog" aria-modal="true" onClick={onClose}>
+      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-lg space-y-4 animate-entry my-8">
+        <h2 className="text-lg font-extrabold tracking-tight">{hospital ? `Editar ${hospital.name}` : 'Novo Hospital'}</h2>
         <TextInput
           label="Nome do hospital"
           required
@@ -281,31 +246,14 @@ function HospitalFormModal({
           }}
         />
         <div className="grid grid-cols-[1fr_120px] gap-3">
-          <TextInput
-            label="Cidade"
-            hint="Recomendado para organização."
-            placeholder="Ex. Curitiba"
-            value={form.city}
-            onChange={(e) => set('city', e.target.value)}
-          />
-          <TextInput
-            label="Estado (UF)"
-            placeholder="Ex. PR"
-            maxLength={2}
-            value={form.state}
-            onChange={(e) => set('state', e.target.value.toUpperCase())}
-          />
+          <TextInput label="Cidade" placeholder="Ex. Curitiba" value={form.city} onChange={(e) => set('city', e.target.value)} />
+          <TextInput label="Estado (UF)" placeholder="Ex. PR" maxLength={2} value={form.state} onChange={(e) => set('state', e.target.value.toUpperCase())} />
         </div>
-        <TextInput label="Endereço (opcional)" placeholder="Rua, número, bairro" value={form.address ?? ''} onChange={(e) => set('address', e.target.value)} />
-        <TextInput label="Telefone (opcional)" placeholder="(41) 3000-0000" value={form.phone ?? ''} onChange={(e) => set('phone', e.target.value)} />
-        <Field label="Status">
-          <ToggleSwitch
-            checked={form.status === 'ACTIVE'}
-            onChange={(v) => set('status', v ? 'ACTIVE' : 'INACTIVE')}
-            label={form.status === 'ACTIVE' ? 'Ativo' : 'Inativo'}
-          />
-        </Field>
-
+        {hospital && (
+          <Field label="Status">
+            <ToggleSwitch checked={form.status === 'ACTIVE'} onChange={(v) => set('status', v ? 'ACTIVE' : 'INACTIVE')} label={form.status === 'ACTIVE' ? 'Ativo' : 'Inativo'} />
+          </Field>
+        )}
         <div className="flex items-center justify-between gap-3 pt-2">
           <Button type="button" variant="ghost" onClick={onClose}>
             Cancelar
