@@ -42,4 +42,19 @@ export const permissionService = {
   canSeeOwnTeams(user: AuthUser | null | undefined): boolean {
     return user?.role === Role.SURGEON || user?.role === Role.ASSOCIATE;
   },
+
+  /** "Gerenciar Usuários": exclusivo do Administrador. */
+  canManageUsers(user: AuthUser | null | undefined): boolean {
+    return this.isAdmin(user);
+  },
+
+  /** Alterar o papel/perfil de um usuário — ação sensível, só Admin. */
+  canChangeUserRole(user: AuthUser | null | undefined): boolean {
+    return this.isAdmin(user);
+  },
+
+  /** Ativar/inativar um usuário — só Admin. */
+  canDeactivateUser(user: AuthUser | null | undefined): boolean {
+    return this.isAdmin(user);
+  },
 };

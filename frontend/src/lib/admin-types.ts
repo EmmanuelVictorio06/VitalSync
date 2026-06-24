@@ -127,7 +127,9 @@ export type AuditAction =
   | 'DATA_EXPORT'
   | 'SETTINGS_CHANGE'
   | 'PROFILE_UPDATE'
-  | 'ACCOUNT_DEACTIVATION_REQUEST';
+  | 'ACCOUNT_DEACTIVATION_REQUEST'
+  | 'USER_CREATE'
+  | 'USER_ROLE_CHANGE';
 
 export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   LOGIN: 'Login',
@@ -143,6 +145,8 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   SETTINGS_CHANGE: 'Alteração de configurações',
   PROFILE_UPDATE: 'Alteração de perfil',
   ACCOUNT_DEACTIVATION_REQUEST: 'Solicitação de desativação de conta',
+  USER_CREATE: 'Cadastro de usuário',
+  USER_ROLE_CHANGE: 'Alteração de papel de usuário',
 };
 
 export interface AuditEvent {

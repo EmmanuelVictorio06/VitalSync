@@ -17,6 +17,8 @@ const PAGE_TITLES: Array<{ match: (path: string) => boolean; title: string }> = 
   { match: (p) => p.startsWith('/monitoring'), title: 'Pacientes em Monitoramento' },
   { match: (p) => p === '/patients/new', title: 'Cadastro de Pacientes' },
   { match: (p) => p.startsWith('/patients/'), title: 'Acompanhamento Individual' },
+  { match: (p) => p.startsWith('/admin/users'), title: 'Gerenciar Usuários' },
+  { match: (p) => p.startsWith('/admin/teams'), title: 'Gerenciar Equipes' },
   { match: (p) => p.startsWith('/teams'), title: 'Gerenciar Equipes' },
   { match: (p) => p.startsWith('/my-teams'), title: 'Minhas Equipes' },
   { match: (p) => p.startsWith('/my-team'), title: 'Minha Equipe' },

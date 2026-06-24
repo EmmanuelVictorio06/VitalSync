@@ -18,6 +18,7 @@ import {
   Scissors,
   Settings,
   User,
+  UserCog,
   UserPlus,
   Users,
   Users2,
@@ -60,6 +61,7 @@ export function useRoleMenus(): { main: NavItem[]; admin: NavItem[] } {
     return {
       main: [
         { to: '/dashboard', label: 'Dashboard', short: 'Início', icon: LayoutDashboard },
+        { to: '/admin/users', label: 'Gerenciar Usuários', short: 'Usuários', icon: UserCog },
         { to: '/teams', label: 'Gerenciar Equipes', short: 'Equipes', icon: Users },
         { to: '/patients/new', label: 'Cadastro de Pacientes', short: 'Cadastrar', icon: UserPlus },
         { to: '/monitoring', label: 'Pacientes em Monitoramento', short: 'Pacientes', icon: Activity },

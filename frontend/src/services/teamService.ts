@@ -163,6 +163,25 @@ export const teamService = {
   createDoctor(input: { name: string; email: string; password: string; whatsapp: string; role: RoleInTeam }): Promise<string> {
     return profileService.createDoctorProfile(input);
   },
+
+  /** Cirurgiões principais disponíveis (para a tela de Equipes). */
+  getAvailableMainSurgeons(): Promise<Profile[]> {
+    return profileService.getMainSurgeons();
+  },
+
+  /** Médicos associados disponíveis (para a tela de Equipes). */
+  getAvailableAssociatedDoctors(): Promise<Profile[]> {
+    return profileService.getAssociatedDoctors();
+  },
+
+  /**
+   * Equipes vinculadas a um usuário (resumo). Usado por "Gerenciar Usuários" só
+   * para exibir o vínculo + link; o gerenciamento fica em "Gerenciar Equipes".
+   */
+  async getTeamsByUser(userId: string): Promise<import('./types').UserTeamLink[]> {
+    const { userService } = await import('./userService');
+    return userService.getUserTeamLinks(userId);
+  },
 };
 
 /** Traduz mensagens cruas do Postgres/PostgREST para o usuário final. */
