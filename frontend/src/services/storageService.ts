@@ -9,11 +9,19 @@ import { supabase } from '../lib/supabase';
 const BUCKET = 'patient-photos';
 const AVATAR_BUCKET = 'profile-avatars';
 
+/** Tipo da foto de acompanhamento enviada pelo paciente. */
+export type PatientPhotoKind = 'wound' | 'drain';
+
 export const storageService = {
-  /** Sobe a foto e retorna o caminho salvo (vai em vital_sign_records.wound_photo_path). */
-  async uploadPatientPhoto(file: File, patientId: string): Promise<string> {
+  /**
+   * Sobe a foto de acompanhamento e retorna o caminho salvo.
+   *  - `wound` → vital_sign_records.wound_photo_path (cicatriz operatória)
+   *  - `drain` → vital_sign_records.drain_photo_path (foto do dreno)
+   * Cada tipo vai em arquivo separado, dentro da pasta do paciente.
+   */
+  async uploadPatientPhoto(file: File, patientId: string, kind: PatientPhotoKind = 'wound'): Promise<string> {
     const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-    const path = `${patientId}/${Date.now()}.${ext}`;
+    const path = `${patientId}/${kind}-${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
       cacheControl: '3600',
       upsert: false,

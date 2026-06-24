@@ -80,13 +80,18 @@ export interface VitalRecord {
   stepsCount: number | null;
   overallStatus: ClinicalStatus;
   statusByVital: Record<string, ClinicalStatus>;
-  /** Foto da ferida operatória / dreno (opcional). */
+  /** Foto da cicatriz operatória (opcional). */
   patientId: string;
   woundPhotoUrl: string | null;
   woundPhotoFileName: string | null;
   woundPhotoMimeType: string | null;
   woundPhotoSize: number | null;
   woundPhotoUploadedAt: string | null;
+  /** Dreno: o paciente informou possuir? E a foto do dreno (opcional). */
+  hasDrain: boolean;
+  drainPhotoUrl: string | null;
+  drainPhotoFileName: string | null;
+  drainPhotoUploadedAt: string | null;
 }
 
 export interface PatientDashboard {

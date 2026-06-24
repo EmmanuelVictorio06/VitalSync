@@ -33,7 +33,12 @@ export interface VitalSubmission {
   vomiting_count?: number;
   has_bleeding?: boolean;
   steps?: number;
+  /** Foto da cicatriz operatória. */
   wound_photo_path?: string;
+  /** Paciente possui dreno? */
+  has_drain?: boolean;
+  /** Foto do dreno (só quando has_drain = true). */
+  drain_photo_path?: string;
 }
 
 export const vitalSignsService = {
@@ -73,6 +78,8 @@ export const vitalSignsService = {
       p_has_bleeding: input.has_bleeding ?? false,
       p_steps: input.steps ?? null,
       p_wound_photo_path: input.wound_photo_path ?? null,
+      p_has_drain: input.has_drain ?? false,
+      p_drain_photo_path: input.drain_photo_path ?? null,
     });
     if (error) throw new Error(error.message);
     return { clinical_status: data as string };

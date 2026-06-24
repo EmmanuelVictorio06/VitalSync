@@ -44,6 +44,15 @@ async function toVitalRecord(v: VitalSignRecord): Promise<VitalRecord> {
     }
   }
 
+  let drainPhotoUrl: string | null = null;
+  if (v.drain_photo_path) {
+    try {
+      drainPhotoUrl = await storageService.getPatientPhotoUrl(v.drain_photo_path);
+    } catch {
+      drainPhotoUrl = null;
+    }
+  }
+
   return {
     id: v.id,
     recordDate: v.record_date,
@@ -70,6 +79,10 @@ async function toVitalRecord(v: VitalSignRecord): Promise<VitalRecord> {
     woundPhotoMimeType: null,
     woundPhotoSize: null,
     woundPhotoUploadedAt: woundPhotoUrl ? v.created_at : null,
+    hasDrain: v.has_drain ?? false,
+    drainPhotoUrl,
+    drainPhotoFileName: v.drain_photo_path ? v.drain_photo_path.split('/').pop() ?? null : null,
+    drainPhotoUploadedAt: drainPhotoUrl ? v.created_at : null,
   };
 }
 

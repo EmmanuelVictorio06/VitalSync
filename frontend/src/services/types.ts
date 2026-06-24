@@ -146,6 +146,8 @@ export interface VitalSignRecord {
   has_bleeding: boolean | null;
   steps: number | null;
   wound_photo_path: string | null;
+  has_drain: boolean | null;
+  drain_photo_path: string | null;
   clinical_status: ClinicalStatus;
   created_at: string;
 }

@@ -82,16 +82,20 @@ export function ImagePreviewCard({
 }
 
 /* ------------------------------------------------------------------ */
-/*  PhotoUploadField — card de envio (paciente)                        */
+/*  PhotoUploadField — um campo de foto (paciente)                     */
 /* ------------------------------------------------------------------ */
 export function PhotoUploadField({
   value,
   onChange,
   onError,
+  title = 'Foto da cicatriz operatória',
+  description = 'Envie uma foto nítida da cicatriz operatória para acompanhamento da equipe médica.',
 }: {
   value: File | null;
   onChange: (file: File | null) => void;
   onError?: (message: string) => void;
+  title?: string;
+  description?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -112,17 +116,14 @@ export function PhotoUploadField({
   }
 
   return (
-    <div className="bg-card border border-border rounded-2xl shadow-sm p-5 space-y-4">
+    <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
       <header className="flex items-start gap-3">
-        <div className="size-10 shrink-0 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+        <div className="size-9 shrink-0 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
           <Camera className="size-5" />
         </div>
         <div>
-          <h2 className="text-base font-extrabold tracking-tight">Foto da ferida operatória ou do dreno</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Envie uma foto nítida da região operada ou do dreno, caso exista. Essa imagem será analisada pela
-            equipe médica.
-          </p>
+          <h3 className="text-sm font-extrabold tracking-tight">{title}</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
         </div>
       </header>
 
@@ -141,19 +142,116 @@ export function PhotoUploadField({
         <button
           type="button"
           onClick={openPicker}
-          className="w-full flex flex-col items-center justify-center gap-2 py-7 px-5 rounded-xl border-2 border-dashed border-primary/40 text-primary bg-primary/5 hover:bg-primary/10 transition-colors"
+          className="w-full flex flex-col items-center justify-center gap-2 py-6 px-5 rounded-xl border-2 border-dashed border-primary/40 text-primary bg-primary/5 hover:bg-primary/10 transition-colors"
         >
-          <ImageIcon className="size-7" />
+          <ImageIcon className="size-6" />
           <span className="font-bold text-base">Adicionar foto</span>
           <span className="text-xs text-muted-foreground">JPG, PNG ou WEBP · até {humanSize(WOUND_PHOTO.maxBytes)}</span>
         </button>
       )}
-
-      <div className="rounded-lg bg-muted/60 px-3 py-2.5 text-xs text-muted-foreground">
-        💡 Tire a foto em um local bem iluminado e tente deixar a imagem nítida.
-      </div>
-      <p className="text-xs text-muted-foreground">Envio opcional, mas recomendado para melhor acompanhamento.</p>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  DrainQuestionField — pergunta "Você possui dreno?" (Sim/Não)       */
+/* ------------------------------------------------------------------ */
+export function DrainQuestionField({
+  value,
+  onChange,
+}: {
+  value: boolean | null;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <div>
+      <span className="block text-sm font-bold mb-2">Você possui dreno?</span>
+      <div className="grid grid-cols-2 gap-3">
+        {([true, false] as const).map((opt) => {
+          const active = value === opt;
+          return (
+            <button
+              key={String(opt)}
+              type="button"
+              onClick={() => onChange(opt)}
+              className={cn(
+                'py-4 rounded-xl font-bold text-base border-2 transition-all',
+                active
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border bg-card text-muted-foreground hover:border-primary/30',
+              )}
+            >
+              {opt ? 'Sim' : 'Não'}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  PatientPhotoUploadSection — card "Fotos de acompanhamento"         */
+/*  Pergunta do dreno + upload da cicatriz + (se Sim) upload do dreno  */
+/* ------------------------------------------------------------------ */
+export function PatientPhotoUploadSection({
+  hasDrain,
+  onHasDrainChange,
+  woundPhoto,
+  onWoundPhotoChange,
+  drainPhoto,
+  onDrainPhotoChange,
+  onError,
+}: {
+  hasDrain: boolean | null;
+  onHasDrainChange: (v: boolean) => void;
+  woundPhoto: File | null;
+  onWoundPhotoChange: (file: File | null) => void;
+  drainPhoto: File | null;
+  onDrainPhotoChange: (file: File | null) => void;
+  onError?: (message: string) => void;
+}) {
+  return (
+    <section className="bg-card border border-border rounded-2xl shadow-sm p-5 space-y-4">
+      <header>
+        <h2 className="text-lg font-extrabold tracking-tight">Fotos de acompanhamento</h2>
+        <p className="text-sm text-muted-foreground">As fotos ajudam a equipe médica a acompanhar sua recuperação.</p>
+      </header>
+
+      <DrainQuestionField value={hasDrain} onChange={onHasDrainChange} />
+
+      {hasDrain !== null && (
+        <div className="space-y-3">
+          {/* Sem dreno: ajuda mais completa. Com dreno: ajuda curta + foto do dreno. */}
+          <PhotoUploadField
+            value={woundPhoto}
+            onChange={onWoundPhotoChange}
+            onError={onError}
+            title="Foto da cicatriz operatória"
+            description={
+              hasDrain
+                ? 'Envie uma foto nítida da cicatriz operatória.'
+                : 'Envie uma foto nítida da cicatriz operatória para acompanhamento da equipe médica.'
+            }
+          />
+
+          {hasDrain && (
+            <PhotoUploadField
+              value={drainPhoto}
+              onChange={onDrainPhotoChange}
+              onError={onError}
+              title="Foto do dreno"
+              description="Envie uma foto nítida do dreno para acompanhamento da equipe médica."
+            />
+          )}
+
+          <div className="rounded-lg bg-muted/60 px-3 py-2.5 text-xs text-muted-foreground">
+            💡 Tire a foto em um local bem iluminado e tente deixar a imagem nítida.
+          </div>
+          <p className="text-xs text-muted-foreground">Envio opcional, mas recomendado para melhor acompanhamento.</p>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -249,12 +347,28 @@ export function ViewImageModal({
 /* ------------------------------------------------------------------ */
 /*  PatientMeasurementPhotoSection — painel médico                     */
 /* ------------------------------------------------------------------ */
-function PhotoRecordCard({ record }: { record: VitalRecord }) {
-  const { src, loading, error } = useProtectedImage(record.woundPhotoUrl);
+
+/** Card de UMA foto (cicatriz ou dreno): miniatura + período + data + ver. */
+function PhotoThumbCard({
+  label,
+  photoUrl,
+  fileName,
+  uploadedAt,
+  period,
+  monitoringDay,
+}: {
+  label: string;
+  photoUrl: string | null;
+  fileName: string | null;
+  uploadedAt: string | null;
+  period: Period;
+  monitoringDay: number;
+}) {
+  const { src, loading, error } = useProtectedImage(photoUrl);
   const [open, setOpen] = useState(false);
 
-  const uploadedAt = record.woundPhotoUploadedAt ? new Date(record.woundPhotoUploadedAt) : null;
-  const isMorning = record.period === Period.MORNING;
+  const at = uploadedAt ? new Date(uploadedAt) : null;
+  const isMorning = period === Period.MORNING;
 
   return (
     <div className="bg-card border border-border rounded-xl shadow-sm p-4 flex gap-4">
@@ -262,13 +376,13 @@ function PhotoRecordCard({ record }: { record: VitalRecord }) {
         type="button"
         onClick={() => src && setOpen(true)}
         className="relative size-24 shrink-0 rounded-lg overflow-hidden border border-border bg-muted/50 grid place-items-center group"
-        aria-label="Visualizar foto"
+        aria-label={`Visualizar ${label.toLowerCase()}`}
       >
         {loading && <Loader2 className="size-5 animate-spin text-muted-foreground" />}
         {error && <span className="text-[10px] text-alert px-1 text-center">Falha ao carregar</span>}
         {src && (
           <>
-            <img src={src} alt="Miniatura da foto da ferida" className="size-full object-cover" />
+            <img src={src} alt={`Miniatura — ${label}`} className="size-full object-cover" />
             <span className="absolute inset-0 bg-foreground/0 group-hover:bg-foreground/30 transition-colors flex items-center justify-center">
               <ZoomIn className="size-6 text-white opacity-0 group-hover:opacity-100" />
             </span>
@@ -277,18 +391,19 @@ function PhotoRecordCard({ record }: { record: VitalRecord }) {
       </button>
 
       <div className="min-w-0 flex flex-col">
+        <p className="text-sm font-bold tracking-tight">{label}</p>
         <span
           className={cn(
-            'inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase',
+            'inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase mt-1',
             isMorning ? 'bg-warning/10 text-warning' : 'bg-primary/10 text-primary',
           )}
         >
           {isMorning ? <Sun className="size-3" /> : <Moon className="size-3" />}
-          {isMorning ? 'Manhã' : 'Noite'} · D+{record.monitoringDay}
+          {isMorning ? 'Manhã' : 'Noite'} · D+{monitoringDay}
         </span>
         <p className="text-xs text-muted-foreground mt-1.5">
-          {uploadedAt
-            ? uploadedAt.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+          {at
+            ? at.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
             : '—'}
         </p>
         <button
@@ -301,29 +416,85 @@ function PhotoRecordCard({ record }: { record: VitalRecord }) {
         </button>
       </div>
 
-      {open && src && <ViewImageModal src={src} fileName={record.woundPhotoFileName} onClose={() => setOpen(false)} />}
+      {open && src && <ViewImageModal src={src} fileName={fileName} onClose={() => setOpen(false)} />}
+    </div>
+  );
+}
+
+/** Mensagem curta (sem foto) com cor neutra. */
+function PhotoEmptyNote({ children }: { children: React.ReactNode }) {
+  return <p className="text-sm text-muted-foreground bg-muted/40 border border-border rounded-xl px-4 py-3">{children}</p>;
+}
+
+/** Bloco de fotos de UM registro (período): dreno + cicatriz + dreno. */
+function RecordPhotosBlock({ record }: { record: VitalRecord }) {
+  return (
+    <div className="space-y-3">
+      <p className="text-sm">
+        <span className="font-bold">Possui dreno:</span>{' '}
+        <span className={record.hasDrain ? 'text-primary font-semibold' : 'text-muted-foreground'}>
+          {record.hasDrain ? 'Sim' : 'Não'}
+        </span>
+      </p>
+
+      <div className="grid sm:grid-cols-2 gap-4">
+        {/* Cicatriz operatória */}
+        {record.woundPhotoUrl ? (
+          <PhotoThumbCard
+            label="Foto da cicatriz operatória"
+            photoUrl={record.woundPhotoUrl}
+            fileName={record.woundPhotoFileName}
+            uploadedAt={record.woundPhotoUploadedAt}
+            period={record.period}
+            monitoringDay={record.monitoringDay}
+          />
+        ) : (
+          <PhotoEmptyNote>Nenhuma foto da cicatriz operatória anexada.</PhotoEmptyNote>
+        )}
+
+        {/* Dreno — só quando o paciente informou possuir */}
+        {record.hasDrain &&
+          (record.drainPhotoUrl ? (
+            <PhotoThumbCard
+              label="Foto do dreno"
+              photoUrl={record.drainPhotoUrl}
+              fileName={record.drainPhotoFileName}
+              uploadedAt={record.drainPhotoUploadedAt}
+              period={record.period}
+              monitoringDay={record.monitoringDay}
+            />
+          ) : (
+            <PhotoEmptyNote>
+              Paciente informou que possui dreno, mas nenhuma foto do dreno foi anexada.
+            </PhotoEmptyNote>
+          ))}
+      </div>
+
+      {!record.hasDrain && (
+        <p className="text-xs text-muted-foreground">Paciente informou que não possui dreno.</p>
+      )}
     </div>
   );
 }
 
 export function PatientMeasurementPhotoSection({ records }: { records: VitalRecord[] }) {
-  const withPhotos = records.filter((r) => r.woundPhotoUrl);
+  // Mostra os registros que tenham ALGO de acompanhamento de foto: alguma foto
+  // anexada ou a informação de que possui dreno.
+  const relevant = records.filter((r) => r.woundPhotoUrl || r.drainPhotoUrl || r.hasDrain);
 
   return (
     <section className="bg-card border border-border rounded-xl shadow-sm p-5 md:p-6 space-y-4">
       <header className="flex items-center gap-2">
         <Camera className="size-4 text-primary" />
-        <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">
-          Foto da ferida operatória ou do dreno
-        </h3>
+        <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Fotos de acompanhamento</h3>
       </header>
 
-      {withPhotos.length === 0 ? (
+      {relevant.length === 0 ? (
         <p className="text-sm text-muted-foreground">Nenhuma foto enviada neste período.</p>
       ) : (
-        <div className="grid sm:grid-cols-2 gap-4">
-          {withPhotos.map((r) => (
-            <PhotoRecordCard key={`${r.monitoringDay}-${r.period}`} record={r} />
+        <div className="space-y-5">
+          {relevant.map((r) => (
+            <RecordPhotosBlock key={`${r.monitoringDay}-${r.period}`} record={r} />
           ))}
         </div>
       )}

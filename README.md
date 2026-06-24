@@ -158,7 +158,9 @@ monitoramento; uma nova medição do paciente **reseta** o atendimento.
   conforme `.env.example`; trocar `JWT_SECRET` por segredo forte e `WHATSAPP_PROVIDER` para
   `twilio`/`meta` com as credenciais reais.
 - **Frontend**: build estático (`npm run build --workspace @vitalsync/frontend`) servido por
-  Vercel/Netlify/CDN. Definir `VITE_API_URL` para a URL pública da API.
+  Vercel/Netlify/CDN. Definir `VITE_API_URL` para a URL pública da API. Para o login via
+  Supabase, configurar `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` e `VITE_PUBLIC_APP_URL` —
+  passo a passo (local + Vercel) em **[`docs/CONFIG_SUPABASE.md`](docs/CONFIG_SUPABASE.md)**.
 - **Escala (≥500 → crescimento)**: índices já previstos (paciente, equipe, status, período);
   paginação nas listagens; cache pode ser adicionado em catálogos. Arquitetura desacoplada
   permite trocar banco/provedor/framework sem reescrever regras.
