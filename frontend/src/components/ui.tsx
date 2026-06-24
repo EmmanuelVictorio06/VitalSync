@@ -196,13 +196,13 @@ export function ConfirmModal({
   const enabled = !requireText || confirmInput?.trim().toUpperCase() === requireText.toUpperCase();
   return (
     <div
-      className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
       role="dialog"
       aria-modal="true"
       onClick={onCancel}
     >
       <div
-        className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-md animate-entry"
+        className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-md my-auto max-h-[90vh] overflow-y-auto animate-entry"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-extrabold tracking-tight">{title}</h2>
