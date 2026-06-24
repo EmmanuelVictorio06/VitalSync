@@ -3,6 +3,7 @@ import { CheckCircle2, Copy, MessageCircle, UserPlus } from 'lucide-react';
 import { calculateAge, whatsappLink } from '@vitalsync/shared';
 import { useToast } from '../components/Toast';
 import { Button, Field, PhoneInput, SelectField, TextInput } from '../components/ui';
+import { patientVitalsLink } from '../lib/publicUrl';
 import { hospitalService } from '../services/hospitalService';
 import { surgeryTypeService } from '../services/surgeryTypeService';
 import { teamService } from '../services/teamService';
@@ -66,7 +67,9 @@ export function PatientRegisterPage() {
         team_id: form.teamId,
       });
       // Link público do paciente: rota sem login, validada por token seguro.
-      const link = `${window.location.origin}/registro-sinais/${patient.secure_token}`;
+      // Usa o domínio de produção (VITE_PUBLIC_APP_URL) para nunca gerar link de
+      // preview protegido da Vercel; cai em window.location.origin no dev local.
+      const link = patientVitalsLink(patient.secure_token);
       toast.success('Paciente cadastrado e link gerado!');
       setResult({ link, phone: form.phone, name: form.name });
       setForm(empty);
