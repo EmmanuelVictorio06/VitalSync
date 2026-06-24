@@ -135,4 +135,51 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
   }
+
+  /* Evita rolagem horizontal indesejada em qualquer página.
+     `clip` (e não `hidden`) não cria contexto de rolagem — preserva o
+     comportamento de `position: sticky` da sidebar/topbar. */
+  body {
+    overflow-x: clip;
+  }
+
+  /* Mídia flexível: nunca estoura o container (imagens, logos, gráficos). */
+  img,
+  svg,
+  video,
+  canvas {
+    max-width: 100%;
+  }
+
+  img,
+  video {
+    height: auto;
+  }
+}
+
+/* -------------------------------------------------------------------------
+   Regras NÃO-camadas (vencem o cascade das @utility/@layer quando preciso).
+   ------------------------------------------------------------------------- */
+
+/* iOS: inputs com fonte < 16px disparam zoom automático ao focar. No mobile,
+   garantimos 16px para uma experiência de toque sem saltos de zoom. */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea,
+  .input {
+    font-size: 16px;
+  }
+}
+
+/* Acessibilidade: respeita quem prefere menos movimento (heurística + WCAG). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
