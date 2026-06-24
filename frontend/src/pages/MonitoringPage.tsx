@@ -31,10 +31,6 @@ async function copyToClipboard(text: string): Promise<void> {
   if (!ok) throw new Error('Não foi possível copiar o link.');
 }
 
-function patientLink(p: PatientWithNames): string {
-  return `${window.location.origin}/r/${p.secure_token}`;
-}
-
 export function MonitoringPage() {
   const toast = useToast();
   const navigate = useNavigate();
@@ -74,8 +70,8 @@ export function MonitoringPage() {
   }
 
   async function share(p: PatientWithNames, mode: 'copy' | 'whatsapp') {
-    const link = patientLink(p);
     try {
+      const link = await patientService.getLink(p.id);
       if (mode === 'copy') {
         await copyToClipboard(link);
         toast.info('Link copiado.');

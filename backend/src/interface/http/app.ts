@@ -30,7 +30,8 @@ export async function buildApp(container: Container): Promise<FastifyInstance> {
     origin: (origin, cb) => {
       // Sem origin = curl/health check/same-origin → permitido.
       if (!origin) return cb(null, true);
-      if (allowedOrigins.includes(origin) || /\.vercel\.app$/.test(origin)) return cb(null, true);
+      const isLocalDevOrigin = env.NODE_ENV === 'development' && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
+      if (allowedOrigins.includes(origin) || isLocalDevOrigin || /\.vercel\.app$/.test(origin)) return cb(null, true);
       cb(null, false);
     },
     credentials: true,

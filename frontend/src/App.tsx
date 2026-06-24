@@ -5,6 +5,7 @@ import { PermissionGuard } from './components/PermissionGuard';
 import { adminRoles } from './lib/permissions';
 import { AlertsPage } from './pages/AlertsPage';
 import { DashboardPage } from './pages/DashboardPage';
+import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
 import { MonitoringPage } from './pages/MonitoringPage';
 import { MyTeamPage } from './pages/MyTeamPage';
@@ -23,6 +24,7 @@ export function App() {
   return (
     <Routes>
       {/* Públicas */}
+      <Route index element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
       {/* Tela do paciente — acesso somente via link com token (sem login) */}
       <Route path="/r/:token" element={<VitalsRegisterPage />} />
@@ -35,7 +37,6 @@ export function App() {
           </PermissionGuard>
         }
       >
-        <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/monitoring" element={<MonitoringPage />} />
         {/* Cadastro de pacientes: Administrador e Cirurgião Principal */}

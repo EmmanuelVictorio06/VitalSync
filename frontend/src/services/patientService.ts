@@ -1,8 +1,39 @@
-/** Pacientes (RLS aplica o escopo por equipe). */
-import { supabase } from '../lib/supabase';
-import type { ClinicalStatus, Patient } from './types';
+import type { ClinicalStatus } from '@vitalsync/shared';
+import { api } from '../lib/api';
+import type { Paginated } from '../lib/dto';
+import type { EntityStatus, Patient } from './types';
 
-export interface PatientWithNames extends Patient {
+interface ApiPatient {
+  id: string;
+  name: string;
+  birthDate: string | null;
+  phone: string | null;
+  surgeryTypeId: string | null;
+  surgeryDate: string | null;
+  dischargeDate: string | null;
+  hospitalId: string | null;
+  teamId: string;
+  currentStatus: ClinicalStatus;
+  createdAt: string;
+  surgeryType?: { name: string } | null;
+  hospital?: { name: string } | null;
+  team?: { number: number } | null;
+}
+
+export interface PatientWithNames {
+  id: string;
+  name: string;
+  birth_date: string | null;
+  phone: string | null;
+  surgery_type_id: string | null;
+  surgery_date: string | null;
+  hospital_discharge_date: string | null;
+  hospital_id: string | null;
+  team_id: string;
+  secure_token?: string;
+  status: EntityStatus;
+  current_status: ClinicalStatus;
+  created_at: string;
   surgery_type: { name: string } | null;
   hospital: { name: string } | null;
   medical_team: { team_number: number } | null;
@@ -19,41 +50,60 @@ export interface NewPatientInput {
   team_id: string;
 }
 
+function mapPatient(p: ApiPatient): PatientWithNames {
+  return {
+    id: p.id,
+    name: p.name,
+    birth_date: p.birthDate,
+    phone: p.phone,
+    surgery_type_id: p.surgeryTypeId,
+    surgery_date: p.surgeryDate,
+    hospital_discharge_date: p.dischargeDate,
+    hospital_id: p.hospitalId,
+    team_id: p.teamId,
+    status: 'ACTIVE',
+    current_status: p.currentStatus,
+    created_at: p.createdAt,
+    surgery_type: p.surgeryType ? { name: p.surgeryType.name } : null,
+    hospital: p.hospital ? { name: p.hospital.name } : null,
+    medical_team: p.team ? { team_number: p.team.number } : null,
+  };
+}
+
 export const patientService = {
-  /** Lista pacientes visíveis ao usuário; filtros opcionais. */
-  async list(opts: { status?: ClinicalStatus; teamId?: string; search?: string } = {}): Promise<PatientWithNames[]> {
-    let q = supabase
-      .from('patients')
-      .select('*, surgery_type:surgery_types(name), hospital:hospitals(name), medical_team:medical_teams(team_number)')
-      .eq('status', 'ACTIVE')
-      .order('created_at', { ascending: false });
-    if (opts.status) q = q.eq('current_status', opts.status);
-    if (opts.teamId) q = q.eq('team_id', opts.teamId);
-    if (opts.search) q = q.ilike('name', `%${opts.search}%`);
-    const { data, error } = await q;
-    if (error) throw new Error(error.message);
-    return (data as unknown as PatientWithNames[]) ?? [];
+  async list(opts: { status?: ClinicalStatus; search?: string } = {}): Promise<PatientWithNames[]> {
+    const params = new URLSearchParams({ page: '1', pageSize: '100' });
+    if (opts.status) params.set('status', opts.status);
+    if (opts.search) params.set('search', opts.search);
+
+    const res = await api.get<Paginated<ApiPatient>>(`/patients?${params.toString()}`);
+    return res.items.map(mapPatient);
   },
 
-  async getById(id: string): Promise<PatientWithNames | null> {
-    const { data, error } = await supabase
-      .from('patients')
-      .select('*, surgery_type:surgery_types(name), hospital:hospitals(name), medical_team:medical_teams(team_number)')
-      .eq('id', id)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    return (data as unknown as PatientWithNames) ?? null;
+  async getLink(id: string): Promise<string> {
+    const res = await api.post<{ link: string }>(`/patients/${id}/link`);
+    return res.link;
   },
 
-  /** Cadastra paciente (ADMIN ou cirurgião responsável). Retorna o secure_token. */
-  async create(input: NewPatientInput): Promise<Patient> {
-    const { data, error } = await supabase.from('patients').insert(input).select().single();
-    if (error) throw new Error(error.message);
-    return data as Patient;
+  async create(input: NewPatientInput): Promise<Patient & { secure_token: string }> {
+    const res = await api.post<{ patient: ApiPatient; link: string }>('/patients', {
+      name: input.name,
+      birthDate: input.birth_date,
+      phone: input.phone,
+      surgeryTypeId: input.surgery_type_id,
+      surgeryDate: input.surgery_date,
+      dischargeDate: input.hospital_discharge_date,
+      hospitalId: input.hospital_id,
+      surgeonId: input.team_id,
+    });
+
+    return {
+      ...(mapPatient(res.patient) as unknown as Patient),
+      secure_token: res.link.split('/r/')[1] ?? '',
+    };
   },
 
   async remove(id: string): Promise<void> {
-    const { error } = await supabase.from('patients').update({ status: 'INACTIVE' }).eq('id', id);
-    if (error) throw new Error(error.message);
+    await api.del(`/patients/${id}`);
   },
 };

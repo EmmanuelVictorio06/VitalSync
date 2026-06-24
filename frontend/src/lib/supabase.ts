@@ -10,11 +10,12 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+const apiUrl = import.meta.env.VITE_API_URL as string | undefined;
 
 /** Permite à UI mostrar um erro claro em vez de quebrar com tela branca. */
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
-if (!isSupabaseConfigured) {
+if (!isSupabaseConfigured && !apiUrl) {
   // Não lança no import (evita tela branca); apenas registra o problema.
   console.error(
     'Supabase não configurado: defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY (.env.local / Vercel).',
