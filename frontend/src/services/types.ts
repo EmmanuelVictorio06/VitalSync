@@ -6,13 +6,47 @@ export type EntityStatus = 'ACTIVE' | 'INACTIVE';
 export type MeasurementPeriod = 'MORNING' | 'NIGHT';
 export type ClinicalStatus = 'GREEN' | 'YELLOW' | 'RED';
 
+export interface NotificationPrefs {
+  whatsapp_alerts_enabled: boolean;
+  email_alerts_enabled: boolean;
+  yellow_alerts_enabled: boolean;
+  red_alerts_enabled: boolean;
+  pending_attendance_enabled: boolean;
+}
+
+export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
+  whatsapp_alerts_enabled: true,
+  email_alerts_enabled: false,
+  yellow_alerts_enabled: true,
+  red_alerts_enabled: true,
+  pending_attendance_enabled: true,
+};
+
 export interface Profile {
   id: string;
   name: string;
   email: string;
   whatsapp: string | null;
   role: UserRole;
+  avatar_url: string | null;
+  specialty: string | null;
+  crm: string | null;
+  notes: string | null;
+  status: EntityStatus;
+  notification_prefs: Partial<NotificationPrefs> | null;
   created_at: string;
+  updated_at: string | null;
+}
+
+export interface AccountRequest {
+  id: string;
+  profile_id: string;
+  type: 'DEACTIVATION';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  reason: string | null;
+  created_at: string;
+  resolved_at: string | null;
+  resolved_by: string | null;
 }
 
 export interface Hospital {

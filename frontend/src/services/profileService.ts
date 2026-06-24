@@ -1,6 +1,16 @@
 /** Perfil do usuário (role, nome) — usado para menus e RBAC no frontend. */
 import { supabase } from '../lib/supabase';
-import type { Profile, RoleInTeam, UserRole } from './types';
+import { storageService } from './storageService';
+import { teamViewService, type TeamSummary } from './teamViewService';
+import type { NotificationPrefs, Profile, RoleInTeam, UserRole } from './types';
+
+/** Helper interno: id do usuário logado (ou erro de sessão). */
+async function requireUid(): Promise<string> {
+  const { data } = await supabase.auth.getUser();
+  const uid = data.user?.id;
+  if (!uid) throw new Error('Sessão expirada. Faça login novamente.');
+  return uid;
+}
 
 export const profileService = {
   /** Perfil do usuário logado (define o papel e os menus). */
@@ -68,5 +78,89 @@ export const profileService = {
     });
     if (error) throw new Error(error.message);
     return data as string;
+  },
+
+  /* ======================= "Meu Perfil" (próprio usuário) ======================= */
+
+  /**
+   * Atualiza os dados pessoais do PRÓPRIO usuário. Nunca toca em role/status
+   * (protegidos por trigger no banco). Senha e e-mail NÃO passam por aqui —
+   * vão pelo Supabase Auth (authService).
+   */
+  async updateMyProfile(input: {
+    name?: string;
+    whatsapp?: string | null;
+    specialty?: string | null;
+    crm?: string | null;
+    notes?: string | null;
+  }): Promise<Profile> {
+    const uid = await requireUid();
+    const { data, error } = await supabase.from('profiles').update(input).eq('id', uid).select().single();
+    if (error) throw new Error(error.message);
+    return data as Profile;
+  },
+
+  /** Atalho para atualizar só o WhatsApp (usado ao ligar alertas por WhatsApp). */
+  updateMyWhatsapp(whatsapp: string): Promise<Profile> {
+    return this.updateMyProfile({ whatsapp });
+  },
+
+  /** Sobe um novo avatar, salva o caminho e remove o anterior (se houver). */
+  async updateAvatar(file: File): Promise<Profile> {
+    const uid = await requireUid();
+    const current = await this.getProfile(uid);
+    const path = await storageService.uploadProfileAvatar(file, uid);
+    const { data, error } = await supabase.from('profiles').update({ avatar_url: path }).eq('id', uid).select().single();
+    if (error) throw new Error(error.message);
+    if (current?.avatar_url && current.avatar_url !== path) {
+      await storageService.deleteProfileAvatar(current.avatar_url).catch(() => {});
+    }
+    return data as Profile;
+  },
+
+  /** Remove o avatar atual (arquivo + referência no perfil). */
+  async removeAvatar(): Promise<Profile> {
+    const uid = await requireUid();
+    const current = await this.getProfile(uid);
+    if (current?.avatar_url) await storageService.deleteProfileAvatar(current.avatar_url).catch(() => {});
+    const { data, error } = await supabase.from('profiles').update({ avatar_url: null }).eq('id', uid).select().single();
+    if (error) throw new Error(error.message);
+    return data as Profile;
+  },
+
+  /** Equipes do usuário logado (RLS já restringe às que ele participa). */
+  getMyTeams(): Promise<TeamSummary[]> {
+    return teamViewService.listMyTeams();
+  },
+
+  /** Salva as preferências de notificação (jsonb em profiles). */
+  async updateNotificationPreferences(prefs: NotificationPrefs): Promise<Profile> {
+    const uid = await requireUid();
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ notification_prefs: prefs })
+      .eq('id', uid)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return data as Profile;
+  },
+
+  /** Registra uma solicitação de desativação da própria conta (ADMIN analisa). */
+  async requestAccountDeactivation(reason?: string): Promise<void> {
+    const uid = await requireUid();
+    const { error } = await supabase.from('account_requests').insert({ profile_id: uid, type: 'DEACTIVATION', reason: reason ?? null });
+    if (error) throw new Error(error.message);
+  },
+
+  /** Quantidade de administradores ATIVOS (evita o único admin se autodesativar). */
+  async countActiveAdmins(): Promise<number> {
+    const { count, error } = await supabase
+      .from('profiles')
+      .select('id', { count: 'exact', head: true })
+      .eq('role', 'ADMIN')
+      .eq('status', 'ACTIVE');
+    if (error) throw new Error(error.message);
+    return count ?? 0;
   },
 };

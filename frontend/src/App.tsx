@@ -7,6 +7,7 @@ import { AlertsPage } from './pages/AlertsPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { LoginPage } from './pages/LoginPage';
 import { MonitoringPage } from './pages/MonitoringPage';
+import { MyProfilePage } from './pages/MyProfilePage';
 import { MyTeamPage } from './pages/MyTeamPage';
 import { MyTeamsPage } from './pages/MyTeamsPage';
 import { PatientDashboardPage } from './pages/PatientDashboardPage';
@@ -92,14 +93,12 @@ export function App() {
             </PermissionGuard>
           }
         />
+        {/* Meu Perfil — Administrador, Cirurgião Principal e Médico Associado */}
         <Route
           path="/profile"
           element={
-            <PermissionGuard roles={[Role.SURGEON, Role.ASSOCIATE]}>
-              <PlaceholderPage
-                title="Meu Perfil"
-                description="Seus dados profissionais, contato de WhatsApp para alertas e preferências de notificação."
-              />
+            <PermissionGuard roles={[Role.ADM, Role.SURGEON, Role.ASSOCIATE]}>
+              <MyProfilePage />
             </PermissionGuard>
           }
         />
