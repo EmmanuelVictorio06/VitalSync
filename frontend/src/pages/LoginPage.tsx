@@ -1,8 +1,15 @@
-import { useState, type FormEvent } from 'react';
+import { useCallback, useState, type FormEvent, type MouseEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { Activity, Heart, Lock, Mail, ShieldCheck, Stethoscope } from 'lucide-react';
+import { Activity, Lock, Mail, ShieldCheck, Stethoscope } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
+import { BackToHomeButton } from '../components/BackToHomeButton';
+import { VitalSyncLogo } from '../components/VitalSyncLogo';
 import { useToast } from '../components/Toast';
+import { cn } from '../components/ui';
+
+function prefersReducedMotion() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
 
 export function LoginPage() {
   const { user, login } = useAuth();
@@ -11,6 +18,34 @@ export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+
+  const navigateHome = useCallback(
+    (event: MouseEvent<HTMLAnchorElement>) => {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.shiftKey
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      if (leaving) return;
+
+      if (prefersReducedMotion()) {
+        navigate('/');
+        return;
+      }
+
+      setLeaving(true);
+      window.setTimeout(() => navigate('/'), 180);
+    },
+    [leaving, navigate],
+  );
 
   if (user) return <Navigate to="/monitoring" replace />;
 
@@ -35,7 +70,12 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2 bg-background">
+    <div
+      className={cn(
+        'min-h-screen grid bg-background transition-all duration-200 ease-out lg:grid-cols-2',
+        leaving ? 'opacity-0 -translate-y-1' : 'opacity-100 translate-y-0',
+      )}
+    >
       {/* Lado da marca */}
       <aside className="relative hidden lg:flex flex-col justify-between p-12 bg-primary text-primary-foreground overflow-hidden">
         <div
@@ -45,22 +85,15 @@ export function LoginPage() {
               'radial-gradient(circle at 20% 20%, rgba(255,255,255,0.35), transparent 40%), radial-gradient(circle at 80% 80%, rgba(255,255,255,0.2), transparent 50%)',
           }}
         />
-        <div className="relative flex items-center gap-3">
-          <div className="size-10 bg-white/10 backdrop-blur rounded-xl flex items-center justify-center">
-            <Heart className="size-5" fill="currentColor" />
-          </div>
-          <span className="text-xl font-extrabold tracking-tight">
-            Vital<span className="font-normal opacity-70">Sync</span>
-          </span>
-        </div>
+        <VitalSyncLogo tone="onPrimary" onNavigate={navigateHome} className="relative" />
         <div className="relative space-y-6 max-w-md">
           <p className="text-xs font-bold uppercase tracking-[0.3em] opacity-80">HealthTech</p>
           <h1 className="text-4xl font-extrabold tracking-tight text-balance leading-tight">
             Monitoramento pós-operatório domiciliar em tempo real.
           </h1>
           <p className="text-base opacity-80 text-pretty">
-            Acompanhe sinais vitais, alertas clínicos e a recuperação dos seus pacientes com segurança, em
-            qualquer lugar.
+            Acompanhe sinais vitais, alertas clínicos e a recuperação dos seus pacientes com segurança, em qualquer
+            lugar.
           </p>
           <div className="grid grid-cols-3 gap-3 pt-4">
             {[
@@ -82,16 +115,14 @@ export function LoginPage() {
       </aside>
 
       {/* Formulário de login */}
-      <main className="flex flex-col justify-center p-6 md:p-12">
+      <main className="relative flex min-h-screen flex-col justify-center p-6 pt-24 md:p-12 md:pt-24">
+        <BackToHomeButton
+          onNavigate={navigateHome}
+          className="absolute left-6 top-6 md:left-10 md:top-10 lg:left-12 lg:top-12"
+        />
+
         <div className="w-full max-w-md mx-auto animate-entry">
-          <div className="lg:hidden flex items-center gap-3 mb-8">
-            <div className="size-9 bg-primary rounded-lg flex items-center justify-center text-primary-foreground">
-              <Heart className="size-5" fill="currentColor" />
-            </div>
-            <span className="text-lg font-extrabold tracking-tight">
-              Vital<span className="font-normal text-muted-foreground">Sync</span>
-            </span>
-          </div>
+          <VitalSyncLogo size="sm" onNavigate={navigateHome} className="mb-8 lg:hidden" />
 
           <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">Entrar</h2>
           <p className="text-sm text-muted-foreground mt-1">Acesse o painel para acompanhar seus pacientes.</p>
@@ -117,7 +148,10 @@ export function LoginPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground" htmlFor="login-password">
+              <label
+                className="text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                htmlFor="login-password"
+              >
                 Senha
               </label>
               <div className="relative">
