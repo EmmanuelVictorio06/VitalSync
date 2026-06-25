@@ -47,7 +47,7 @@ import { DEFAULT_NOTIFICATION_PREFS, type NotificationPrefs, type Profile } from
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function MyProfilePage() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const toast = useToast();
 
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -56,7 +56,6 @@ export function MyProfilePage() {
 
   const load = useCallback(async () => {
     setError(null);
-    setProfile(null);
     try {
       const [p, u] = await Promise.all([profileService.getMyProfile(), authService.getCurrentUser()]);
       setProfile(p);
@@ -105,7 +104,7 @@ export function MyProfilePage() {
 
           {/* Coluna direita: seções */}
           <div className="space-y-6 min-w-0">
-            <PersonalDataCard profile={profile} avatarUrl={avatarUrl} onChanged={load} />
+            <PersonalDataCard profile={profile} avatarUrl={avatarUrl} onChanged={load} onUserRefreshed={refreshUser} />
             <AccessDataCard profile={profile} onChanged={load} />
             <ChangePasswordCard />
             <NotificationsCard profile={profile} onChanged={load} />
@@ -120,7 +119,17 @@ export function MyProfilePage() {
 }
 
 /* ============================ Dados pessoais ============================ */
-function PersonalDataCard({ profile, avatarUrl, onChanged }: { profile: Profile; avatarUrl: string | null; onChanged: () => Promise<void> }) {
+function PersonalDataCard({
+  profile,
+  avatarUrl,
+  onChanged,
+  onUserRefreshed,
+}: {
+  profile: Profile;
+  avatarUrl: string | null;
+  onChanged: () => Promise<void>;
+  onUserRefreshed: () => Promise<void>;
+}) {
   const toast = useToast();
   const [name, setName] = useState(profile.name);
   const [whatsapp, setWhatsapp] = useState(profile.whatsapp ?? '');
@@ -153,6 +162,7 @@ function PersonalDataCard({ profile, avatarUrl, onChanged }: { profile: Profile;
       });
       toast.success('Dados atualizados com sucesso.');
       await onChanged();
+      await onUserRefreshed();
     } catch {
       toast.error('Não foi possível atualizar seus dados. Tente novamente.');
     } finally {
@@ -166,6 +176,7 @@ function PersonalDataCard({ profile, avatarUrl, onChanged }: { profile: Profile;
       await profileService.updateAvatar(file);
       toast.success('Foto de perfil atualizada.');
       await onChanged();
+      await onUserRefreshed();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Não foi possível enviar a foto.');
     } finally {
@@ -179,6 +190,7 @@ function PersonalDataCard({ profile, avatarUrl, onChanged }: { profile: Profile;
       await profileService.removeAvatar();
       toast.success('Foto removida.');
       await onChanged();
+      await onUserRefreshed();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Não foi possível remover a foto.');
     } finally {

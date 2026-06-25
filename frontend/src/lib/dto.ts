@@ -6,6 +6,8 @@ export interface AuthUser {
   name: string;
   role: Role;
   teamId: string | null;
+  /** Caminho do avatar no bucket `profile-avatars` (null = sem foto). */
+  avatarUrl: string | null;
 }
 
 export interface LoginResponse {
