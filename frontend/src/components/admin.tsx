@@ -68,14 +68,14 @@ export function ToggleSwitch({
         aria-checked={checked}
         onClick={() => onChange(!checked)}
         className={cn(
-          'relative w-10 h-6 rounded-full transition-colors shrink-0',
+          'inline-flex h-6 w-10 items-center rounded-full p-0.5 transition-colors shrink-0 overflow-hidden',
           checked ? 'bg-primary' : 'bg-muted-foreground/30',
         )}
       >
         <span
           className={cn(
-            'absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform',
-            checked ? 'translate-x-[18px]' : 'translate-x-0.5',
+            'block size-5 rounded-full bg-white shadow transition-transform',
+            checked ? 'translate-x-4' : 'translate-x-0',
           )}
         />
       </button>
