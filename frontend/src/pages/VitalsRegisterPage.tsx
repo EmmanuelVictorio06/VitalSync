@@ -241,6 +241,8 @@ function MeasurementForm({
     if (hadVomit === null) return 'Responda sobre vômitos.';
     if (hadBleeding === null) return 'Responda sobre sangramentos.';
     if (hasDrain === null) return 'Responda se você possui dreno.';
+    if (!woundPhoto) return 'Envie a foto da cicatriz operatória.';
+    if (hasDrain && !drainPhoto) return 'Envie a foto do dreno.';
     const checks: Array<[string, number, { min: number; max: number }]> = [
       ['Temperatura', num(temperature), ranges.temperature],
       ['Saturação', num(spo2), ranges.spo2],
