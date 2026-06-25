@@ -36,18 +36,22 @@ export function validateAvatarFile(file: File): string | null {
   return null;
 }
 
-/* ---------------- Avatar com upload + recorte ---------------- */
+/* ---------------- Avatar com seleção + recorte (preview local) ---------------- */
 export function AvatarUpload({
   name,
   currentUrl,
-  onUpload,
+  previewUrl,
+  isRemoved,
+  onFileSelected,
   onRemove,
   busy,
   onError,
 }: {
   name: string;
-  currentUrl: string | null; // URL pública já resolvida (ou null)
-  onUpload: (file: File) => void;
+  currentUrl: string | null; // URL pública já salva (ou null)
+  previewUrl?: string | null; // URL de prévia local (ObjectURL) — ainda não persistida
+  isRemoved?: boolean; // true quando o usuário pediu remoção, mas ainda não salvou
+  onFileSelected: (file: File) => void; // arquivo pronto após validação/recorte
   onRemove: () => void;
   busy?: boolean;
   onError?: (msg: string) => void;
@@ -69,14 +73,17 @@ export function AvatarUpload({
 
   function handleCropConfirm(file: File) {
     setCropFile(null);
-    onUpload(file);
+    onFileSelected(file);
   }
+
+  const displayUrl = previewUrl ?? (isRemoved ? null : currentUrl);
+  const hasPhoto = !!displayUrl;
 
   return (
     <div className="flex flex-col items-center gap-3">
       <div className="size-28 rounded-full overflow-hidden border border-border bg-primary/10 text-primary grid place-items-center shrink-0">
-        {currentUrl ? (
-          <img src={currentUrl} alt={`Avatar de ${name}`} className="size-full object-cover" />
+        {displayUrl ? (
+          <img src={displayUrl} alt={`Avatar de ${name}`} className="size-full object-cover" />
         ) : (
           <span className="text-3xl font-extrabold">{initials(name)}</span>
         )}
@@ -91,10 +98,10 @@ export function AvatarUpload({
           disabled={busy}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-primary/30 text-primary text-xs font-semibold hover:bg-accent disabled:opacity-55"
         >
-          {currentUrl ? <RefreshCw className="size-3.5" /> : <Camera className="size-3.5" />}
-          {currentUrl ? 'Trocar foto' : 'Adicionar foto'}
+          {hasPhoto ? <RefreshCw className="size-3.5" /> : <Camera className="size-3.5" />}
+          {hasPhoto ? 'Trocar foto' : 'Adicionar foto'}
         </button>
-        {currentUrl && (
+        {hasPhoto && (
           <button
             type="button"
             onClick={onRemove}
