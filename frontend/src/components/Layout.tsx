@@ -141,6 +141,11 @@ export function Layout() {
   const title = PAGE_TITLES.find((t) => t.match(pathname))?.title ?? 'VitalSync';
   const { main, admin } = useRoleMenus();
 
+  // A busca e o "Novo Paciente" do topo são ações clínicas: só fazem sentido nas
+  // telas de pacientes. Nas telas administrativas (usuários, equipes, configs) o
+  // topo fica contextual — cada página já traz seu próprio botão de criação.
+  const showPatientActions = !(pathname.startsWith('/admin') || pathname.startsWith('/teams'));
+
   // Fecha o drawer ao trocar de rota e ao apertar Escape; trava o scroll do fundo.
   useEffect(() => setMenuOpen(false), [pathname]);
   useEffect(() => {
@@ -199,20 +204,22 @@ export function Layout() {
           </button>
           <h1 className="text-base md:text-lg font-semibold tracking-tight truncate flex-1 min-w-0">{title}</h1>
 
-          <form
-            onSubmit={submitSearch}
-            className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-md bg-muted text-muted-foreground text-sm w-48 lg:w-64"
-          >
-            <Search className="size-4 shrink-0" />
-            <input
-              className="bg-transparent outline-none flex-1 min-w-0 placeholder:text-muted-foreground"
-              placeholder="Buscar paciente..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </form>
+          {showPatientActions && (
+            <form
+              onSubmit={submitSearch}
+              className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-md bg-muted text-muted-foreground text-sm w-48 lg:w-64"
+            >
+              <Search className="size-4 shrink-0" />
+              <input
+                className="bg-transparent outline-none flex-1 min-w-0 placeholder:text-muted-foreground"
+                placeholder="Buscar paciente..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </form>
+          )}
 
-          {canRegisterPatients(user?.role) && (
+          {canRegisterPatients(user?.role) && showPatientActions && (
             <Link
               to="/patients/new"
               className="inline-flex items-center gap-2 px-3 md:px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors shrink-0"

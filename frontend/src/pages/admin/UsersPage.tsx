@@ -10,16 +10,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Activity,
-  CheckCircle2,
-  CircleSlash,
   Eye,
   KeyRound,
   Mail,
   Pencil,
   Plus,
   Power,
-  ShieldCheck,
-  Stethoscope,
   Trash2,
   UserCog,
   Users,
@@ -34,22 +30,34 @@ import {
   ErrorState,
   LoadingState,
   RowIconButton,
-  SearchBox,
-  SegmentedFilter,
   StatusPill,
   ToggleSwitch,
 } from '../../components/admin';
-import { AccessDenied, SummaryCard } from '../../components/teams-admin';
+import { AccessDenied } from '../../components/teams-admin';
 import { PasswordInput } from '../../components/profile';
-import { Drawer, ModalShell, RoleBadge, ROLE_META, ROLE_OPTIONS, UserAvatar } from '../../components/users-admin';
+import {
+  Drawer,
+  EMPTY_USER_FILTERS,
+  ModalShell,
+  RoleBadge,
+  ROLE_META,
+  ROLE_OPTIONS,
+  UserActiveFilterChips,
+  UserAdvancedFilters,
+  UserAvatar,
+  UserSearchBar,
+  UserSummaryQuickFilters,
+  activeUserQuickCard,
+  applyUserFilters,
+  applyUserQuickCard,
+  countUserAdvancedFilters,
+  type UserFiltersState,
+} from '../../components/users-admin';
 import { permissionService } from '../../services/permissionService';
 import { userService } from '../../services/userService';
 import type { EntityStatus, UserOverview, UserRole, UserTeamLink } from '../../services/types';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-type RoleFilter = UserRole | 'ALL';
-type StatusFilter = EntityStatus | 'ALL';
-type TeamFilter = 'ALL' | 'WITH' | 'WITHOUT';
 
 export function UsersPage() {
   const { user } = useAuth();
@@ -58,13 +66,9 @@ export function UsersPage() {
   const [users, setUsers] = useState<UserOverview[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // filtros
-  const [fName, setFName] = useState('');
-  const [fEmail, setFEmail] = useState('');
-  const [fWhats, setFWhats] = useState('');
-  const [fRole, setFRole] = useState<RoleFilter>('ALL');
-  const [fStatus, setFStatus] = useState<StatusFilter>('ALL');
-  const [fTeam, setFTeam] = useState<TeamFilter>('ALL');
+  // filtros (busca geral + cards rápidos + filtros avançados num só estado)
+  const [filters, setFilters] = useState<UserFiltersState>(EMPTY_USER_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   // modais
   const [creating, setCreating] = useState(false);
@@ -105,26 +109,9 @@ export function UsersPage() {
   const activeAdmins = summary.admins ? (users ?? []).filter((x) => x.role === 'ADMIN' && x.status === 'ACTIVE').length : 0;
   const isSoleActiveAdmin = (u: UserOverview) => u.role === 'ADMIN' && u.status === 'ACTIVE' && activeAdmins <= 1;
 
-  const filtered = useMemo(() => {
-    const name = fName.trim().toLowerCase();
-    const email = fEmail.trim().toLowerCase();
-    const whats = onlyDigits(fWhats);
-    return (users ?? []).filter((u) => {
-      if (name && !u.name.toLowerCase().includes(name)) return false;
-      if (email && !u.email.toLowerCase().includes(email)) return false;
-      if (whats && !(u.whatsapp ?? '').includes(whats)) return false;
-      if (fRole !== 'ALL' && u.role !== fRole) return false;
-      if (fStatus !== 'ALL' && u.status !== fStatus) return false;
-      if (fTeam === 'WITH' && u.team_count === 0) return false;
-      if (fTeam === 'WITHOUT' && u.team_count > 0) return false;
-      return true;
-    });
-  }, [users, fName, fEmail, fWhats, fRole, fStatus, fTeam]);
-
-  const hasFilters = !!(fName || fEmail || fWhats || fRole !== 'ALL' || fStatus !== 'ALL' || fTeam !== 'ALL');
-  function clearFilters() {
-    setFName(''); setFEmail(''); setFWhats(''); setFRole('ALL'); setFStatus('ALL'); setFTeam('ALL');
-  }
+  const filtered = useMemo(() => applyUserFilters(users ?? [], filters), [users, filters]);
+  const activeQuick = useMemo(() => activeUserQuickCard(filters), [filters]);
+  const advancedCount = useMemo(() => countUserAdvancedFilters(filters), [filters]);
 
   async function toggleStatus() {
     if (!toToggle) return;
@@ -187,46 +174,28 @@ export function UsersPage() {
         }
       />
 
-      {/* Resumo */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 animate-entry [animation-delay:80ms]">
-        <SummaryCard label="Total de usuários" value={summary.total} icon={<Users className="size-5" />} />
-        <SummaryCard label="Administradores" value={summary.admins} icon={<ShieldCheck className="size-5" />} />
-        <SummaryCard label="Cirurgiões principais" value={summary.surgeons} icon={<Stethoscope className="size-5" />} tone="stable" />
-        <SummaryCard label="Médicos associados" value={summary.associates} icon={<UserCog className="size-5" />} tone="muted" />
-        <SummaryCard label="Usuários ativos" value={summary.active} icon={<CheckCircle2 className="size-5" />} tone="stable" />
-        <SummaryCard label="Usuários inativos" value={summary.inactive} icon={<CircleSlash className="size-5" />} tone="alert" />
-      </div>
+      {/* Cards de filtro rápido */}
+      {users && !error && (
+        <UserSummaryQuickFilters
+          summary={summary}
+          active={activeQuick}
+          onSelect={(key) => setFilters((f) => applyUserQuickCard(f, key))}
+        />
+      )}
 
-      {/* Filtros */}
-      <div className="bg-card border border-border shadow-sm rounded-xl p-4 space-y-3 animate-entry [animation-delay:120ms]">
-        <div className="flex flex-col md:flex-row gap-3">
-          <SearchBox value={fName} onChange={setFName} placeholder="Buscar por nome..." />
-          <SearchBox value={fEmail} onChange={setFEmail} placeholder="Buscar por e-mail..." />
-          <SearchBox value={fWhats} onChange={setFWhats} placeholder="Buscar por WhatsApp..." />
-        </div>
-        <div className="flex flex-col xl:flex-row xl:items-center gap-3 justify-between">
-          <div className="flex flex-wrap items-center gap-3">
-            <SegmentedFilter
-              value={fRole}
-              onChange={setFRole}
-              options={[{ value: 'ALL', label: 'Todos' }, { value: 'ADMIN', label: 'Admin' }, { value: 'MAIN_SURGEON', label: 'Cirurgião' }, { value: 'ASSOCIATED_DOCTOR', label: 'Associado' }]}
-            />
-            <SegmentedFilter
-              value={fStatus}
-              onChange={setFStatus}
-              options={[{ value: 'ALL', label: 'Todos' }, { value: 'ACTIVE', label: 'Ativos' }, { value: 'INACTIVE', label: 'Inativos' }]}
-            />
-            <SegmentedFilter
-              value={fTeam}
-              onChange={setFTeam}
-              options={[{ value: 'ALL', label: 'Todos' }, { value: 'WITH', label: 'Com equipe' }, { value: 'WITHOUT', label: 'Sem equipe' }]}
-            />
-          </div>
-          {hasFilters && (
-            <button onClick={clearFilters} className="text-sm font-semibold text-primary hover:underline self-start">Limpar filtros</button>
-          )}
-        </div>
-      </div>
+      {/* Busca + filtros */}
+      <UserSearchBar
+        search={filters.search}
+        onSearch={(v) => setFilters((f) => ({ ...f, search: v }))}
+        onOpenFilters={() => setFiltersOpen(true)}
+        activeFilterCount={advancedCount}
+      />
+
+      <UserActiveFilterChips
+        filters={filters}
+        onRemove={(key) => setFilters((f) => ({ ...f, [key]: EMPTY_USER_FILTERS[key] }))}
+        onClear={() => setFilters((f) => ({ ...EMPTY_USER_FILTERS, search: f.search }))}
+      />
 
       {/* Listagem */}
       {error ? (
@@ -234,9 +203,9 @@ export function UsersPage() {
       ) : users === null ? (
         <LoadingState label="Carregando usuários..." />
       ) : users.length === 0 ? (
-        <EmptyState title="Nenhum usuário cadastrado ainda." hint="Clique em “Novo usuário” para começar." />
+        <EmptyState title="Nenhum usuário cadastrado." hint="Clique em “Novo usuário” para começar." />
       ) : filtered.length === 0 ? (
-        <EmptyState title="Nenhum usuário encontrado para os filtros selecionados." />
+        <EmptyState title="Nenhum usuário encontrado para os filtros selecionados." hint="Ajuste a busca ou os filtros para ver outros usuários." />
       ) : (
         <div className="animate-entry [animation-delay:150ms]">
           <AdminTable
@@ -255,12 +224,12 @@ export function UsersPage() {
                   </div>
                 ),
               },
-              { header: 'WhatsApp', hideOnMobile: true, render: (u) => <span className="text-muted-foreground">{u.whatsapp ? formatPhone(u.whatsapp) : '—'}</span> },
+              { header: 'WhatsApp', render: (u) => <span className="text-muted-foreground whitespace-nowrap">{u.whatsapp ? formatPhone(u.whatsapp) : '—'}</span> },
               { header: 'Papel', render: (u) => <RoleBadge role={u.role} /> },
               { header: 'Status', render: (u) => <StatusPill status={u.status} /> },
               { header: 'Equipes', render: (u) => <span className="font-semibold">{u.team_count}</span> },
-              { header: 'Último acesso', hideOnMobile: true, render: (u) => <span className="text-muted-foreground text-xs">{u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleDateString('pt-BR') : '—'}</span> },
-              { header: 'Cadastro', hideOnMobile: true, render: (u) => <span className="text-muted-foreground font-mono text-xs">{u.created_at.slice(0, 10)}</span> },
+              { header: 'Último acesso', render: (u) => <span className="text-muted-foreground text-xs whitespace-nowrap">{u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleDateString('pt-BR') : '—'}</span> },
+              { header: 'Cadastro', hideOnMobile: true, render: (u) => <span className="text-muted-foreground font-mono text-xs whitespace-nowrap">{u.created_at.slice(0, 10)}</span> },
             ]}
             actions={(u) => (
               <>
@@ -279,6 +248,15 @@ export function UsersPage() {
             )}
           />
         </div>
+      )}
+
+      {/* Filtros avançados (bottom sheet no mobile, modal no desktop) */}
+      {filtersOpen && (
+        <UserAdvancedFilters
+          value={filters}
+          onApply={setFilters}
+          onClose={() => setFiltersOpen(false)}
+        />
       )}
 
       {/* Modais */}
