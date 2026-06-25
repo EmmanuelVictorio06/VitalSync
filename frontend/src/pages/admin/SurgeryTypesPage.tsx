@@ -13,7 +13,7 @@ import {
   StatusPill,
   ToggleSwitch,
 } from '../../components/admin';
-import { Button, ConfirmModal, Field, SelectField, TextInput } from '../../components/ui';
+import { Button, ConfirmModal, Field, PageContainer, SelectField, TextInput } from '../../components/ui';
 import { surgeryTypeService } from '../../services/surgeryTypeService';
 import type { EntityStatus, SurgeryType } from '../../services/types';
 
@@ -99,7 +99,7 @@ export function SurgeryTypesPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto w-full space-y-6">
+    <PageContainer>
       <AdminPageHeader
         title="Tipos de Cirurgia"
         subtitle="Gerencie os tipos de procedimentos usados no cadastro dos pacientes. Tipos inativos não aparecem em novos cadastros."
@@ -206,7 +206,7 @@ export function SurgeryTypesPage() {
           onConfirm={remove}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }
 

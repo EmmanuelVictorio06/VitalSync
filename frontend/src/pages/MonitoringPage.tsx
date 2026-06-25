@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Calendar, Copy, Eye, MessageCircle, Search, Trash2, X } from 'lucide-react';
 import { ClinicalStatus, formatCivilDate, whatsappLink } from '@vitalsync/shared';
 import { useToast } from '../components/Toast';
-import { ConfirmModal, StatusBadge, cn, statusBorder } from '../components/ui';
+import { ConfirmModal, PageContainer, PageHeader, StatusBadge, cn, statusBorder } from '../components/ui';
 import { patientService, type PatientWithNames } from '../services/patientService';
 
 const STATUS_OPTIONS: Array<{ value: '' | ClinicalStatus; label: string }> = [
@@ -101,13 +101,11 @@ export function MonitoringPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto w-full space-y-6">
-      <div className="animate-entry">
-        <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">Pacientes em monitoramento</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Pacientes ativos em monitoramento domiciliar pós-alta. Filtre por nome ou status.
-        </p>
-      </div>
+    <PageContainer size="wide">
+      <PageHeader
+        title="Pacientes em monitoramento"
+        subtitle="Pacientes ativos em monitoramento domiciliar pós-alta. Filtre por nome ou status."
+      />
 
       {team && (
         <div className="flex items-center gap-2 animate-entry">
@@ -183,7 +181,7 @@ export function MonitoringPage() {
           onConfirm={remove}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }
 

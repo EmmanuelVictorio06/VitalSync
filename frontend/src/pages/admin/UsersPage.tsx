@@ -27,7 +27,7 @@ import {
 import { onlyDigits } from '@vitalsync/shared';
 import { useAuth } from '../../auth/AuthContext';
 import { useToast } from '../../components/Toast';
-import { Button, ConfirmModal, Field, PhoneInput, SelectField, TextInput } from '../../components/ui';
+import { Button, ConfirmModal, Field, PageContainer, PageHeader, PhoneInput, SelectField, TextInput } from '../../components/ui';
 import {
   AdminTable,
   EmptyState,
@@ -176,17 +176,16 @@ export function UsersPage() {
   if (!permissionService.canManageUsers(user)) return <AccessDenied />;
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto w-full space-y-6">
-      {/* Cabeçalho */}
-      <div className="flex flex-col sm:flex-row sm:items-end gap-3 animate-entry">
-        <div className="flex-1">
-          <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">Gerenciar Usuários</h2>
-          <p className="text-sm text-muted-foreground mt-1 max-w-2xl">Cadastre, edite e controle os usuários com acesso ao sistema.</p>
-        </div>
-        <button onClick={() => setCreating(true)} className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 self-start sm:self-auto">
-          <Plus className="size-4" /> Novo usuário
-        </button>
-      </div>
+    <PageContainer size="wide">
+      <PageHeader
+        title="Gerenciar Usuários"
+        subtitle="Cadastre, edite e controle os usuários com acesso ao sistema."
+        action={
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="size-4" /> Novo usuário
+          </Button>
+        }
+      />
 
       {/* Resumo */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 animate-entry [animation-delay:80ms]">
@@ -333,7 +332,7 @@ export function UsersPage() {
           onConfirm={resetPassword}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }
 

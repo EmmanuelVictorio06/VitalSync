@@ -7,20 +7,25 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Role, useAuth } from '../auth/AuthContext';
+import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
-import { Loading } from '../components/ui';
+import { PageContainer, PageHeader } from '../components/ui';
 import {
   AlertCard,
   AlertDetailsDrawer,
-  AlertFilters,
-  AlertSummaryCards,
+  AlertFiltersSheet,
+  AlertListSkeleton,
+  AlertQuickFilters,
+  AlertSearchBar,
   EMPTY_FILTERS,
   EmptyState,
   ErrorState,
   IgnoreAlertModal,
   MarkAttendedModal,
+  activeQuickCard,
   applyAlertFilters,
+  applyQuickCard,
+  countAdvancedFilters,
   sortAlerts,
   type AlertFiltersState,
 } from '../components/alerts';
@@ -36,11 +41,11 @@ export function AlertsPage() {
 
   const [alerts, setAlerts] = useState<AlertRow[] | null>(null);
   const [error, setError] = useState(false);
-  const [failedCount, setFailedCount] = useState(0);
   const [filters, setFilters] = useState<AlertFiltersState>({
     ...EMPTY_FILTERS,
     team: searchParams.get('team') ?? 'ALL',
   });
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [selected, setSelected] = useState<AlertRow | null>(null);
   const [attendTarget, setAttendTarget] = useState<AlertRow | null>(null);
   const [ignoreTarget, setIgnoreTarget] = useState<AlertRow | null>(null);
@@ -48,8 +53,6 @@ export function AlertsPage() {
   const isAdmin = permissionService.isAdmin(user);
   const canAttend = permissionService.canAttendAlerts(user);
   const canResend = permissionService.canResendAlertNotification(user);
-  const roleKey: 'ADM' | 'SURGEON' | 'ASSOCIATE' =
-    user?.role === Role.ADM ? 'ADM' : user?.role === Role.SURGEON ? 'SURGEON' : 'ASSOCIATE';
 
   const load = useCallback(async () => {
     setError(false);
@@ -58,14 +61,11 @@ export function AlertsPage() {
       const data = await alertService.getAlerts();
       setAlerts(data);
       refreshCount(); // atualiza o badge da sidebar (não atendidos restantes)
-      if (permissionService.isAdmin(user)) {
-        setFailedCount(await alertService.getFailedNotificationCount());
-      }
     } catch {
       setError(true);
       setAlerts([]);
     }
-  }, [user, refreshCount]);
+  }, [refreshCount]);
 
   useEffect(() => {
     void load();
@@ -80,10 +80,9 @@ export function AlertsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [alerts]);
 
-  const summary = useMemo(() => {
-    const base = alertService.summarize(alerts ?? []);
-    return { ...base, failedNotifications: failedCount };
-  }, [alerts, failedCount]);
+  const summary = useMemo(() => alertService.summarize(alerts ?? []), [alerts]);
+  const activeQuick = useMemo(() => activeQuickCard(filters), [filters]);
+  const advancedCount = useMemo(() => countAdvancedFilters(filters), [filters]);
 
   const teamOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -131,33 +130,42 @@ export function AlertsPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto w-full space-y-6">
-      <div className="animate-entry">
-        <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">Alertas</h2>
-        <p className="text-sm text-muted-foreground mt-1 max-w-3xl">
-          Acompanhe alterações clínicas geradas pelos registros de sinais vitais dos pacientes em monitoramento.
-        </p>
-      </div>
+    <PageContainer>
+      <PageHeader
+        title="Alertas"
+        subtitle="Acompanhe alterações clínicas geradas pelos registros de sinais vitais dos pacientes em monitoramento."
+      />
 
-      {alerts && !error && <AlertSummaryCards summary={summary} role={roleKey} />}
+      {alerts && !error && (
+        <AlertQuickFilters
+          summary={summary}
+          active={activeQuick}
+          onSelect={(key) => setFilters((f) => applyQuickCard(f, key))}
+        />
+      )}
 
-      <AlertFilters value={filters} onChange={setFilters} isAdmin={isAdmin} teamOptions={teamOptions} />
+      <AlertSearchBar
+        search={filters.search}
+        onSearch={(v) => setFilters((f) => ({ ...f, search: v }))}
+        onOpenFilters={() => setFiltersOpen(true)}
+        activeFilterCount={advancedCount}
+      />
 
       {error ? (
         <ErrorState onRetry={load} />
       ) : alerts === null ? (
-        <Loading label="Carregando alertas…" />
+        <AlertListSkeleton />
       ) : filtered.length === 0 ? (
         <EmptyState
-          title={(alerts.length === 0) ? 'Nenhum alerta no momento.' : 'Nenhum alerta encontrado.'}
-          hint={(alerts.length > 0) ? 'Ajuste os filtros para ver outros alertas.' : 'Novos alertas aparecem quando um paciente registra sinais alterados.'}
+          title={(alerts.length === 0) ? 'Nenhum alerta no momento.' : 'Nenhum alerta encontrado para os filtros selecionados.'}
+          hint={(alerts.length > 0) ? 'Ajuste a busca ou os filtros para ver outros alertas.' : 'Novos alertas aparecem quando um paciente registra sinais alterados.'}
         />
       ) : (
         <>
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground px-1">
           <span><b className="text-foreground">{filtered.length}</b> alerta(s)</span>
-          {filters.attendance === 'ACTIVE' && !filters.search.trim() && (
-            <span>Atendidos e ignorados ficam ocultos — filtre por “Atendido” ou busque por nome para vê-los.</span>
+          {activeQuick === null && filters.attendance === 'ACTIVE' && !filters.search.trim() && (
+            <span>Atendidos e ignorados ficam ocultos — use o card “Atendidos” ou busque por nome para vê-los.</span>
           )}
         </div>
         <ul className="space-y-3">
@@ -200,6 +208,16 @@ export function AlertsPage() {
           onConfirm={(reason) => handleIgnoreConfirm(ignoreTarget, reason)}
         />
       )}
-    </div>
+
+      {filtersOpen && (
+        <AlertFiltersSheet
+          value={filters}
+          onApply={setFilters}
+          onClose={() => setFiltersOpen(false)}
+          isAdmin={isAdmin}
+          teamOptions={teamOptions}
+        />
+      )}
+    </PageContainer>
   );
 }

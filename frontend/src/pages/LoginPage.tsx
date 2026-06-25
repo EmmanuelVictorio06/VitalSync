@@ -5,7 +5,7 @@ import { useAuth } from '../auth/AuthContext';
 import { BackToHomeButton } from '../components/BackToHomeButton';
 import { VitalSyncLogo } from '../components/VitalSyncLogo';
 import { useToast } from '../components/Toast';
-import { cn } from '../components/ui';
+import { Button, cn } from '../components/ui';
 
 function prefersReducedMotion() {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -169,13 +169,9 @@ export function LoginPage() {
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={busy}
-              className="w-full bg-primary text-primary-foreground rounded-lg py-3 font-semibold text-sm hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 disabled:opacity-55 disabled:cursor-not-allowed"
-            >
-              {busy ? 'Aguarde…' : 'Entrar'}
-            </button>
+            <Button type="submit" block loading={busy}>
+              Entrar
+            </Button>
 
             <p className="text-xs text-muted-foreground text-center">
               Acesso restrito a profissionais cadastrados. Pacientes acessam pelo link enviado por WhatsApp.

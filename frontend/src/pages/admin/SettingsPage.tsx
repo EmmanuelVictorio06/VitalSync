@@ -16,7 +16,7 @@ import {
   SettingsSection,
   ToggleSwitch,
 } from '../../components/admin';
-import { Button, ConfirmModal, Field, SelectField, TextInput, cn } from '../../components/ui';
+import { Button, ConfirmModal, Field, PageContainer, SelectField, TextInput, cn } from '../../components/ui';
 import { settingsService } from '../../services/settingsService';
 import {
   AUDIT_ACTION_LABEL,
@@ -42,7 +42,7 @@ export function SettingsPage() {
   const [tab, setTab] = useState<Tab>('general');
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto w-full space-y-6">
+    <PageContainer>
       <AdminPageHeader
         title="Configurações"
         subtitle="Ajuste regras gerais, clínicas, integrações e segurança do sistema sem alterar o código."
@@ -70,7 +70,7 @@ export function SettingsPage() {
         {tab === 'security' && <SecurityTab />}
         {tab === 'audit' && <AuditTab />}
       </div>
-    </div>
+    </PageContainer>
   );
 }
 

@@ -6,6 +6,51 @@ export function cn(...classes: Array<string | false | null | undefined>): string
   return classes.filter(Boolean).join(' ');
 }
 
+/* ---------------- Container e cabeçalho de página ---------------- */
+/**
+ * Wrapper padrão das telas internas: padding e centralização consistentes.
+ * `size` define a largura máxima — `default` (até 6xl) para telas comuns e
+ * `wide` (até 7xl) para telas densas (dashboards, listas grandes).
+ */
+export function PageContainer({
+  size = 'default',
+  className,
+  children,
+}: {
+  size?: 'default' | 'wide';
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={cn('p-4 md:p-8 mx-auto w-full space-y-6', size === 'wide' ? 'max-w-7xl' : 'max-w-6xl', className)}>
+      {children}
+    </div>
+  );
+}
+
+/** Cabeçalho padrão da página: título, subtítulo opcional e slot de ação à direita. */
+export function PageHeader({
+  title,
+  subtitle,
+  action,
+  className,
+}: {
+  title: ReactNode;
+  subtitle?: ReactNode;
+  action?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn('flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 animate-entry', className)}>
+      <div className="min-w-0">
+        <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">{title}</h2>
+        {subtitle && <p className="text-sm text-muted-foreground mt-1 max-w-2xl">{subtitle}</p>}
+      </div>
+      {action && <div className="shrink-0">{action}</div>}
+    </div>
+  );
+}
+
 /* ---------------- Status badge (semáforo) ---------------- */
 const STATUS_META: Record<ClinicalStatus, { cls: string; dot: string; label: string }> = {
   GREEN: { cls: 'bg-stable/10 text-stable border border-stable/20', dot: 'bg-stable', label: 'Estável' },

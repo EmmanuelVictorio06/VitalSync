@@ -26,7 +26,7 @@ import {
 import { onlyDigits } from '@vitalsync/shared';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
-import { Button, ConfirmModal, Field, PhoneInput, TextInput } from '../components/ui';
+import { Button, ConfirmModal, Field, PageContainer, PageHeader, PhoneInput, TextInput } from '../components/ui';
 import { ErrorState, LoadingState, SettingsSection, ToggleSwitch } from '../components/admin';
 import { AccessDenied } from '../components/teams-admin';
 import {
@@ -76,13 +76,11 @@ export function MyProfilePage() {
   const roleLabel = ROLE_LABEL_PT[user?.role ?? ''] ?? 'Usuário';
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto w-full space-y-6">
-      <div className="animate-entry">
-        <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">Meu Perfil</h2>
-        <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-          Gerencie suas informações pessoais, dados de acesso e preferências de conta.
-        </p>
-      </div>
+    <PageContainer>
+      <PageHeader
+        title="Meu Perfil"
+        subtitle="Gerencie suas informações pessoais, dados de acesso e preferências de conta."
+      />
 
       {error ? (
         <ErrorState message={error} onRetry={load} />
@@ -115,7 +113,7 @@ export function MyProfilePage() {
           </div>
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }
 
