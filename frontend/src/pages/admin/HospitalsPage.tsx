@@ -13,7 +13,7 @@ import {
   StatusPill,
   ToggleSwitch,
 } from '../../components/admin';
-import { Button, ConfirmModal, Field, TextInput } from '../../components/ui';
+import { Button, ConfirmModal, Field, PageContainer, TextInput } from '../../components/ui';
 import { hospitalService } from '../../services/hospitalService';
 import type { EntityStatus, Hospital } from '../../services/types';
 
@@ -91,7 +91,7 @@ export function HospitalsPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto w-full space-y-6">
+    <PageContainer>
       <AdminPageHeader
         title="Hospitais"
         subtitle="Gerencie os hospitais disponíveis no cadastro de pacientes. Hospitais inativos não aparecem em novos cadastros."
@@ -184,7 +184,7 @@ export function HospitalsPage() {
           onConfirm={remove}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }
 

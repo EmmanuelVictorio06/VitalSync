@@ -27,7 +27,7 @@ import { onlyDigits } from '@vitalsync/shared';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
-import { Button, ConfirmModal, SelectField, StatusBadge, TextInput } from '../components/ui';
+import { Button, ConfirmModal, PageContainer, PageHeader, SelectField, StatusBadge, TextInput } from '../components/ui';
 import { EmptyState, ErrorState, LoadingState, SearchBox, SegmentedFilter } from '../components/admin';
 import {
   AccessDenied,
@@ -165,22 +165,16 @@ export function TeamsPage() {
   if (!permissionService.canManageTeams(user)) return <AccessDenied />;
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto w-full space-y-6">
-      {/* Cabeçalho */}
-      <div className="flex flex-col sm:flex-row sm:items-end gap-3 animate-entry">
-        <div className="flex-1">
-          <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">Gerenciar Equipes Médicas</h2>
-          <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-            Cadastre, edite e acompanhe as equipes responsáveis pelo monitoramento pós-operatório dos pacientes.
-          </p>
-        </div>
-        <button
-          onClick={() => setCreating(true)}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 self-start sm:self-auto"
-        >
-          <Plus className="size-4" /> Nova Equipe
-        </button>
-      </div>
+    <PageContainer>
+      <PageHeader
+        title="Gerenciar Equipes Médicas"
+        subtitle="Cadastre, edite e acompanhe as equipes responsáveis pelo monitoramento pós-operatório dos pacientes."
+        action={
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="size-4" /> Nova Equipe
+          </Button>
+        }
+      />
 
       {/* Cards de resumo */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 animate-entry [animation-delay:80ms]">
@@ -300,7 +294,7 @@ export function TeamsPage() {
           onConfirm={remove}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }
 

@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Activity, AlertTriangle, BellRing, ShieldAlert, Stethoscope, Users } from 'lucide-react';
-import { Loading, cn } from '../components/ui';
+import { Loading, PageContainer, PageHeader, cn } from '../components/ui';
 import { teamViewService, type TeamSummary } from '../services/teamViewService';
 
 export function MyTeamsPage() {
@@ -47,13 +47,11 @@ export function MyTeamsPage() {
   );
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto w-full space-y-6">
-      <div className="animate-entry">
-        <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">Minhas Equipes</h2>
-        <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-          Visualize as equipes médicas em que você está associado e acompanhe os pacientes vinculados a cada uma.
-        </p>
-      </div>
+    <PageContainer size="wide">
+      <PageHeader
+        title="Minhas Equipes"
+        subtitle="Visualize as equipes médicas em que você está associado e acompanhe os pacientes vinculados a cada uma."
+      />
 
       {teams && !error && (
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4">
@@ -143,7 +141,7 @@ export function MyTeamsPage() {
           ))}
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }
 

@@ -21,7 +21,7 @@ import {
   StatusDonutCard,
   WeeklyBarChart,
 } from '../components/dashboard';
-import { Loading } from '../components/ui';
+import { Loading, PageContainer } from '../components/ui';
 import { dashboardService } from '../services/dashboardService';
 import type { DashboardData } from '../lib/dashboard-data';
 
@@ -59,12 +59,12 @@ export function DashboardPage() {
         { to: '/my-care', label: 'Meus atendimentos', icon: ClipboardList },
       ];
 
-  if (loading) return <div className="p-8"><Loading label="Carregando o painel…" /></div>;
-  if (!data) return <div className="p-8"><Loading label="Não foi possível carregar o painel." /></div>;
+  if (loading) return <PageContainer size="wide"><Loading label="Carregando o painel…" /></PageContainer>;
+  if (!data) return <PageContainer size="wide"><Loading label="Não foi possível carregar o painel." /></PageContainer>;
   const { kpis } = data;
 
   return (
-    <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto w-full">
+    <PageContainer size="wide">
       <div className="animate-entry">
         <h2 className="text-xl md:text-2xl font-extrabold tracking-tight">
           Olá, {user?.name?.split(' ')[0] ?? 'Doutor(a)'} 👋
@@ -127,6 +127,6 @@ export function DashboardPage() {
           </section>
         </aside>
       </div>
-    </div>
+    </PageContainer>
   );
 }

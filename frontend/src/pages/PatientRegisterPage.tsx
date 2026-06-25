@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Copy, MessageCircle, UserPlus } from 'lucide-react';
 import { calculateAge, whatsappLink } from '@vitalsync/shared';
 import { useToast } from '../components/Toast';
-import { Button, Field, PhoneInput, SelectField, TextInput } from '../components/ui';
+import { Button, Field, PageContainer, PageHeader, PhoneInput, SelectField, TextInput } from '../components/ui';
 import { patientVitalsLink } from '../lib/publicUrl';
 import { hospitalService } from '../services/hospitalService';
 import { surgeryTypeService } from '../services/surgeryTypeService';
@@ -86,13 +86,11 @@ export function PatientRegisterPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto w-full space-y-8">
-      <div className="animate-entry">
-        <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">Cadastro de Pacientes</h2>
-        <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-          Preencha as informações necessárias para iniciar o monitoramento de recuperação pós-operatória.
-        </p>
-      </div>
+    <PageContainer>
+      <PageHeader
+        title="Cadastro de Pacientes"
+        subtitle="Preencha as informações necessárias para iniciar o monitoramento de recuperação pós-operatória."
+      />
 
       <form
         className="space-y-6 animate-entry [animation-delay:100ms]"
@@ -155,23 +153,20 @@ export function PatientRegisterPage() {
             {result.link}
           </div>
           <div className="flex flex-col sm:flex-row gap-2 mt-4">
-            <button
-              onClick={() => copyLink(result.link)}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-border rounded-lg text-sm font-semibold hover:bg-muted"
-            >
+            <Button variant="ghost" onClick={() => copyLink(result.link)}>
               <Copy className="size-4" /> Copiar link
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="whatsapp"
               onClick={() =>
                 window.open(
                   whatsappLink(result.phone, `Olá, ${result.name}! Registre seus sinais vitais neste link seguro: ${result.link}`),
                   '_blank',
                 )
               }
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#25D366] text-white rounded-lg text-sm font-semibold hover:opacity-90"
             >
               <MessageCircle className="size-4" /> Enviar pelo WhatsApp
-            </button>
+            </Button>
             <span className="flex-1" />
             <Button variant="ghost" onClick={() => setResult(null)}>
               Cadastrar outro
@@ -179,7 +174,7 @@ export function PatientRegisterPage() {
           </div>
         </section>
       )}
-    </div>
+    </PageContainer>
   );
 }
 

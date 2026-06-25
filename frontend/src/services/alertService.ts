@@ -41,6 +41,7 @@ export interface AlertSummary {
   inAnalysis: number;
   red: number;
   yellow: number;
+  attended: number;
   attendedToday: number;
   failedNotifications: number;
   patientsWithActiveAlert: number;
@@ -101,13 +102,16 @@ export const alertService = {
   /** Resumo agregado para os cards do topo (a partir do conjunto já carregado). */
   summarize(alerts: AlertRow[]): AlertSummary {
     const activePatients = new Set<string>();
-    let pending = 0, inAnalysis = 0, red = 0, yellow = 0, attendedToday = 0;
+    let pending = 0, inAnalysis = 0, red = 0, yellow = 0, attended = 0, attendedToday = 0;
     for (const a of alerts) {
       if (a.status === 'RED') red++;
       if (a.status === 'YELLOW') yellow++;
       if (a.attendance_status === 'PENDING') pending++;
       if (a.attendance_status === 'IN_ANALYSIS') inAnalysis++;
-      if (a.attendance_status === 'ATTENDED' && isToday(a.attended_at)) attendedToday++;
+      if (a.attendance_status === 'ATTENDED') {
+        attended++;
+        if (isToday(a.attended_at)) attendedToday++;
+      }
       if ((a.attendance_status === 'PENDING' || a.attendance_status === 'IN_ANALYSIS') && a.patient) {
         activePatients.add(a.patient.id);
       }
@@ -118,6 +122,7 @@ export const alertService = {
       inAnalysis,
       red,
       yellow,
+      attended,
       attendedToday,
       failedNotifications: 0, // preenchido sob demanda (ver getFailedNotificationCount)
       patientsWithActiveAlert: activePatients.size,

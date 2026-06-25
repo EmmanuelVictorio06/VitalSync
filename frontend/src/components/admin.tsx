@@ -2,9 +2,10 @@
 import type { ReactNode } from 'react';
 import { AlertCircle, Inbox, Plus, Search } from 'lucide-react';
 import type { EntityStatus } from '../lib/admin-types';
-import { cn } from './ui';
+import { Button, PageHeader, cn } from './ui';
 
 /* ---------------- Cabeçalho de página administrativa ---------------- */
+/** Delega ao PageHeader global para manter o mesmo cabeçalho/botão do resto do app. */
 export function AdminPageHeader({
   title,
   subtitle,
@@ -17,20 +18,17 @@ export function AdminPageHeader({
   onAction?: () => void;
 }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-end gap-3 animate-entry">
-      <div className="flex-1">
-        <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">{title}</h2>
-        <p className="text-sm text-muted-foreground mt-1 max-w-2xl">{subtitle}</p>
-      </div>
-      {actionLabel && (
-        <button
-          onClick={onAction}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 self-start sm:self-auto"
-        >
-          <Plus className="size-4" /> {actionLabel}
-        </button>
-      )}
-    </div>
+    <PageHeader
+      title={title}
+      subtitle={subtitle}
+      action={
+        actionLabel ? (
+          <Button onClick={onAction}>
+            <Plus className="size-4" /> {actionLabel}
+          </Button>
+        ) : undefined
+      }
+    />
   );
 }
 

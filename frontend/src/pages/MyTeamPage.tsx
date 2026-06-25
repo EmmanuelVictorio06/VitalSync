@@ -9,7 +9,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Activity, BellRing, Calendar, Mail, MessageCircle, Stethoscope, Users } from 'lucide-react';
 import { formatCivilDate, formatPhoneBR } from '@vitalsync/shared';
-import { Button, StatusBadge, cn, statusBorder } from '../components/ui';
+import { Button, PageContainer, PageHeader, StatusBadge, cn, statusBorder } from '../components/ui';
 import { EmptyState, ErrorState, LoadingState } from '../components/admin';
 import { teamViewService, type TeamDetail } from '../services/teamViewService';
 
@@ -40,9 +40,9 @@ export function MyTeamPage() {
     void load();
   }, [load]);
 
-  if (loading) return <div className="p-4 md:p-8 max-w-5xl mx-auto w-full"><LoadingState label="Carregando dados da sua equipe…" /></div>;
-  if (error) return <div className="p-4 md:p-8 max-w-5xl mx-auto w-full"><ErrorState message={error} onRetry={() => void load()} /></div>;
-  if (!detail) return <div className="p-4 md:p-8 max-w-5xl mx-auto w-full"><EmptyState title="Nenhuma equipe vinculada ao seu usuário." /></div>;
+  if (loading) return <PageContainer><LoadingState label="Carregando dados da sua equipe…" /></PageContainer>;
+  if (error) return <PageContainer><ErrorState message={error} onRetry={() => void load()} /></PageContainer>;
+  if (!detail) return <PageContainer><EmptyState title="Nenhuma equipe vinculada ao seu usuário." /></PageContainer>;
 
   const { summary, members, patients } = detail;
   const associates = members.filter((m) => !m.isSurgeon);
@@ -55,13 +55,11 @@ export function MyTeamPage() {
   ];
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto w-full space-y-6">
-      <div className="animate-entry">
-        <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">Minha Equipe</h2>
-        <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-          Visualize os médicos associados à sua equipe e acompanhe os pacientes vinculados.
-        </p>
-      </div>
+    <PageContainer>
+      <PageHeader
+        title="Minha Equipe"
+        subtitle="Visualize os médicos associados à sua equipe e acompanhe os pacientes vinculados."
+      />
 
       <section className="bg-card border border-border rounded-xl shadow-sm p-5 space-y-4 animate-entry [animation-delay:100ms]">
         <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -153,6 +151,6 @@ export function MyTeamPage() {
           </ul>
         )}
       </section>
-    </div>
+    </PageContainer>
   );
 }

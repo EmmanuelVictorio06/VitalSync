@@ -20,6 +20,7 @@ import {
   MessageCircle,
   Search,
   Send,
+  SlidersHorizontal,
   Stethoscope,
   Thermometer,
   Users,
@@ -94,64 +95,96 @@ export function alertSummaryText(a: AlertRow): string {
   ].filter(Boolean).join('\n');
 }
 
-/* ============================ Summary cards ============================ */
+/* ======================= Quick filter cards (topo) ======================= */
+// Os cards do topo são atalhos de filtro: escrevem em severity + attendance.
+// Um card por vez fica ativo; clicar no ativo volta para a "fila ativa" padrão.
 
-type Tone = 'info' | 'pending' | 'red' | 'yellow' | 'green';
-const TONE: Record<Tone, string> = {
-  info: 'bg-primary/10 text-primary',
-  pending: 'bg-warning/10 text-warning',
-  red: 'bg-alert/10 text-alert',
-  yellow: 'bg-warning/10 text-warning',
-  green: 'bg-stable/10 text-stable',
+export type QuickKey = 'ALL' | 'RED' | 'YELLOW' | 'IN_ANALYSIS' | 'ATTENDED';
+
+const QUICK_PRESET: Record<QuickKey, Pick<AlertFiltersState, 'severity' | 'attendance'>> = {
+  ALL: { severity: 'ALL', attendance: 'ALL' },
+  RED: { severity: 'RED', attendance: 'ALL' },
+  YELLOW: { severity: 'YELLOW', attendance: 'ALL' },
+  IN_ANALYSIS: { severity: 'ALL', attendance: 'IN_ANALYSIS' },
+  ATTENDED: { severity: 'ALL', attendance: 'ATTENDED' },
 };
 
-function SummaryCard({ label, value, tone, icon: Icon }: { label: string; value: number; tone: Tone; icon: typeof Bell }) {
+/** Card destacado conforme os filtros atuais (null = fila ativa padrão ou combinação avançada). */
+export function activeQuickCard(f: AlertFiltersState): QuickKey | null {
+  for (const key of Object.keys(QUICK_PRESET) as QuickKey[]) {
+    const p = QUICK_PRESET[key];
+    if (f.severity === p.severity && f.attendance === p.attendance) return key;
+  }
+  return null;
+}
+
+/** Aplica o preset do card; se já estava ativo, volta para a fila ativa (não atendidos). */
+export function applyQuickCard(f: AlertFiltersState, key: QuickKey): AlertFiltersState {
+  if (activeQuickCard(f) === key) return { ...f, severity: 'ALL', attendance: 'ACTIVE' };
+  return { ...f, ...QUICK_PRESET[key] };
+}
+
+type QuickColor = 'primary' | 'alert' | 'warning' | 'stable';
+const QUICK_COLOR: Record<QuickColor, { icon: string; active: string; num: string }> = {
+  primary: { icon: 'bg-primary/10 text-primary', active: 'border-primary ring-1 ring-primary bg-primary/5', num: 'text-primary' },
+  alert: { icon: 'bg-alert/10 text-alert', active: 'border-alert ring-1 ring-alert bg-alert/5', num: 'text-alert' },
+  warning: { icon: 'bg-warning/10 text-warning', active: 'border-warning ring-1 ring-warning bg-warning/5', num: 'text-warning' },
+  stable: { icon: 'bg-stable/10 text-stable', active: 'border-stable ring-1 ring-stable bg-stable/5', num: 'text-stable' },
+};
+
+const QUICK_CARDS: Array<{ key: QuickKey; label: string; icon: typeof Bell; color: QuickColor }> = [
+  { key: 'ALL', label: 'Todos os alertas', icon: Bell, color: 'primary' },
+  { key: 'RED', label: 'Vermelhos', icon: AlertCircle, color: 'alert' },
+  { key: 'YELLOW', label: 'Amarelos', icon: AlertTriangle, color: 'warning' },
+  { key: 'IN_ANALYSIS', label: 'Em análise', icon: Activity, color: 'primary' },
+  { key: 'ATTENDED', label: 'Atendidos', icon: CheckCircle2, color: 'stable' },
+];
+
+function QuickCard({ label, value, icon: Icon, color, active, onClick }: {
+  label: string; value: number; icon: typeof Bell; color: QuickColor; active: boolean; onClick: () => void;
+}) {
+  const c = QUICK_COLOR[color];
   return (
-    <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex items-center gap-3">
-      <span className={cn('size-10 rounded-lg flex items-center justify-center shrink-0', TONE[tone])}>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        'text-left bg-card border rounded-xl p-3 sm:p-4 shadow-sm flex items-center gap-3 transition-all',
+        'hover:shadow-md hover:border-primary/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
+        active ? c.active : 'border-border',
+      )}
+    >
+      <span className={cn('size-9 sm:size-10 rounded-lg flex items-center justify-center shrink-0', c.icon)}>
         <Icon className="size-5" />
       </span>
       <div className="min-w-0">
-        <p className="text-2xl font-extrabold tracking-tight leading-none">{value}</p>
+        <p className={cn('text-xl sm:text-2xl font-extrabold tracking-tight leading-none', active && c.num)}>{value}</p>
         <p className="text-[11px] text-muted-foreground font-semibold mt-1 truncate">{label}</p>
       </div>
-    </div>
+    </button>
   );
 }
 
-export function AlertSummaryCards({ summary, role }: { summary: AlertSummary; role: 'ADM' | 'SURGEON' | 'ASSOCIATE' }) {
-  const cards: Array<{ label: string; value: number; tone: Tone; icon: typeof Bell }> =
-    role === 'ADM'
-      ? [
-          { label: 'Total de alertas', value: summary.total, tone: 'info', icon: Bell },
-          { label: 'Pendentes', value: summary.pending, tone: 'pending', icon: Clock },
-          { label: 'Vermelhos', value: summary.red, tone: 'red', icon: AlertCircle },
-          { label: 'Amarelos', value: summary.yellow, tone: 'yellow', icon: AlertTriangle },
-          { label: 'Atendidos hoje', value: summary.attendedToday, tone: 'green', icon: CheckCircle2 },
-          { label: 'Falhas no WhatsApp', value: summary.failedNotifications, tone: 'red', icon: MessageCircle },
-        ]
-      : role === 'SURGEON'
-        ? [
-            { label: 'Alertas da minha equipe', value: summary.total, tone: 'info', icon: Bell },
-            { label: 'Pendentes', value: summary.pending, tone: 'pending', icon: Clock },
-            { label: 'Vermelhos', value: summary.red, tone: 'red', icon: AlertCircle },
-            { label: 'Amarelos', value: summary.yellow, tone: 'yellow', icon: AlertTriangle },
-            { label: 'Atendidos hoje', value: summary.attendedToday, tone: 'green', icon: CheckCircle2 },
-            { label: 'Pacientes com alerta ativo', value: summary.patientsWithActiveAlert, tone: 'info', icon: Users },
-          ]
-        : [
-            { label: 'Alertas das minhas equipes', value: summary.total, tone: 'info', icon: Bell },
-            { label: 'Pendentes', value: summary.pending, tone: 'pending', icon: Clock },
-            { label: 'Vermelhos', value: summary.red, tone: 'red', icon: AlertCircle },
-            { label: 'Amarelos', value: summary.yellow, tone: 'yellow', icon: AlertTriangle },
-            { label: 'Em análise', value: summary.inAnalysis, tone: 'info', icon: Activity },
-            { label: 'Atendidos hoje', value: summary.attendedToday, tone: 'green', icon: CheckCircle2 },
-          ];
-
+export function AlertQuickFilters({ summary, active, onSelect }: {
+  summary: AlertSummary; active: QuickKey | null; onSelect: (key: QuickKey) => void;
+}) {
+  const counts: Record<QuickKey, number> = {
+    ALL: summary.total, RED: summary.red, YELLOW: summary.yellow,
+    IN_ANALYSIS: summary.inAnalysis, ATTENDED: summary.attended,
+  };
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 animate-entry">
-      {cards.map((c) => (
-        <SummaryCard key={c.label} {...c} />
+    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 animate-entry">
+      {QUICK_CARDS.map((c) => (
+        <QuickCard
+          key={c.key}
+          label={c.label}
+          value={counts[c.key]}
+          icon={c.icon}
+          color={c.color}
+          active={active === c.key}
+          onClick={() => onSelect(c.key)}
+        />
       ))}
     </div>
   );
@@ -191,42 +224,119 @@ function Sel({ label, value, onChange, options }: {
   );
 }
 
-export function AlertFilters({ value, onChange, isAdmin, teamOptions }: {
-  value: AlertFiltersState;
-  onChange: (next: AlertFiltersState) => void;
-  isAdmin: boolean;
-  teamOptions: Array<{ value: string; label: string }>;
+/** Conta os filtros avançados ativos (para o badge do botão "Filtros"). */
+export function countAdvancedFilters(f: AlertFiltersState): number {
+  let n = 0;
+  if (f.period !== 'ALL') n++;
+  if (f.signal !== 'ALL') n++;
+  if (f.measurement !== 'ALL') n++;
+  if (f.team !== 'ALL') n++;
+  return n;
+}
+
+/** Barra enxuta sempre visível: busca por paciente + botão "Filtros" (abre o sheet). */
+export function AlertSearchBar({ search, onSearch, onOpenFilters, activeFilterCount }: {
+  search: string;
+  onSearch: (v: string) => void;
+  onOpenFilters: () => void;
+  activeFilterCount: number;
 }) {
-  const set = <K extends keyof AlertFiltersState>(k: K, v: AlertFiltersState[K]) => onChange({ ...value, [k]: v });
   return (
-    <div className="bg-card border border-border rounded-xl p-4 shadow-sm space-y-3 animate-entry">
-      <div className="relative">
+    <div className="flex items-stretch gap-2 animate-entry">
+      <div className="relative flex-1">
         <Search className="size-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
         <input
           className="input pl-9"
-          placeholder="Buscar por nome do paciente…"
-          value={value.search}
-          onChange={(e) => set('search', e.target.value)}
+          placeholder="Buscar por nome do paciente..."
+          value={search}
+          onChange={(e) => onSearch(e.target.value)}
         />
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <Sel label="Status do alerta" value={value.severity} onChange={(v) => set('severity', v as AlertFiltersState['severity'])}
-          options={[{ value: 'ALL', label: 'Todos' }, { value: 'RED', label: 'Alerta' }, { value: 'YELLOW', label: 'Atenção' }]} />
-        <Sel label="Atendimento" value={value.attendance} onChange={(v) => set('attendance', v as AlertFiltersState['attendance'])}
-          options={[{ value: 'ACTIVE', label: 'Ativos (não atendidos)' }, { value: 'PENDING', label: 'Pendente' }, { value: 'IN_ANALYSIS', label: 'Em análise' }, { value: 'ATTENDED', label: 'Atendido' }, { value: 'IGNORED', label: 'Ignorado' }, { value: 'ALL', label: 'Todos' }]} />
-        <Sel label="Período" value={value.period} onChange={(v) => set('period', v as AlertFiltersState['period'])}
-          options={[{ value: 'ALL', label: 'Todos' }, { value: 'TODAY', label: 'Hoje' }, { value: '7D', label: 'Últimos 7 dias' }, { value: '30D', label: 'Últimos 30 dias' }]} />
-        <Sel label="Sinal vital" value={value.signal} onChange={(v) => set('signal', v)}
-          options={[{ value: 'ALL', label: 'Todos' }, ...SIGNAL_OPTIONS.map((s) => ({ value: s, label: s }))]} />
-        <Sel label="Medição" value={value.measurement} onChange={(v) => set('measurement', v as AlertFiltersState['measurement'])}
-          options={[{ value: 'ALL', label: 'Ambos' }, { value: 'MORNING', label: 'Manhã' }, { value: 'NIGHT', label: 'Noite' }]} />
-        {isAdmin && (
-          <Sel label="Equipe" value={value.team} onChange={(v) => set('team', v)}
-            options={[{ value: 'ALL', label: 'Todas' }, ...teamOptions]} />
+      <button
+        type="button"
+        onClick={onOpenFilters}
+        className="inline-flex items-center gap-2 px-3 sm:px-4 rounded-lg border border-border bg-card text-sm font-semibold hover:bg-muted transition-colors shrink-0"
+      >
+        <SlidersHorizontal className="size-4" />
+        <span className="hidden sm:inline">Filtros</span>
+        {activeFilterCount > 0 && (
+          <span className="inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full bg-primary text-primary-foreground text-[11px] font-bold">
+            {activeFilterCount}
+          </span>
         )}
-      </div>
-      <div className="flex justify-end">
-        <Button variant="ghost" size="sm" onClick={() => onChange(EMPTY_FILTERS)}>Limpar filtros</Button>
+      </button>
+    </div>
+  );
+}
+
+/** Filtros avançados — bottom sheet no mobile, modal centralizado no desktop. */
+export function AlertFiltersSheet({ value, onApply, onClose, isAdmin, teamOptions }: {
+  value: AlertFiltersState;
+  onApply: (next: AlertFiltersState) => void;
+  onClose: () => void;
+  isAdmin: boolean;
+  teamOptions: Array<{ value: string; label: string }>;
+}) {
+  const [draft, setDraft] = useState<AlertFiltersState>(value);
+  const set = <K extends keyof AlertFiltersState>(k: K, v: AlertFiltersState[K]) => setDraft((d) => ({ ...d, [k]: v }));
+  const activeCount = countAdvancedFilters(draft);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [onClose]);
+
+  function clear() {
+    setDraft((d) => ({ ...d, severity: 'ALL', attendance: 'ACTIVE', period: 'ALL', signal: 'ALL', measurement: 'ALL', team: 'ALL' }));
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Filtros avançados"
+      onClick={onClose}
+    >
+      <div
+        className="bg-card border border-border w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[88vh] flex flex-col animate-entry"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="flex items-center gap-3 px-5 py-4 border-b border-border">
+          <h2 className="font-extrabold tracking-tight flex-1">
+            Filtros avançados{activeCount > 0 ? ` · ${activeCount}` : ''}
+          </h2>
+          <button onClick={onClose} className="size-8 rounded-lg hover:bg-muted flex items-center justify-center" aria-label="Fechar">
+            <X className="size-4" />
+          </button>
+        </header>
+
+        <div className="p-5 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Sel label="Status do alerta" value={draft.severity} onChange={(v) => set('severity', v as AlertFiltersState['severity'])}
+            options={[{ value: 'ALL', label: 'Todos' }, { value: 'RED', label: 'Alerta' }, { value: 'YELLOW', label: 'Atenção' }]} />
+          <Sel label="Atendimento" value={draft.attendance} onChange={(v) => set('attendance', v as AlertFiltersState['attendance'])}
+            options={[{ value: 'ACTIVE', label: 'Ativos (não atendidos)' }, { value: 'PENDING', label: 'Pendente' }, { value: 'IN_ANALYSIS', label: 'Em análise' }, { value: 'ATTENDED', label: 'Atendido' }, { value: 'IGNORED', label: 'Ignorado' }, { value: 'ALL', label: 'Todos' }]} />
+          <Sel label="Período" value={draft.period} onChange={(v) => set('period', v as AlertFiltersState['period'])}
+            options={[{ value: 'ALL', label: 'Todos' }, { value: 'TODAY', label: 'Hoje' }, { value: '7D', label: 'Últimos 7 dias' }, { value: '30D', label: 'Últimos 30 dias' }]} />
+          <Sel label="Sinal vital" value={draft.signal} onChange={(v) => set('signal', v)}
+            options={[{ value: 'ALL', label: 'Todos' }, ...SIGNAL_OPTIONS.map((s) => ({ value: s, label: s }))]} />
+          <Sel label="Medição" value={draft.measurement} onChange={(v) => set('measurement', v as AlertFiltersState['measurement'])}
+            options={[{ value: 'ALL', label: 'Ambos' }, { value: 'MORNING', label: 'Manhã' }, { value: 'NIGHT', label: 'Noite' }]} />
+          {isAdmin && (
+            <Sel label="Equipe" value={draft.team} onChange={(v) => set('team', v)}
+              options={[{ value: 'ALL', label: 'Todas' }, ...teamOptions]} />
+          )}
+        </div>
+
+        <footer className="flex items-center justify-between gap-3 px-5 py-4 border-t border-border">
+          <Button variant="ghost" onClick={clear}>Limpar filtros</Button>
+          <Button onClick={() => { onApply(draft); onClose(); }}>Aplicar filtros</Button>
+        </footer>
       </div>
     </div>
   );
@@ -752,6 +862,32 @@ function ModalFooter({ children }: { children: React.ReactNode }) {
 }
 
 /* ============================ States ============================ */
+
+export function AlertListSkeleton() {
+  return (
+    <ul className="space-y-3" aria-hidden>
+      {Array.from({ length: 4 }).map((_, i) => (
+        <li key={i} className="bg-card border border-border rounded-xl p-4 shadow-sm border-l-4 border-l-border animate-pulse">
+          <div className="flex items-start gap-3">
+            <span className="size-2.5 rounded-full bg-muted mt-1.5 shrink-0" />
+            <div className="flex-1 min-w-0 space-y-2.5">
+              <div className="h-4 w-40 max-w-[60%] bg-muted rounded" />
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2">
+                {Array.from({ length: 4 }).map((__, j) => (
+                  <div key={j} className="h-3 bg-muted rounded" />
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="mt-3 pt-3 border-t border-border flex gap-2">
+            <div className="h-7 w-24 bg-muted rounded-md" />
+            <div className="h-7 w-20 bg-muted rounded-md" />
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (

@@ -31,7 +31,7 @@ import {
   type DayPoint,
 } from '../components/charts';
 import { PatientMeasurementPhotoSection } from '../components/photo';
-import { Button, Loading, StatusBadge, cn, statusBorder } from '../components/ui';
+import { Button, Loading, PageContainer, StatusBadge, cn, statusBorder } from '../components/ui';
 import { patientDashboardService } from '../services/patientDashboardService';
 import type { PatientDashboard, VitalRecord } from '../lib/dto';
 
@@ -146,14 +146,14 @@ export function PatientDashboardPage() {
     }
   }
 
-  if (loading) return <Loading label="Carregando painel…" />;
-  if (!data) return <p className="text-center text-muted-foreground py-12">Paciente não encontrado.</p>;
+  if (loading) return <PageContainer size="wide"><Loading label="Carregando painel…" /></PageContainer>;
+  if (!data) return <PageContainer size="wide"><p className="text-center text-muted-foreground py-12">Paciente não encontrado.</p></PageContainer>;
 
   const p = data.patient;
   const worst = (s?: ClinicalStatus) => s ?? ClinicalStatus.GREEN;
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto w-full space-y-6">
+    <PageContainer size="wide">
       <Link
         to="/monitoring"
         className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
@@ -186,12 +186,13 @@ export function PatientDashboardPage() {
             </dl>
           </div>
           <div className="flex flex-col gap-2 lg:items-end lg:min-w-64">
-            <button
+            <Button
+              variant="whatsapp"
               onClick={() => window.open(whatsappLink(p.phone, `Olá, ${p.name}! Aqui é da sua equipe médica.`), '_blank')}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#25D366] text-white rounded-lg font-semibold text-sm hover:opacity-90 w-full lg:w-auto"
+              className="w-full lg:w-auto"
             >
               <MessageCircle className="size-4" /> Conversar no WhatsApp
-            </button>
+            </Button>
             {p.attendedByName ? (
               <p className="text-xs text-muted-foreground lg:text-right">
                 ✓ Atendido por <strong className="text-foreground">{p.attendedByName}</strong>. Será resetado
@@ -290,7 +291,7 @@ export function PatientDashboardPage() {
           <PatientMeasurementPhotoSection records={periodRecords} />
         </>
       )}
-    </div>
+    </PageContainer>
   );
 }
 

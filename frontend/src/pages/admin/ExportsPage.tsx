@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { Activity, Bell, FileDown } from 'lucide-react';
 import { useToast } from '../../components/Toast';
 import { AdminPageHeader } from '../../components/admin';
+import { Button, PageContainer } from '../../components/ui';
 import { alertService } from '../../services/alertService';
 import { patientService } from '../../services/patientService';
 
@@ -77,7 +78,7 @@ export function ExportsPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto w-full space-y-6">
+    <PageContainer>
       <AdminPageHeader
         title="Exportações"
         subtitle="Baixe os dados em CSV (abre no Excel/Google Sheets). A exportação respeita o seu perfil de acesso."
@@ -99,7 +100,7 @@ export function ExportsPage() {
           onExport={exportAlerts}
         />
       </div>
-    </div>
+    </PageContainer>
   );
 }
 
@@ -125,13 +126,9 @@ function ExportCard({
         <h3 className="font-bold tracking-tight">{title}</h3>
         <p className="text-sm text-muted-foreground mt-0.5">{description}</p>
       </div>
-      <button
-        onClick={onExport}
-        disabled={loading}
-        className="mt-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-55"
-      >
+      <Button onClick={onExport} disabled={loading} className="mt-auto w-full">
         <FileDown className="size-4" /> {loading ? 'Gerando…' : 'Exportar CSV'}
-      </button>
+      </Button>
     </div>
   );
 }
