@@ -149,9 +149,15 @@ export function Layout() {
   const { main, admin } = useRoleMenus();
 
   // A busca e o "Novo Paciente" do topo são ações clínicas: só fazem sentido nas
-  // telas de pacientes. Nas telas administrativas (usuários, equipes, configs) o
-  // topo fica contextual — cada página já traz seu próprio botão de criação.
-  const showPatientActions = !(pathname.startsWith('/admin') || pathname.startsWith('/teams'));
+  // telas de pacientes. Nas telas de Alertas, Meus Atendimentos e administrativas
+  // (usuários, equipes, configs) o topo fica contextual — cada página já traz seu
+  // próprio conteúdo.
+  const showPatientActions = !(
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/teams') ||
+    pathname.startsWith('/alerts') ||
+    pathname.startsWith('/my-care')
+  );
 
   // Fecha o drawer ao trocar de rota e ao apertar Escape; trava o scroll do fundo.
   useEffect(() => setMenuOpen(false), [pathname]);

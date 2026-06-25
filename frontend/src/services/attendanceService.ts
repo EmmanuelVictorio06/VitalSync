@@ -13,7 +13,7 @@
  *   nunca amplia esse escopo — apenas filtra/visualiza o que a RLS já liberou.
  *
  * A edição de observação usa a própria policy `attendance_rw` (membro da equipe).
- * "Resolver" reaproveita a RPC `alert_mark_attended` (0008), sem novas tabelas.
+ * Apenas registros finalizados (ATTENDED ou IGNORED) são listados aqui.
  */
 import { supabase } from '../lib/supabase';
 import type {
@@ -23,15 +23,23 @@ import type {
   VitalSignRecord,
 } from './types';
 
-/** Status do atendimento (subconjunto de attendance_confirmations.status). */
-export type AttendanceState = 'IN_ANALYSIS' | 'ATTENDED' | 'IGNORED';
+/** Status de um atendimento finalizado (exibido em Meus Atendimentos). */
+export type AttendanceStatus = 'ATTENDED' | 'IGNORED';
+
+/** Nível clínico do alerta de origem (semáforo). */
+export type AttendanceAlertLevel = 'YELLOW' | 'RED';
 
 /** De onde veio o atendimento (derivado: alerta x acompanhamento manual). */
 export type AttendanceOrigin = 'ALERT' | 'MANUAL_REVIEW';
 
+/** Decide se um registro da tabela attendance_confirmations aparece em Meus Atendimentos. */
+export function isFinalizedAttendance(status: string | null | undefined): status is AttendanceStatus {
+  return status === 'ATTENDED' || status === 'IGNORED';
+}
+
 /** Linha enriquecida exibida na lista/detalhe (joins resolvidos no serviço). */
 export interface AttendanceRow extends AttendanceConfirmation {
-  status: AttendanceState | null;
+  status: AttendanceStatus;
   patient: {
     id: string;
     name: string;
@@ -66,14 +74,22 @@ export interface AttendanceRow extends AttendanceConfirmation {
   related_vital_sign: string | null;
   /** Status clínico no momento (do alerta, ou o atual do paciente). */
   clinical_status: ClinicalStatus;
+  /** Nível do alerta de origem, quando veio de um alerta clínico. */
+  alert_level: AttendanceAlertLevel | null;
 }
 
 export interface AttendanceSummary {
   total: number;
-  /** Atendimentos registrados hoje (qualquer status). */
+  /** Atendimentos finalizados registrados hoje. */
   today: number;
-  inAnalysis: number;
-  resolved: number;
+  /** Alertas vermelhos já atendidos/finalizados. */
+  red: number;
+  /** Alertas amarelos já atendidos/finalizados. */
+  yellow: number;
+  /** Marcados como atendido. */
+  attended: number;
+  /** Finalizados com justificativa (ignorados). */
+  ignored: number;
 }
 
 const ATTENDANCE_SELECT = `
@@ -99,7 +115,7 @@ function isToday(iso: string | null): boolean {
 
 /** Linha "crua" do Supabase antes de resolver nomes/derivados. */
 interface RawRow extends AttendanceConfirmation {
-  status: AttendanceState | null;
+  status: AttendanceStatus;
   patient: (AttendanceRow['patient'] & { team: AttendanceRow['team'] }) | null;
   alert: (AttendanceRow['alert'] & { vital_record: VitalSignRecord | null }) | null;
 }
@@ -113,6 +129,7 @@ export const attendanceService = {
     const { data, error } = await supabase
       .from('attendance_confirmations')
       .select(ATTENDANCE_SELECT)
+      .in('status', ['ATTENDED', 'IGNORED'])
       .order('created_at', { ascending: false });
     if (error) throw new Error(error.message);
     const raw = (data as unknown as RawRow[]) ?? [];
@@ -160,6 +177,8 @@ export const attendanceService = {
       const prof = r.attended_by ? profiles.get(r.attended_by) : undefined;
       const surgeonId = team?.main_surgeon_id ?? null;
       const clinical_status: ClinicalStatus = alert?.status ?? rawPatient?.current_status ?? 'GREEN';
+      const alert_level: AttendanceAlertLevel | null =
+        alert?.status === 'RED' || alert?.status === 'YELLOW' ? alert.status : null;
       return {
         ...rest,
         patient,
@@ -172,19 +191,22 @@ export const attendanceService = {
         origin: r.alert_id ? 'ALERT' : 'MANUAL_REVIEW',
         related_vital_sign: alert?.type ?? null,
         clinical_status,
+        alert_level,
       };
     });
   },
 
   /** Resumo agregado para os cards do topo (a partir do conjunto carregado). */
   summarize(rows: AttendanceRow[]): AttendanceSummary {
-    let today = 0, inAnalysis = 0, resolved = 0;
+    let today = 0, red = 0, yellow = 0, attended = 0, ignored = 0;
     for (const r of rows) {
       if (isToday(r.created_at)) today++;
-      if (r.status === 'IN_ANALYSIS') inAnalysis++;
-      if (r.status === 'ATTENDED' || r.status === 'IGNORED') resolved++;
+      if (r.alert_level === 'RED') red++;
+      if (r.alert_level === 'YELLOW') yellow++;
+      if (r.status === 'ATTENDED') attended++;
+      if (r.status === 'IGNORED') ignored++;
     }
-    return { total: rows.length, today, inAnalysis, resolved };
+    return { total: rows.length, today, red, yellow, attended, ignored };
   },
 
   /**
@@ -227,18 +249,4 @@ export const attendanceService = {
     if (error) throw new Error(error.message);
   },
 
-  /**
-   * "Marcar como resolvido": conclui o alerta de origem reaproveitando a RPC
-   * de atendimento (registra a conduta e fecha o alerta). Só faz sentido quando
-   * o atendimento veio de um alerta ainda em análise.
-   */
-  async resolve(row: AttendanceRow, observation: string): Promise<void> {
-    if (!row.alert_id) throw new Error('Este atendimento não está vinculado a um alerta.');
-    const { error } = await supabase.rpc('alert_mark_attended', {
-      p_alert: row.alert_id,
-      p_professional: row.attended_by,
-      p_observation: observation,
-    });
-    if (error) throw new Error(error.message);
-  },
 };

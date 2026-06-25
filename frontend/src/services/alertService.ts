@@ -11,6 +11,7 @@ import { supabase } from '../lib/supabase';
 import type {
   AttendanceConfirmation,
   ClinicalAlert,
+  EntityStatus,
   NotificationLog,
   VitalSignRecord,
 } from './types';
@@ -25,6 +26,7 @@ export interface AlertRow extends ClinicalAlert {
     surgery_date: string | null;
     hospital_discharge_date: string | null;
     team_id: string;
+    status: EntityStatus;
     surgery_type: { name: string } | null;
     hospital: { name: string } | null;
   } | null;
@@ -56,7 +58,7 @@ export interface TeamProfessional {
 const ALERT_SELECT = `
   *,
   patient:patients(
-    id, name, birth_date, phone, surgery_date, hospital_discharge_date, team_id,
+    id, name, birth_date, phone, surgery_date, hospital_discharge_date, team_id, status,
     surgery_type:surgery_types(name),
     hospital:hospitals(name)
   ),
@@ -79,7 +81,10 @@ export const alertService = {
       .select(ALERT_SELECT)
       .order('created_at', { ascending: false });
     if (error) throw new Error(error.message);
-    const rows = (data as unknown as AlertRow[]) ?? [];
+    let rows = (data as unknown as AlertRow[]) ?? [];
+
+    // Exclui alertas de pacientes inativos (soft-deleted).
+    rows = rows.filter((r) => !r.patient || r.patient.status === 'ACTIVE');
 
     // Resolve nomes de profissionais (cirurgião + quem atendeu) em 1 query.
     const ids = new Set<string>();
@@ -132,14 +137,22 @@ export const alertService = {
   /**
    * Conta os alertas NÃO atendidos (Pendente + Em análise) visíveis ao usuário
    * (RLS). Alimenta o badge da sidebar — diminui à medida que são atendidos.
+   * Exclui alertas de pacientes inativos (soft-deleted).
    */
   async getUnattendedCount(): Promise<number> {
-    const { count, error } = await supabase
+    const { data, error } = await supabase
       .from('clinical_alerts')
-      .select('id', { count: 'exact', head: true })
+      .select('id, patient:patients(status)')
       .in('attendance_status', ['PENDING', 'IN_ANALYSIS']);
     if (error) return 0;
-    return count ?? 0;
+    return ((data ?? []) as unknown as Array<{ patient: { status: string } | Array<{ status: string }> | null }>)
+      .filter((a) => {
+        const p = a.patient;
+        if (!p) return false;
+        if (Array.isArray(p)) return p[0]?.status === 'ACTIVE';
+        return p.status === 'ACTIVE';
+      })
+      .length;
   },
 
   /** Conta notificações com falha entre os alertas visíveis (card do Admin). */
