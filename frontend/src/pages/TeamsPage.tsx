@@ -8,18 +8,12 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Activity,
-  BellRing,
-  CheckCircle2,
   Eye,
   Pencil,
   Plus,
   Power,
-  Stethoscope,
   Trash2,
-  UserCog,
   UserPlus,
-  Users,
   Users2,
   X,
 } from 'lucide-react';
@@ -28,26 +22,34 @@ import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
 import { Button, ConfirmModal, PageContainer, PageHeader, SelectField, StatusBadge, TextInput } from '../components/ui';
-import { EmptyState, ErrorState, LoadingState, SearchBox, SegmentedFilter } from '../components/admin';
+import { EmptyState, ErrorState, LoadingState } from '../components/admin';
 import {
   AccessDenied,
   ContactLine,
   EMPTY_DOCTOR,
+  EMPTY_TEAM_FILTERS,
   ModeTabs,
   NewDoctorFields,
   StatusTeamBadge,
-  SummaryCard,
+  TeamActiveFilterChips,
+  TeamAdvancedFilters,
+  TeamSearchBar,
+  TeamStatsRow,
+  TeamSummaryQuickFilters,
+  activeTeamQuickCard,
+  applyTeamFilters,
+  applyTeamQuickCard,
+  countTeamAdvancedFilters,
   monitoringDayFrom,
   validateNewDoctor,
   type NewDoctorDraft,
+  type TeamFiltersState,
 } from '../components/teams-admin';
 import { permissionService } from '../services/permissionService';
 import { profileService } from '../services/profileService';
 import { teamService, type AdminTeamSummary } from '../services/teamService';
 import { teamViewService, type TeamDetail } from '../services/teamViewService';
 import type { Profile } from '../services/types';
-
-type StatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
 
 export function TeamsPage() {
   const { user } = useAuth();
@@ -60,12 +62,9 @@ export function TeamsPage() {
   const [surgeons, setSurgeons] = useState<Profile[]>([]);
   const [associates, setAssociates] = useState<Profile[]>([]);
 
-  // Filtros
-  const [fNumber, setFNumber] = useState('');
-  const [fSurgeon, setFSurgeon] = useState('');
-  const [fAssociate, setFAssociate] = useState('');
-  const [fStatus, setFStatus] = useState<StatusFilter>('ALL');
-  const [fOnlyAlerts, setFOnlyAlerts] = useState(false);
+  // Filtros (busca geral + cards rápidos + filtros avançados num só estado)
+  const [filters, setFilters] = useState<TeamFiltersState>(EMPTY_TEAM_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   // Modais
   const [creating, setCreating] = useState(false);
@@ -103,29 +102,12 @@ export function TeamsPage() {
     if (deepLinkTeamId && teams?.some((t) => t.summary.id === deepLinkTeamId)) setOpenId(deepLinkTeamId);
   }, [deepLinkTeamId, teams]);
 
-  const filtered = useMemo(() => {
-    if (!teams) return [];
-    const num = fNumber.trim();
-    const sur = fSurgeon.trim().toLowerCase();
-    const ass = fAssociate.trim().toLowerCase();
-    return teams.filter((t) => {
-      if (num && !String(t.summary.number).includes(onlyDigits(num))) return false;
-      if (sur && !t.summary.surgeonName.toLowerCase().includes(sur)) return false;
-      if (ass && !t.members.some((m) => !m.isSurgeon && m.name.toLowerCase().includes(ass))) return false;
-      if (fStatus !== 'ALL' && t.summary.status !== fStatus) return false;
-      if (fOnlyAlerts && t.summary.stats.unattendedAlerts === 0 && t.summary.stats.alert === 0) return false;
-      return true;
-    });
-  }, [teams, fNumber, fSurgeon, fAssociate, fStatus, fOnlyAlerts]);
+  const filtered = useMemo(() => applyTeamFilters(teams ?? [], filters), [teams, filters]);
+  const activeQuick = useMemo(() => activeTeamQuickCard(filters), [filters]);
+  const advancedCount = useMemo(() => countTeamAdvancedFilters(filters), [filters]);
 
-  const hasFilters = !!(fNumber || fSurgeon || fAssociate || fStatus !== 'ALL' || fOnlyAlerts);
-  function clearFilters() {
-    setFNumber('');
-    setFSurgeon('');
-    setFAssociate('');
-    setFStatus('ALL');
-    setFOnlyAlerts(false);
-  }
+  const surgeonOptions = useMemo(() => surgeons.map((s) => ({ value: s.id, label: s.name })), [surgeons]);
+  const associateOptions = useMemo(() => associates.map((a) => ({ value: a.id, label: a.name })), [associates]);
 
   const openTeam = openId ? (teams ?? []).find((t) => t.summary.id === openId) ?? null : null;
 
@@ -176,46 +158,39 @@ export function TeamsPage() {
         }
       />
 
-      {/* Cards de resumo */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 animate-entry [animation-delay:80ms]">
-        <SummaryCard label="Total de equipes" value={summary?.totalTeams ?? 0} icon={<Users className="size-5" />} />
-        <SummaryCard label="Equipes ativas" value={summary?.activeTeams ?? 0} icon={<CheckCircle2 className="size-5" />} tone="stable" />
-        <SummaryCard label="Cirurgiões principais" value={summary?.mainSurgeons ?? 0} icon={<Stethoscope className="size-5" />} />
-        <SummaryCard label="Médicos associados" value={summary?.associatedDoctors ?? 0} icon={<UserCog className="size-5" />} tone="muted" />
-        <SummaryCard label="Pacientes vinculados" value={summary?.linkedPatients ?? 0} icon={<Activity className="size-5" />} />
-        <SummaryCard label="Equipes com alertas" value={summary?.teamsWithAlerts ?? 0} icon={<BellRing className="size-5" />} tone="alert" />
-      </div>
+      {/* Cards de filtro rápido */}
+      {teams && !error && (
+        <TeamSummaryQuickFilters
+          teams={teams}
+          active={activeQuick}
+          onSelect={(key) => setFilters((f) => applyTeamQuickCard(f, key))}
+        />
+      )}
 
-      {/* Filtros */}
-      <div className="bg-card border border-border shadow-sm rounded-xl p-4 space-y-3 animate-entry [animation-delay:120ms]">
-        <div className="flex flex-col md:flex-row gap-3">
-          <SearchBox value={fNumber} onChange={setFNumber} placeholder="Buscar por número da equipe..." />
-          <SearchBox value={fSurgeon} onChange={setFSurgeon} placeholder="Buscar por cirurgião principal..." />
-          <SearchBox value={fAssociate} onChange={setFAssociate} placeholder="Buscar por médico associado..." />
-        </div>
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
-          <div className="flex flex-wrap items-center gap-3">
-            <SegmentedFilter
-              value={fStatus}
-              onChange={setFStatus}
-              options={[
-                { value: 'ALL', label: 'Todas' },
-                { value: 'ACTIVE', label: 'Ativas' },
-                { value: 'INACTIVE', label: 'Inativas' },
-              ]}
-            />
-            <label className="inline-flex items-center gap-2 text-sm font-medium cursor-pointer select-none">
-              <input type="checkbox" className="size-4 accent-alert" checked={fOnlyAlerts} onChange={(e) => setFOnlyAlerts(e.target.checked)} />
-              Com pacientes em alerta
-            </label>
-          </div>
-          {hasFilters && (
-            <button onClick={clearFilters} className="text-sm font-semibold text-primary hover:underline self-start">
-              Limpar filtros
-            </button>
-          )}
-        </div>
-      </div>
+      {/* Resumo geral secundário */}
+      {summary && (
+        <TeamStatsRow
+          mainSurgeons={summary.mainSurgeons}
+          associatedDoctors={summary.associatedDoctors}
+          linkedPatients={summary.linkedPatients}
+        />
+      )}
+
+      {/* Busca + filtros */}
+      <TeamSearchBar
+        search={filters.search}
+        onSearch={(v) => setFilters((f) => ({ ...f, search: v }))}
+        onOpenFilters={() => setFiltersOpen(true)}
+        activeFilterCount={advancedCount}
+      />
+
+      <TeamActiveFilterChips
+        filters={filters}
+        surgeonOptions={surgeonOptions}
+        associateOptions={associateOptions}
+        onRemove={(key) => setFilters((f) => ({ ...f, [key]: EMPTY_TEAM_FILTERS[key] }))}
+        onClear={() => setFilters((f) => ({ ...EMPTY_TEAM_FILTERS, search: f.search }))}
+      />
 
       {/* Listagem */}
       <section className="space-y-3">
@@ -223,11 +198,11 @@ export function TeamsPage() {
         {error ? (
           <ErrorState message={error} onRetry={load} />
         ) : teams === null ? (
-          <LoadingState label="Carregando equipes médicas..." />
+          <LoadingState label="Carregando equipes..." />
         ) : teams.length === 0 ? (
-          <EmptyState title="Nenhuma equipe cadastrada ainda." hint="Clique em “Nova Equipe” para começar." />
+          <EmptyState title="Nenhuma equipe cadastrada." hint="Clique em “Nova Equipe” para começar." />
         ) : filtered.length === 0 ? (
-          <EmptyState title="Nenhuma equipe encontrada para os filtros selecionados." />
+          <EmptyState title="Nenhuma equipe encontrada para os filtros selecionados." hint="Ajuste a busca ou os filtros para ver outras equipes." />
         ) : (
           <div className="grid md:grid-cols-2 gap-4">
             {filtered.map((t) => (
@@ -242,6 +217,17 @@ export function TeamsPage() {
           </div>
         )}
       </section>
+
+      {/* Filtros avançados (bottom sheet no mobile, modal no desktop) */}
+      {filtersOpen && (
+        <TeamAdvancedFilters
+          value={filters}
+          surgeonOptions={surgeonOptions}
+          associateOptions={associateOptions}
+          onApply={setFilters}
+          onClose={() => setFiltersOpen(false)}
+        />
+      )}
 
       {/* Modais */}
       {creating && (
@@ -349,17 +335,27 @@ function TeamCard({
       </div>
 
       <footer className="flex items-center gap-2 border-t border-border pt-3 mt-auto">
-        <Button variant="secondary" size="sm" onClick={onView}>
+        <Button variant="secondary" size="sm" onClick={onView} title="Ver detalhes da equipe">
           <Eye className="size-3.5" /> Ver detalhes
         </Button>
-        <Button variant="ghost" size="sm" onClick={onView}>
+        <Button variant="ghost" size="sm" onClick={onView} title="Editar equipe">
           <Pencil className="size-3.5" /> Editar
         </Button>
         <div className="ml-auto flex items-center gap-2">
-          <button onClick={onToggle} title={active ? 'Inativar' : 'Ativar'} aria-label={active ? 'Inativar' : 'Ativar'} className="size-8 rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center">
+          <button
+            onClick={onToggle}
+            title={active ? 'Inativar equipe' : 'Ativar equipe'}
+            aria-label={active ? 'Inativar equipe' : 'Ativar equipe'}
+            className="size-8 rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center"
+          >
             <Power className="size-4" />
           </button>
-          <button onClick={onDelete} title="Excluir" aria-label="Excluir" className="size-8 rounded-md border border-alert/30 text-alert hover:bg-alert/5 flex items-center justify-center">
+          <button
+            onClick={onDelete}
+            title="Excluir equipe"
+            aria-label="Excluir equipe"
+            className="size-8 rounded-md border border-alert/30 text-alert hover:bg-alert/5 flex items-center justify-center"
+          >
             <Trash2 className="size-4" />
           </button>
         </div>
