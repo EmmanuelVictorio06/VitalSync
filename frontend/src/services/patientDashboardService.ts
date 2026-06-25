@@ -131,7 +131,12 @@ export const patientDashboardService = {
     };
   },
 
-  /** Marca os alertas pendentes do paciente como atendidos. */
+  /**
+   * Marca os alertas pendentes do paciente como atendidos e registra o
+   * atendimento no histórico ("Meus Atendimentos"). A linha em
+   * attendance_confirmations (sem alert_id) representa o acompanhamento manual
+   * feito pelo checkbox "Atendido por"; a RLS (attendance_rw) garante o escopo.
+   */
   async markAttended(patientId: string, attendedBy: string): Promise<void> {
     const { error } = await supabase
       .from('clinical_alerts')
@@ -139,5 +144,14 @@ export const patientDashboardService = {
       .eq('patient_id', patientId)
       .eq('attended', false);
     if (error) throw new Error(error.message);
+
+    // Histórico de atendimento (não bloqueia o fluxo se a inserção falhar).
+    const { error: confirmError } = await supabase.from('attendance_confirmations').insert({
+      patient_id: patientId,
+      attended_by: attendedBy,
+      status: 'ATTENDED',
+      observation: 'Paciente marcado como atendido no acompanhamento individual.',
+    });
+    if (confirmError) throw new Error(confirmError.message);
   },
 };
