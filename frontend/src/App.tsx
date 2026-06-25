@@ -12,9 +12,9 @@ import { MonitoringPage } from './pages/MonitoringPage';
 import { MyProfilePage } from './pages/MyProfilePage';
 import { MyTeamPage } from './pages/MyTeamPage';
 import { MyTeamsPage } from './pages/MyTeamsPage';
+import { MyAttendancesPage } from './pages/MyAttendancesPage';
 import { PatientDashboardPage } from './pages/PatientDashboardPage';
 import { PatientRegisterPage } from './pages/PatientRegisterPage';
-import { PlaceholderPage } from './pages/PlaceholderPage';
 import { TeamsPage } from './pages/TeamsPage';
 import { UsersPage } from './pages/admin/UsersPage';
 import { VitalsRegisterPage } from './pages/VitalsRegisterPage';
@@ -115,10 +115,7 @@ export function App() {
           path="/my-care"
           element={
             <PermissionGuard roles={[Role.SURGEON, Role.ASSOCIATE]}>
-              <PlaceholderPage
-                title="Meus Atendimentos"
-                description="Histórico dos pacientes atendidos por você, com data, status e medições relacionadas."
-              />
+              <MyAttendancesPage />
             </PermissionGuard>
           }
         />
