@@ -47,7 +47,7 @@ import { DEFAULT_NOTIFICATION_PREFS, type NotificationPrefs, type Profile } from
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function MyProfilePage() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const toast = useToast();
 
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -56,7 +56,6 @@ export function MyProfilePage() {
 
   const load = useCallback(async () => {
     setError(null);
-    setProfile(null);
     try {
       const [p, u] = await Promise.all([profileService.getMyProfile(), authService.getCurrentUser()]);
       setProfile(p);
@@ -103,7 +102,7 @@ export function MyProfilePage() {
 
           {/* Coluna direita: seções */}
           <div className="space-y-6 min-w-0">
-            <PersonalDataCard profile={profile} avatarUrl={avatarUrl} onChanged={load} />
+            <PersonalDataCard profile={profile} avatarUrl={avatarUrl} onChanged={load} onUserRefreshed={refreshUser} />
             <AccessDataCard profile={profile} onChanged={load} />
             <ChangePasswordCard />
             <NotificationsCard profile={profile} onChanged={load} />
@@ -118,7 +117,19 @@ export function MyProfilePage() {
 }
 
 /* ============================ Dados pessoais ============================ */
-function PersonalDataCard({ profile, avatarUrl, onChanged }: { profile: Profile; avatarUrl: string | null; onChanged: () => Promise<void> }) {
+type PendingAvatar = { kind: 'file'; file: File } | { kind: 'remove' } | null;
+
+function PersonalDataCard({
+  profile,
+  avatarUrl,
+  onChanged,
+  onUserRefreshed,
+}: {
+  profile: Profile;
+  avatarUrl: string | null;
+  onChanged: () => Promise<void>;
+  onUserRefreshed: () => Promise<void>;
+}) {
   const toast = useToast();
   const [name, setName] = useState(profile.name);
   const [whatsapp, setWhatsapp] = useState(profile.whatsapp ?? '');
@@ -127,7 +138,17 @@ function PersonalDataCard({ profile, avatarUrl, onChanged }: { profile: Profile;
   const [notes, setNotes] = useState(profile.notes ?? '');
   const [nameError, setNameError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [pendingAvatar, setPendingAvatar] = useState<PendingAvatar>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (pendingAvatar?.kind === 'file') {
+      const url = URL.createObjectURL(pendingAvatar.file);
+      setPreviewUrl(url);
+      return () => URL.revokeObjectURL(url);
+    }
+    setPreviewUrl(null);
+  }, [pendingAvatar]);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -149,8 +170,17 @@ function PersonalDataCard({ profile, avatarUrl, onChanged }: { profile: Profile;
         crm: crm.trim() || null,
         notes: notes.trim() || null,
       });
+
+      if (pendingAvatar?.kind === 'file') {
+        await profileService.updateAvatar(pendingAvatar.file);
+      } else if (pendingAvatar?.kind === 'remove') {
+        await profileService.removeAvatar();
+      }
+
+      setPendingAvatar(null);
       toast.success('Dados atualizados com sucesso.');
       await onChanged();
+      await onUserRefreshed();
     } catch {
       toast.error('Não foi possível atualizar seus dados. Tente novamente.');
     } finally {
@@ -158,36 +188,27 @@ function PersonalDataCard({ profile, avatarUrl, onChanged }: { profile: Profile;
     }
   }
 
-  async function uploadAvatar(file: File) {
-    setAvatarBusy(true);
-    try {
-      await profileService.updateAvatar(file);
-      toast.success('Foto de perfil atualizada.');
-      await onChanged();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Não foi possível enviar a foto.');
-    } finally {
-      setAvatarBusy(false);
-    }
+  function selectAvatarFile(file: File) {
+    setPendingAvatar({ kind: 'file', file });
   }
 
-  async function removeAvatar() {
-    setAvatarBusy(true);
-    try {
-      await profileService.removeAvatar();
-      toast.success('Foto removida.');
-      await onChanged();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Não foi possível remover a foto.');
-    } finally {
-      setAvatarBusy(false);
-    }
+  function markAvatarForRemoval() {
+    setPendingAvatar({ kind: 'remove' });
   }
 
   return (
     <SettingsSection title="Dados pessoais" description="Mantenha seu nome e contato atualizados — o WhatsApp é usado para os alertas da equipe.">
       <div className="grid sm:grid-cols-[auto_1fr] gap-6 items-start">
-        <AvatarUpload name={profile.name} currentUrl={avatarUrl} onUpload={uploadAvatar} onRemove={removeAvatar} busy={avatarBusy} onError={toast.error} />
+        <AvatarUpload
+          name={profile.name}
+          currentUrl={avatarUrl}
+          previewUrl={previewUrl}
+          isRemoved={pendingAvatar?.kind === 'remove'}
+          onFileSelected={selectAvatarFile}
+          onRemove={markAvatarForRemoval}
+          busy={saving}
+          onError={toast.error}
+        />
         <form onSubmit={save} className="space-y-4 min-w-0">
           <TextInput label="Nome completo" required value={name} error={nameError} onChange={(e) => { setName(e.target.value); setNameError(''); }} />
           <div className="grid sm:grid-cols-2 gap-4">

@@ -5,11 +5,12 @@
  * mostrar/ocultar, medidor de força, cartão de resumo do usuário. A lógica de
  * dados fica nos serviços (auth/profile/storage). Senha nunca trafega p/ o banco.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Camera, Eye, EyeOff, RefreshCw, ShieldCheck, Trash2, UserRound } from 'lucide-react';
 import { isAcceptedWoundPhotoType } from '@vitalsync/shared';
 import { Field, cn } from './ui';
 import { StatusPill } from './admin';
+import { AvatarCropModal } from './AvatarCropModal';
 import type { EntityStatus } from '../services/types';
 
 /* ---------------- Iniciais e rótulos ---------------- */
@@ -35,35 +36,28 @@ export function validateAvatarFile(file: File): string | null {
   return null;
 }
 
-/* ---------------- Avatar com upload + preview ---------------- */
+/* ---------------- Avatar com seleção + recorte (preview local) ---------------- */
 export function AvatarUpload({
   name,
   currentUrl,
-  onUpload,
+  previewUrl,
+  isRemoved,
+  onFileSelected,
   onRemove,
   busy,
   onError,
 }: {
   name: string;
-  currentUrl: string | null; // URL pública já resolvida (ou null)
-  onUpload: (file: File) => void;
+  currentUrl: string | null; // URL pública já salva (ou null)
+  previewUrl?: string | null; // URL de prévia local (ObjectURL) — ainda não persistida
+  isRemoved?: boolean; // true quando o usuário pediu remoção, mas ainda não salvou
+  onFileSelected: (file: File) => void; // arquivo pronto após validação/recorte
   onRemove: () => void;
   busy?: boolean;
   onError?: (msg: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [picked, setPicked] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!picked) {
-      setPreviewUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(picked);
-    setPreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [picked]);
+  const [cropFile, setCropFile] = useState<File | null>(null);
 
   function handleFiles(files: FileList | null) {
     const file = files?.[0];
@@ -74,16 +68,22 @@ export function AvatarUpload({
       onError?.(problem);
       return;
     }
-    setPicked(file);
+    setCropFile(file);
   }
 
-  const shown = previewUrl ?? currentUrl;
+  function handleCropConfirm(file: File) {
+    setCropFile(null);
+    onFileSelected(file);
+  }
+
+  const displayUrl = previewUrl ?? (isRemoved ? null : currentUrl);
+  const hasPhoto = !!displayUrl;
 
   return (
     <div className="flex flex-col items-center gap-3">
       <div className="size-28 rounded-full overflow-hidden border border-border bg-primary/10 text-primary grid place-items-center shrink-0">
-        {shown ? (
-          <img src={shown} alt={`Avatar de ${name}`} className="size-full object-cover" />
+        {displayUrl ? (
+          <img src={displayUrl} alt={`Avatar de ${name}`} className="size-full object-cover" />
         ) : (
           <span className="text-3xl font-extrabold">{initials(name)}</span>
         )}
@@ -91,52 +91,37 @@ export function AvatarUpload({
 
       <input ref={inputRef} type="file" accept={AVATAR_ACCEPT} className="hidden" onChange={(e) => handleFiles(e.target.files)} />
 
-      {picked ? (
-        <div className="flex flex-col items-center gap-2 w-full">
-          <p className="text-xs text-muted-foreground truncate max-w-[12rem]">Prévia · {picked.name}</p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => onUpload(picked)}
-              disabled={busy}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 disabled:opacity-55"
-            >
-              {busy ? 'Enviando…' : 'Salvar foto'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setPicked(null)}
-              disabled={busy}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border text-xs font-semibold hover:bg-muted"
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-wrap justify-center gap-2">
+      <div className="flex flex-wrap justify-center gap-2">
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-primary/30 text-primary text-xs font-semibold hover:bg-accent disabled:opacity-55"
+        >
+          {hasPhoto ? <RefreshCw className="size-3.5" /> : <Camera className="size-3.5" />}
+          {hasPhoto ? 'Trocar foto' : 'Adicionar foto'}
+        </button>
+        {hasPhoto && (
           <button
             type="button"
-            onClick={() => inputRef.current?.click()}
+            onClick={onRemove}
             disabled={busy}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-primary/30 text-primary text-xs font-semibold hover:bg-accent disabled:opacity-55"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-alert/30 text-alert text-xs font-semibold hover:bg-alert/5 disabled:opacity-55"
           >
-            {currentUrl ? <RefreshCw className="size-3.5" /> : <Camera className="size-3.5" />}
-            {currentUrl ? 'Trocar foto' : 'Adicionar foto'}
+            <Trash2 className="size-3.5" /> Remover foto
           </button>
-          {currentUrl && (
-            <button
-              type="button"
-              onClick={onRemove}
-              disabled={busy}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-alert/30 text-alert text-xs font-semibold hover:bg-alert/5 disabled:opacity-55"
-            >
-              <Trash2 className="size-3.5" /> Remover foto
-            </button>
-          )}
-        </div>
-      )}
+        )}
+      </div>
       <p className="text-[11px] text-muted-foreground text-center">JPG, PNG ou WEBP · até 5 MB</p>
+
+      {cropFile && (
+        <AvatarCropModal
+          imageFile={cropFile}
+          onCancel={() => setCropFile(null)}
+          onConfirm={handleCropConfirm}
+          busy={busy}
+        />
+      )}
     </div>
   );
 }

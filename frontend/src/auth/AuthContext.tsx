@@ -12,6 +12,8 @@ interface AuthContextValue {
   logout: () => Promise<void>;
   /** true se o perfil do usuário está entre os informados. */
   hasRole: (...roles: Role[]) => boolean;
+  /** Recarrega o perfil do usuário logado e atualiza o contexto (avatar, nome, etc). */
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -27,7 +29,13 @@ const ROLE_MAP: Record<UserRole, Role> = {
 };
 
 function toAuthUser(profile: Profile): AuthUser {
-  return { id: profile.id, name: profile.name, role: ROLE_MAP[profile.role] ?? Role.ASSOCIATE, teamId: null };
+  return {
+    id: profile.id,
+    name: profile.name,
+    role: ROLE_MAP[profile.role] ?? Role.ASSOCIATE,
+    teamId: null,
+    avatarUrl: profile.avatar_url ?? null,
+  };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -86,7 +94,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user],
   );
 
-  const value = useMemo(() => ({ user, loading, login, logout, hasRole }), [user, loading, login, logout, hasRole]);
+  const refreshUser = useCallback(async () => {
+    const profile = await profileService.getMyProfile();
+    if (profile) setUser(toAuthUser(profile));
+  }, []);
+
+  const value = useMemo(
+    () => ({ user, loading, login, logout, hasRole, refreshUser }),
+    [user, loading, login, logout, hasRole, refreshUser],
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

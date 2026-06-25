@@ -4,6 +4,8 @@ import { Heart, LogOut, Menu, Plus, Search, Stethoscope, X } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext';
 import { useRoleMenus, type NavItem } from './RoleBasedSidebar';
 import { canRegisterPatients } from '../lib/permissions';
+import { storageService } from '../services/storageService';
+import { initials } from './profile';
 import { cn } from './ui';
 
 const ROLE_LABEL: Record<string, string> = {
@@ -31,12 +33,6 @@ const PAGE_TITLES: Array<{ match: (path: string) => boolean; title: string }> = 
   { match: (p) => p.startsWith('/admin/settings'), title: 'Configurações' },
 ];
 
-function initials(name?: string): string {
-  if (!name) return '?';
-  const parts = name.trim().split(/\s+/);
-  return ((parts[0]?.[0] ?? '') + (parts[parts.length - 1]?.[0] ?? '')).toUpperCase();
-}
-
 function SidebarLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
   const Icon = item.icon;
   return (
@@ -60,6 +56,19 @@ function SidebarLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => v
         </span>
       ) : null}
     </NavLink>
+  );
+}
+
+function SidebarUserAvatar({ name, avatarPath }: { name?: string; avatarPath?: string | null }) {
+  const url = avatarPath ? storageService.getProfileAvatarUrl(avatarPath) : null;
+  return (
+    <div className="size-9 rounded-full overflow-hidden bg-primary/20 text-primary flex items-center justify-center font-bold text-sm shrink-0 border border-border">
+      {url ? (
+        <img src={url} alt={`Avatar de ${name ?? ''}`} className="size-full object-cover" />
+      ) : (
+        <span>{initials(name)}</span>
+      )}
+    </div>
   );
 }
 
@@ -111,9 +120,7 @@ function SidebarContent({
 
       <div className="p-4 border-t border-border">
         <div className="flex items-center gap-3 p-2 bg-muted/60 rounded-lg">
-          <div className="size-9 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-sm shrink-0">
-            {initials(user?.name)}
-          </div>
+          <SidebarUserAvatar name={user?.name} avatarPath={user?.avatarUrl} />
           <div className="flex-1 min-w-0">
             <p className="text-xs font-semibold truncate">{user?.name}</p>
             <p className="text-[10px] text-muted-foreground truncate">{ROLE_LABEL[user?.role ?? ''] ?? ''}</p>
