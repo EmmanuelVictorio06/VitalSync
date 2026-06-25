@@ -42,7 +42,13 @@ export function MonitoringPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [patients, setPatients] = useState<PatientWithNames[] | null>(null);
   const [search, setSearch] = useState(searchParams.get('search') ?? '');
-  const [status, setStatus] = useState<'' | ClinicalStatus>('');
+  const [status, setStatus] = useState<'' | ClinicalStatus>(() => {
+    const param = searchParams.get('status');
+    if (param === 'stable') return ClinicalStatus.GREEN;
+    if (param === 'attention') return ClinicalStatus.YELLOW;
+    if (param === 'alert') return ClinicalStatus.RED;
+    return '';
+  });
   const [toDelete, setToDelete] = useState<PatientWithNames | null>(null);
   const [confirmText, setConfirmText] = useState('');
   const team = searchParams.get('team') ?? '';
@@ -71,6 +77,13 @@ export function MonitoringPage() {
     const next = new URLSearchParams(searchParams);
     next.delete('team');
     setSearchParams(next, { replace: true });
+  }
+
+  function clearStatus() {
+    const next = new URLSearchParams(searchParams);
+    next.delete('status');
+    setSearchParams(next, { replace: true });
+    setStatus('');
   }
 
   async function share(p: PatientWithNames, mode: 'copy' | 'whatsapp') {
@@ -118,6 +131,22 @@ export function MonitoringPage() {
         </div>
       )}
 
+      {status && (
+        <div className="flex items-center gap-2 animate-entry">
+          <span className={cn(
+            'inline-flex items-center gap-2 text-xs font-semibold rounded-full pl-3 pr-1.5 py-1',
+            status === ClinicalStatus.GREEN && 'bg-stable/10 text-stable',
+            status === ClinicalStatus.YELLOW && 'bg-warning/10 text-warning',
+            status === ClinicalStatus.RED && 'bg-alert/10 text-alert',
+          )}>
+            Filtro ativo: {STATUS_OPTIONS.find((s) => s.value === status)?.label ?? status}
+            <button onClick={clearStatus} className="size-5 rounded-full hover:bg-foreground/10 flex items-center justify-center" aria-label="Remover filtro de status">
+              <X className="size-3.5" />
+            </button>
+          </span>
+        </div>
+      )}
+
       <div className="bg-card border border-border shadow-sm rounded-xl p-4 flex flex-col lg:flex-row gap-3 animate-entry [animation-delay:100ms]">
         <div className="flex-1 flex items-center gap-2 px-3 py-2 bg-muted rounded-lg text-sm">
           <Search className="size-4 text-muted-foreground" />
@@ -130,9 +159,19 @@ export function MonitoringPage() {
         </div>
         <div className="flex gap-1 bg-muted rounded-lg p-1 self-start lg:self-auto">
           {STATUS_OPTIONS.map((s) => (
-            <button
-              key={s.value}
-              onClick={() => setStatus(s.value)}
+              <button
+                key={s.value}
+                onClick={() => {
+                  setStatus(s.value);
+                  const next = new URLSearchParams(searchParams);
+                  if (s.value) {
+                    const paramMap: Record<ClinicalStatus, string> = { [ClinicalStatus.GREEN]: 'stable', [ClinicalStatus.YELLOW]: 'attention', [ClinicalStatus.RED]: 'alert' };
+                    next.set('status', paramMap[s.value]);
+                  } else {
+                    next.delete('status');
+                  }
+                  setSearchParams(next, { replace: true });
+                }}
               className={cn(
                 'px-3 py-1.5 rounded-md text-xs font-semibold transition-colors',
                 status === s.value ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground',

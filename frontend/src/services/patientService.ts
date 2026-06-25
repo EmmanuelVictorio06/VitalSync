@@ -53,7 +53,21 @@ export const patientService = {
   },
 
   async remove(id: string): Promise<void> {
+    // Soft delete: marca paciente como INATIVO.
     const { error } = await supabase.from('patients').update({ status: 'INACTIVE' }).eq('id', id);
     if (error) throw new Error(error.message);
+
+    // Marca alertas pendentes/em análise como IGNORED para que sumam das listas ativas.
+    // Ignora falhas silenciosamente — o filtro nas queries de alertas já garante
+    // que alertas de pacientes INACTIVE não apareçam mesmo se esta operação falhar.
+    try {
+      await supabase
+        .from('clinical_alerts')
+        .update({ attendance_status: 'IGNORED', ignored_reason: 'Paciente excluído do monitoramento' })
+        .eq('patient_id', id)
+        .in('attendance_status', ['PENDING', 'IN_ANALYSIS']);
+    } catch {
+      // RLS pode bloquear — os filtros nas queries já tratam o restante.
+    }
   },
 };

@@ -1,10 +1,10 @@
 /**
- * Aba "Meus Atendimentos" — histórico clínico do profissional logado.
+ * Aba "Meus Atendimentos" — histórico de alertas já atendidos/finalizados.
  *
  * O escopo por perfil vem do Supabase (RLS sobre attendance_confirmations):
  * Admin vê todos; Cirurgião Principal e Médico Associado só os atendimentos dos
- * pacientes das suas equipes. Aqui montamos o resumo, os filtros (cards rápidos,
- * busca e filtros avançados) e as ações leves (editar observação, resolver).
+ * pacientes das suas equipes. Esta tela lista apenas registros finalizados
+ * (ATTENDED ou IGNORED), sem ações de resolução.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -19,11 +19,10 @@ import {
   AttendanceErrorState,
   AttendanceFiltersSheet,
   AttendanceListSkeleton,
-  AttendanceQuickFilters,
   AttendanceSearchBar,
-  EMPTY_FILTERS,
+  AttendanceSummaryCards,
   EditAttendanceObservationModal,
-  ResolveAttendanceModal,
+  EMPTY_FILTERS,
   applyAttendanceFilters,
   applyQuickCard,
   countAdvancedFilters,
@@ -44,9 +43,8 @@ export function MyAttendancesPage() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selected, setSelected] = useState<AttendanceRow | null>(null);
   const [editTarget, setEditTarget] = useState<AttendanceRow | null>(null);
-  const [resolveTarget, setResolveTarget] = useState<AttendanceRow | null>(null);
 
-  // Só profissionais clínicos editam/resolvem; o Admin tem visão de leitura.
+  // Só profissionais clínicos editam observação; o Admin tem visão de leitura.
   const canEdit = permissionService.canAttendAlerts(user);
 
   const load = useCallback(async () => {
@@ -76,7 +74,10 @@ export function MyAttendancesPage() {
 
   const summary = useMemo(() => attendanceService.summarize(rows ?? []), [rows]);
   const advancedCount = useMemo(() => countAdvancedFilters(filters), [filters]);
-  const filtered = useMemo(() => sortAttendances(applyAttendanceFilters(rows ?? [], filters)), [rows, filters]);
+  const filtered = useMemo(
+    () => sortAttendances(applyAttendanceFilters(rows ?? [], filters)),
+    [rows, filters],
+  );
 
   const teamOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -94,7 +95,9 @@ export function MyAttendancesPage() {
     for (const r of rows ?? []) {
       if (r.patient) map.set(r.patient.id, r.patient.name);
     }
-    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([value, label]) => ({ value, label }));
+    return [...map.entries()]
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .map(([value, label]) => ({ value, label }));
   }, [rows]);
 
   const surgeryTypeOptions = useMemo(() => {
@@ -112,14 +115,6 @@ export function MyAttendancesPage() {
     await load();
   }
 
-  async function handleResolveConfirm(row: AttendanceRow, observation: string) {
-    await attendanceService.resolve(row, observation);
-    toast.success('Atendimento marcado como resolvido.');
-    setResolveTarget(null);
-    setSelected(null);
-    await load();
-  }
-
   if (!permissionService.canViewAlerts(user)) {
     return (
       <div className="p-8 max-w-2xl mx-auto">
@@ -128,17 +123,18 @@ export function MyAttendancesPage() {
     );
   }
 
-  const hasAdvancedOrSearch = advancedCount > 0 || filters.search.trim().length > 0 || filters.quick !== 'ALL';
+  const hasAdvancedOrSearch =
+    advancedCount > 0 || filters.search.trim().length > 0 || filters.quick !== 'ALL';
 
   return (
     <PageContainer>
       <PageHeader
         title="Meus Atendimentos"
-        subtitle="Histórico dos pacientes atendidos por você, com data, status clínico e medições relacionadas."
+        subtitle="Histórico de alertas já atendidos ou finalizados pela equipe médica."
       />
 
       {rows && !error && (
-        <AttendanceQuickFilters
+        <AttendanceSummaryCards
           summary={summary}
           active={filters.quick}
           onSelect={(key) => setFilters((f) => applyQuickCard(f, key))}
@@ -166,8 +162,8 @@ export function MyAttendancesPage() {
       ) : filtered.length === 0 ? (
         rows.length === 0 ? (
           <AttendanceEmptyState
-            title="Nenhum atendimento registrado"
-            hint="Quando você marcar um paciente como atendido ou resolver um alerta, o histórico aparecerá aqui."
+            title="Nenhum atendimento finalizado"
+            hint="Quando um alerta for atendido pela equipe médica, ele aparecerá neste histórico."
           />
         ) : (
           <AttendanceEmptyState
@@ -196,10 +192,12 @@ export function MyAttendancesPage() {
                 row={row}
                 canEdit={canEdit}
                 onDetails={() => setSelected(row)}
-                onFollow={() => { if (row.patient?.id) navigate(`/patients/${row.patient.id}`); }}
+                onFollow={() => {
+                  if (row.patient?.id) navigate(`/patients/${row.patient.id}`);
+                }}
                 onViewMeasurement={() => setSelected(row)}
+                onViewAlert={() => setSelected(row)}
                 onEditObservation={() => setEditTarget(row)}
-                onResolve={() => setResolveTarget(row)}
               />
             ))}
           </ul>
@@ -212,7 +210,6 @@ export function MyAttendancesPage() {
           canEdit={canEdit}
           onClose={() => setSelected(null)}
           onEditObservation={() => setEditTarget(selected)}
-          onResolve={() => setResolveTarget(selected)}
         />
       )}
 
@@ -221,14 +218,6 @@ export function MyAttendancesPage() {
           row={editTarget}
           onCancel={() => setEditTarget(null)}
           onConfirm={(observation) => handleEditConfirm(editTarget, observation)}
-        />
-      )}
-
-      {resolveTarget && (
-        <ResolveAttendanceModal
-          row={resolveTarget}
-          onCancel={() => setResolveTarget(null)}
-          onConfirm={(observation) => handleResolveConfirm(resolveTarget, observation)}
         />
       )}
 

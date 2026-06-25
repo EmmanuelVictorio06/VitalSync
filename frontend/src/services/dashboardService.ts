@@ -1,9 +1,5 @@
-/**
- * Agregações do painel a partir do Supabase (RLS aplica o escopo por equipe:
- * ADMIN vê tudo; cirurgião/associado, só a própria equipe).
- */
 import { supabase } from '../lib/supabase';
-import type { CriticalPatient, DashboardData, RecentAlert, WeeklyPoint } from '../lib/dashboard-data';
+import type { CriticalPatient, DashboardAdminKpis, DashboardData, RecentAlert, WeeklyPoint } from '../lib/dashboard-data';
 import type { ClinicalStatus } from './types';
 
 const WEEKDAY = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -25,24 +21,32 @@ function pickVital(v: Record<string, unknown>): { value: string; label: string }
   return { value: '—', label: 'Medição' };
 }
 
+/** Status de atendimento que exigem ação (não atendidos). */
+const UNATTENDED_STATUSES = ['PENDING', 'IN_ANALYSIS'] as const;
+
 export const dashboardService = {
   async getDashboard(): Promise<DashboardData> {
     const todayIso = new Date().toISOString().slice(0, 10);
     const since14 = new Date(Date.now() - 14 * 86_400_000).toISOString().slice(0, 10);
 
-    const [patientsRes, pendingRes, todayRes, alertsRes, weeklyRes] = await Promise.all([
+    const [patientsRes, pendingRes, todayRes, alertsRes, weeklyRes, teamsRes, doctorsRes, hospitalsRes, surgeryTypesRes] = await Promise.all([
       supabase
         .from('patients')
         .select('id, name, current_status, hospital_discharge_date, surgery_type:surgery_types(name)')
         .eq('status', 'ACTIVE'),
-      supabase.from('clinical_alerts').select('id', { count: 'exact', head: true }).eq('attended', false),
+      supabase.from('clinical_alerts').select('id, patient:patients(status)').eq('attended', false),
       supabase.from('vital_sign_records').select('id', { count: 'exact', head: true }).eq('record_date', todayIso),
       supabase
         .from('clinical_alerts')
-        .select('id, status, description, created_at, patient:patients(name)')
+        .select('id, status, description, created_at, patient:patients(name, status)')
+        .in('attendance_status', UNATTENDED_STATUSES)
         .order('created_at', { ascending: false })
         .limit(8),
       supabase.from('vital_sign_records').select('record_date').gte('record_date', since14),
+      supabase.from('medical_teams').select('id', { count: 'exact', head: true }).eq('status', 'ACTIVE'),
+      supabase.from('profiles').select('id', { count: 'exact', head: true }).in('role', ['MAIN_SURGEON', 'ASSOCIATED_DOCTOR']).eq('status', 'ACTIVE'),
+      supabase.from('hospitals').select('id', { count: 'exact', head: true }).eq('status', 'ACTIVE'),
+      supabase.from('surgery_types').select('id', { count: 'exact', head: true }).eq('status', 'ACTIVE'),
     ]);
 
     if (patientsRes.error) throw new Error(patientsRes.error.message);
@@ -56,16 +60,22 @@ export const dashboardService = {
     }>;
 
     const by = (s: ClinicalStatus) => patients.filter((p) => p.current_status === s).length;
+
+    // Conta alertas não atendidos apenas de pacientes ativos.
+    const pendingAlerts = ((pendingRes.data ?? []) as unknown as Array<{
+      patient: { status: string } | null;
+    }>).filter((a) => a.patient?.status === 'ACTIVE');
+
     const kpis = {
       monitoring: patients.length,
       stable: by('GREEN'),
       attention: by('YELLOW'),
       alert: by('RED'),
-      unattendedAlerts: pendingRes.count ?? 0,
+      unattendedAlerts: pendingAlerts.length,
       recordsToday: todayRes.count ?? 0,
     };
 
-    // Gráfico semanal + crescimento vs. semana anterior.
+    // Weekly chart with growth vs. previous week.
     const counts = new Map<string, number>();
     for (const r of (weeklyRes.data ?? []) as Array<{ record_date: string }>) {
       counts.set(r.record_date, (counts.get(r.record_date) ?? 0) + 1);
@@ -88,8 +98,15 @@ export const dashboardService = {
     }
     const pct = lastWeek === 0 ? (thisWeek > 0 ? 100 : 0) : Math.round(((thisWeek - lastWeek) / lastWeek) * 100);
 
-    // Lista crítica (não-verdes) + último sinal vital que destoa.
-    const criticalRows = patients.filter((p) => p.current_status !== 'GREEN').slice(0, 6);
+    // Critical list (non-GREEN) + most recent vital sign.
+    const criticalRows = patients
+      .filter((p) => p.current_status !== 'GREEN')
+      .sort((a, b) => {
+        if (a.current_status === 'RED' && b.current_status !== 'RED') return -1;
+        if (a.current_status !== 'RED' && b.current_status === 'RED') return 1;
+        return 0;
+      })
+      .slice(0, 6);
     const critIds = criticalRows.map((p) => p.id);
     let latestByPatient = new Map<string, Record<string, unknown>>();
     if (critIds.length) {
@@ -117,20 +134,30 @@ export const dashboardService = {
       };
     });
 
+    // Recent alerts (only unattended AND from active patients).
     const alerts: RecentAlert[] = ((alertsRes.data ?? []) as unknown as Array<{
       id: string;
       status: string;
       description: string;
       created_at: string;
-      patient: { name: string } | null;
-    }>).map((a) => ({
-      id: a.id,
-      patientName: a.patient?.name ?? '—',
-      description: a.description,
-      datetime: new Date(a.created_at).toLocaleString('pt-BR'),
-      severity: a.status === 'RED' ? 'RED' : 'YELLOW',
-    }));
+      patient: { name: string; status: string } | null;
+    }>)
+      .filter((a) => a.patient?.status === 'ACTIVE')
+      .map((a) => ({
+        id: a.id,
+        patientName: a.patient?.name ?? '—',
+        description: a.description,
+        datetime: new Date(a.created_at).toLocaleString('pt-BR'),
+        severity: a.status === 'RED' ? 'RED' : 'YELLOW',
+      }));
 
-    return { kpis, weeklyGrowth: `${pct >= 0 ? '+' : ''}${pct}%`, weekly, critical, alerts };
+    const admin: DashboardAdminKpis | undefined = {
+      totalTeams: teamsRes.count ?? 0,
+      totalDoctors: doctorsRes.count ?? 0,
+      totalHospitals: hospitalsRes.count ?? 0,
+      totalSurgeryTypes: surgeryTypesRes.count ?? 0,
+    };
+
+    return { kpis, weeklyGrowth: `${pct >= 0 ? '+' : ''}${pct}%`, weekly, critical, alerts, admin };
   },
 };
