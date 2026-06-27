@@ -58,8 +58,24 @@ export function App() {
             </PermissionGuard>
           }
         />
-        <Route path="/patients/:id" element={<PatientDashboardPage />} />
-        <Route path="/alerts" element={<AlertsPage />} />
+        {/* Detalhe clínico do paciente (com fotos) — não acessível ao Suporte */}
+        <Route
+          path="/patients/:id"
+          element={
+            <PermissionGuard roles={[Role.ADM, Role.SURGEON, Role.ASSOCIATE]}>
+              <PatientDashboardPage />
+            </PermissionGuard>
+          }
+        />
+        {/* Alertas clínicos — não acessível ao Suporte */}
+        <Route
+          path="/alerts"
+          element={
+            <PermissionGuard roles={[Role.ADM, Role.SURGEON, Role.ASSOCIATE]}>
+              <AlertsPage />
+            </PermissionGuard>
+          }
+        />
 
         {/* Gerenciar Usuários — exclusivo do Administrador */}
         <Route
@@ -123,7 +139,7 @@ export function App() {
         <Route
           path="/profile"
           element={
-            <PermissionGuard roles={[Role.ADM, Role.SURGEON, Role.ASSOCIATE]}>
+            <PermissionGuard roles={[Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.SUPPORT]}>
               <MyProfilePage />
             </PermissionGuard>
           }

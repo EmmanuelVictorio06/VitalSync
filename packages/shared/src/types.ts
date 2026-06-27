@@ -9,6 +9,7 @@ export const Role = {
   ADM: 'ADM',
   SURGEON: 'SURGEON', // Cirurgião responsável
   ASSOCIATE: 'ASSOCIATE', // Médico associado
+  SUPPORT: 'SUPPORT', // Suporte operacional (não clínico)
 } as const;
 export type Role = (typeof Role)[keyof typeof Role];
 
