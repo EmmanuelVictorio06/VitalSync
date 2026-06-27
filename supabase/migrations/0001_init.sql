@@ -7,6 +7,14 @@
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
+-- Extensões
+-- ----------------------------------------------------------------------------
+-- pgcrypto fornece gen_random_bytes() (usado no secure_token). No Supabase as
+-- extensões ficam no schema `extensions`, que NÃO está no search_path do
+-- db push — por isso a chamada é qualificada como extensions.gen_random_bytes().
+create extension if not exists pgcrypto with schema extensions;
+
+-- ----------------------------------------------------------------------------
 -- Enums
 -- ----------------------------------------------------------------------------
 do $$ begin
@@ -89,7 +97,7 @@ create table if not exists public.patients (
   hospital_discharge_date date,
   hospital_id            uuid references public.hospitals(id),
   team_id                uuid not null references public.medical_teams(id),
-  secure_token           text not null unique default encode(gen_random_bytes(24), 'hex'),
+  secure_token           text not null unique default encode(extensions.gen_random_bytes(24), 'hex'),
   status                 public.entity_status not null default 'ACTIVE',
   current_status         public.clinical_status not null default 'GREEN',
   created_at             timestamptz not null default now()
