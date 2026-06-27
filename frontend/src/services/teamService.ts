@@ -113,7 +113,7 @@ export const teamService = {
   /** Estatísticas de uma equipe (pacientes por status e alertas pendentes). */
   async getTeamStats(teamId: string): Promise<{ monitoring: number; stable: number; attention: number; alert: number; unattendedAlerts: number }> {
     const [patientsRes, alertsRes] = await Promise.all([
-      supabase.from('patients').select('current_status').eq('team_id', teamId).eq('status', 'ACTIVE'),
+      supabase.from('patients').select('current_status').eq('team_id', teamId).is('deleted_at', null),
       supabase.from('clinical_alerts').select('id', { count: 'exact', head: true }).eq('team_id', teamId).eq('attended', false),
     ]);
     const tp = (patientsRes.data ?? []) as Array<{ current_status: string }>;
@@ -132,7 +132,7 @@ export const teamService = {
     const [teamsRes, membersRes, patientsRes, alertsRes] = await Promise.all([
       supabase.from('medical_teams').select('id, status, main_surgeon_id'),
       supabase.from('team_members').select('doctor_id, role_in_team').eq('status', 'ACTIVE'),
-      supabase.from('patients').select('team_id').eq('status', 'ACTIVE'),
+      supabase.from('patients').select('team_id').is('deleted_at', null),
       supabase.from('clinical_alerts').select('team_id').eq('attended', false),
     ]);
     if (teamsRes.error) throw new Error(teamsRes.error.message);

@@ -118,7 +118,7 @@ export const teamViewService = {
         .from('medical_teams')
         .select('id, team_number, status, main_surgeon_id, surgeon:profiles!medical_teams_main_surgeon_id_fkey(name), members:team_members(status)')
         .order('team_number'),
-      supabase.from('patients').select('team_id, current_status').eq('status', 'ACTIVE'),
+      supabase.from('patients').select('team_id, current_status').is('deleted_at', null),
       supabase.from('clinical_alerts').select('team_id').eq('attended', false),
     ]);
     if (teamsRes.error) throw new Error(teamsRes.error.message);
@@ -174,7 +174,7 @@ export const teamViewService = {
         .from('patients')
         .select('id, name, current_status, surgery_date, hospital_discharge_date, surgery_type:surgery_types(name)')
         .eq('team_id', teamId)
-        .eq('status', 'ACTIVE'),
+        .is('deleted_at', null),
       supabase
         .from('clinical_alerts')
         .select('team_id, patient_id, type, status, created_at')

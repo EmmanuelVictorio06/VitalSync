@@ -33,7 +33,7 @@ export const dashboardService = {
       supabase
         .from('patients')
         .select('id, name, current_status, hospital_discharge_date, surgery_type:surgery_types(name)')
-        .eq('status', 'ACTIVE'),
+        .is('deleted_at', null),
       supabase.from('clinical_alerts').select('id, patient:patients(status)').eq('attended', false),
       supabase.from('vital_sign_records').select('id', { count: 'exact', head: true }).eq('record_date', todayIso),
       supabase
