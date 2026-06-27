@@ -18,6 +18,8 @@ import { PatientRegisterPage } from './pages/PatientRegisterPage';
 import { TeamsPage } from './pages/TeamsPage';
 import { UsersPage } from './pages/admin/UsersPage';
 import { VitalsRegisterPage } from './pages/VitalsRegisterPage';
+import { InviteRegisterPage } from './pages/InviteRegisterPage';
+import { InvitesPage } from './pages/InvitesPage';
 import { ExportsPage } from './pages/admin/ExportsPage';
 import { HospitalsPage } from './pages/admin/HospitalsPage';
 import { SettingsPage } from './pages/admin/SettingsPage';
@@ -36,6 +38,8 @@ export function App() {
           curto `/r/:token` é mantido para os links já enviados pelo WhatsApp. */}
       <Route path="/registro-sinais/:token" element={<VitalsRegisterPage />} />
       <Route path="/r/:token" element={<VitalsRegisterPage />} />
+      {/* Auto-cadastro do profissional por convite (público, sem login). */}
+      <Route path="/convite/:token" element={<InviteRegisterPage />} />
 
       {/* Internas (autenticadas) */}
       <Route
@@ -73,6 +77,16 @@ export function App() {
           element={
             <PermissionGuard roles={[Role.ADM, Role.SURGEON, Role.ASSOCIATE]}>
               <AlertsPage />
+            </PermissionGuard>
+          }
+        />
+
+        {/* Convidar Profissional — Administrador e Suporte */}
+        <Route
+          path="/invites"
+          element={
+            <PermissionGuard roles={[Role.ADM, Role.SUPPORT]}>
+              <InvitesPage />
             </PermissionGuard>
           }
         />
