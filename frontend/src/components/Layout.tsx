@@ -1,6 +1,6 @@
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { Heart, LogOut, Menu, Plus, Search, Stethoscope, X } from 'lucide-react';
+import { Heart, LogOut, Menu, Plus, Search, Stethoscope, User, X } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useRoleMenus, type NavItem } from './RoleBasedSidebar';
 import { HomologationBadge } from './HomologationBadge';
@@ -281,14 +281,19 @@ export function Layout() {
             );
           })}
           <li>
-            <button
-              onClick={() => setMenuOpen(true)}
-              className="w-full flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-semibold text-muted-foreground"
-              aria-label="Abrir menu"
+            <NavLink
+              to="/profile"
+              className={({ isActive }) =>
+                cn(
+                  'flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-semibold transition-colors',
+                  isActive ? 'text-primary' : 'text-muted-foreground',
+                )
+              }
+              aria-label="Meu Perfil"
             >
-              <Menu className="size-5" />
-              Menu
-            </button>
+              <User className="size-5" />
+              Perfil
+            </NavLink>
           </li>
         </ul>
       </nav>
