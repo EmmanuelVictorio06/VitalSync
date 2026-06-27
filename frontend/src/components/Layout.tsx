@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Heart, LogOut, Menu, Plus, Search, Stethoscope, X } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useRoleMenus, type NavItem } from './RoleBasedSidebar';
+import { HomologationBadge } from './HomologationBadge';
 import { canRegisterPatients } from '../lib/permissions';
 import { storageService } from '../services/storageService';
 import { initials } from './profile';
@@ -216,6 +217,8 @@ export function Layout() {
             <Menu className="size-5" />
           </button>
           <h1 className="text-base md:text-lg font-semibold tracking-tight truncate flex-1 min-w-0">{title}</h1>
+
+          <HomologationBadge />
 
           {showPatientActions && (
             <form

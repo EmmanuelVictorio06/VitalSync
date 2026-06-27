@@ -160,7 +160,7 @@ export const alertService = {
     const { count, error } = await supabase
       .from('notification_logs')
       .select('id', { count: 'exact', head: true })
-      .eq('status', 'failed');
+      .in('status', ['FAILED', 'failed']);
     if (error) return 0;
     return count ?? 0;
   },

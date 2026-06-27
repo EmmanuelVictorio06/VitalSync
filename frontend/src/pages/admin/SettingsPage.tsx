@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, Send, ShieldAlert, XCircle } from 'lucide-react';
+import { CheckCircle2, FlaskConical, Send, ShieldAlert, Trash2, XCircle } from 'lucide-react';
 import {
   ALERT_THRESHOLDS,
   BINARY_RULES,
@@ -18,6 +18,7 @@ import {
 } from '../../components/admin';
 import { Button, ConfirmModal, Field, PageContainer, SelectField, TextInput, cn } from '../../components/ui';
 import { settingsService } from '../../services/settingsService';
+import { homologationService, type HomologationStats } from '../../services/homologationService';
 import {
   AUDIT_ACTION_LABEL,
   type AuditAction,
@@ -28,12 +29,13 @@ import {
   type WhatsAppSettings,
 } from '../../lib/admin-types';
 
-type Tab = 'general' | 'clinical' | 'whatsapp' | 'security' | 'audit';
+type Tab = 'general' | 'clinical' | 'whatsapp' | 'homologation' | 'security' | 'audit';
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'general', label: 'Geral' },
   { id: 'clinical', label: 'Regras Clínicas' },
   { id: 'whatsapp', label: 'WhatsApp' },
+  { id: 'homologation', label: 'Homologação' },
   { id: 'security', label: 'Segurança' },
   { id: 'audit', label: 'Auditoria' },
 ];
@@ -67,6 +69,7 @@ export function SettingsPage() {
         {tab === 'general' && <GeneralTab />}
         {tab === 'clinical' && <ClinicalTab />}
         {tab === 'whatsapp' && <WhatsAppTab />}
+        {tab === 'homologation' && <HomologationTab />}
         {tab === 'security' && <SecurityTab />}
         {tab === 'audit' && <AuditTab />}
       </div>
@@ -415,6 +418,180 @@ function WhatsAppTab() {
           </Button>
         </div>
       </SettingsSection>
+    </div>
+  );
+}
+
+/* =====================================================================
+   ABA — HOMOLOGAÇÃO MÉDICA
+   Liga/desliga o modo de teste, gerencia a whitelist de números e permite
+   limpar com segurança os dados de teste antes da divulgação oficial.
+   ===================================================================== */
+function MetricCard({ label, value, tone }: { label: string; value: number; tone?: 'alert' | 'warning' | 'stable' }) {
+  const cls = tone === 'alert' ? 'text-alert' : tone === 'warning' ? 'text-warning' : tone === 'stable' ? 'text-stable' : 'text-foreground';
+  return (
+    <div className="bg-card border border-border rounded-xl shadow-sm p-4">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={cn('mt-1 text-2xl font-extrabold tabular-nums', cls)}>{value}</p>
+    </div>
+  );
+}
+
+function HomologationTab() {
+  const toast = useToast();
+  const [stats, setStats] = useState<HomologationStats | null>(null);
+  const [recipientsText, setRecipientsText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [savingNumbers, setSavingNumbers] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+
+  async function reload() {
+    try {
+      const [s, settings] = await Promise.all([homologationService.getStats(), homologationService.getSettings()]);
+      setStats(s);
+      setRecipientsText(settings.test_recipients.join('\n'));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao carregar dados de homologação.');
+    }
+  }
+
+  useEffect(() => {
+    void reload();
+  }, []);
+
+  if (!stats) return <LoadingState label="Carregando homologação…" />;
+
+  async function toggleMode(on: boolean) {
+    setBusy(true);
+    try {
+      await homologationService.setMode(on);
+      toast.success(on ? 'Modo de homologação ativado.' : 'Modo de homologação desativado.');
+      await reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao alterar o modo.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function parseRecipients(text: string): string[] {
+    return [...new Set(text.split(/[\n,;]/).map((s) => s.trim()).filter(Boolean))];
+  }
+
+  async function saveRecipients() {
+    setSavingNumbers(true);
+    try {
+      await homologationService.setRecipients(parseRecipients(recipientsText));
+      toast.success('Lista de números autorizados salva.');
+      await reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao salvar a lista.');
+    } finally {
+      setSavingNumbers(false);
+    }
+  }
+
+  async function clearData() {
+    setBusy(true);
+    try {
+      const res = await homologationService.clearTestData();
+      toast.success(`Dados de teste removidos: ${res.patients_deleted} paciente(s), ${res.logs_deleted} log(s).`);
+      setConfirming(false);
+      setConfirmText('');
+      await reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao limpar dados de teste.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-start gap-3 bg-warning/10 border border-warning/20 rounded-xl p-4 text-sm">
+        <FlaskConical className="size-5 text-warning shrink-0 mt-0.5" />
+        <div>
+          <p className="font-semibold">Ambiente de homologação médica (semana de testes).</p>
+          <p className="text-muted-foreground mt-1 text-xs">
+            Com o modo ativo, um aviso "Ambiente de teste" aparece no topo do sistema e o WhatsApp automático só é
+            enviado para os números autorizados abaixo. Demais destinatários são registrados como
+            <code className="font-mono"> SKIPPED_TEST_MODE</code> (alerta criado, sem envio real).
+          </p>
+        </div>
+      </div>
+
+      <SettingsSection title="Modo de homologação" description="Controla o badge de teste e o bloqueio de envios fora da whitelist.">
+        <div className="flex items-center gap-4">
+          <ToggleSwitch
+            checked={stats.homologation_mode}
+            onChange={(v) => void toggleMode(v)}
+            label={stats.homologation_mode ? 'Ativo' : 'Inativo'}
+          />
+          {stats.homologation_mode ? (
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-warning"><FlaskConical className="size-3.5" /> Em testes</span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground"><CheckCircle2 className="size-3.5" /> Produção</span>
+          )}
+        </div>
+      </SettingsSection>
+
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+        <MetricCard label="Pacientes de teste" value={stats.test_patients} />
+        <MetricCard label="Alertas de teste" value={stats.test_alerts} tone="warning" />
+        <MetricCard label="WhatsApps enviados" value={stats.whatsapp_sent} tone="stable" />
+        <MetricCard label="Falhas de envio" value={stats.whatsapp_failed} tone="alert" />
+        <MetricCard label="Bloqueados (fora da lista)" value={stats.whatsapp_skipped} />
+        <MetricCard label="Números autorizados" value={stats.authorized_numbers} />
+      </div>
+
+      <SettingsSection
+        title="Números autorizados para teste"
+        description="Um número por linha (com DDI/DDD, ex.: 5541999990000). Só estes recebem WhatsApp durante a homologação."
+      >
+        <Field label="Whitelist">
+          <textarea
+            className="input min-h-28 resize-y font-mono text-sm"
+            placeholder={'5541999990000\n5541888880000'}
+            value={recipientsText}
+            onChange={(e) => setRecipientsText(e.target.value)}
+          />
+        </Field>
+        <div className="flex justify-end">
+          <Button onClick={saveRecipients} loading={savingNumbers}>Salvar lista</Button>
+        </div>
+      </SettingsSection>
+
+      <SettingsSection
+        title="Limpeza dos dados de teste"
+        description="Antes da divulgação oficial, remove com segurança apenas os registros marcados como teste (pacientes fictícios e seus sinais, alertas, atendimentos e logs). Dados reais não são afetados."
+      >
+        <div className="flex justify-end">
+          <button
+            onClick={() => setConfirming(true)}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-alert/30 text-alert rounded-lg text-sm font-semibold hover:bg-alert/5"
+          >
+            <Trash2 className="size-4" /> Limpar dados de teste
+          </button>
+        </div>
+      </SettingsSection>
+
+      {confirming && (
+        <ConfirmModal
+          title="Limpar dados de teste?"
+          message={`Serão removidos ${stats.test_patients} paciente(s) de teste e seus registros associados. Esta ação não pode ser desfeita.`}
+          confirmLabel="Limpar dados"
+          requireText="LIMPAR"
+          busy={busy}
+          confirmInput={confirmText}
+          onConfirmInputChange={setConfirmText}
+          onCancel={() => {
+            setConfirming(false);
+            setConfirmText('');
+          }}
+          onConfirm={clearData}
+        />
+      )}
     </div>
   );
 }

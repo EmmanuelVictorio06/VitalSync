@@ -2,11 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Copy, MessageCircle, UserPlus } from 'lucide-react';
 import { calculateAge, whatsappLink } from '@vitalsync/shared';
 import { useToast } from '../components/Toast';
+import { ToggleSwitch } from '../components/admin';
 import { Button, Field, PageContainer, PageHeader, PhoneInput, SelectField, TextInput } from '../components/ui';
+import { featureFlags } from '../config/featureFlags';
 import { patientVitalsLink } from '../lib/publicUrl';
 import { hospitalService } from '../services/hospitalService';
 import { surgeryTypeService } from '../services/surgeryTypeService';
 import { teamService } from '../services/teamService';
+import { homologationService } from '../services/homologationService';
 import { patientService } from '../services/patientService';
 import type { Hospital, MedicalTeam, SurgeryType } from '../services/types';
 
@@ -19,14 +22,17 @@ interface FormState {
   dischargeDate: string;
   hospitalId: string;
   teamId: string;
+  isTest: boolean;
 }
 const empty: FormState = {
-  name: '', birthDate: '', phone: '', surgeryTypeId: '', surgeryDate: '', dischargeDate: '', hospitalId: '', teamId: '',
+  name: '', birthDate: '', phone: '', surgeryTypeId: '', surgeryDate: '', dischargeDate: '', hospitalId: '', teamId: '', isTest: false,
 };
 
 export function PatientRegisterPage() {
   const toast = useToast();
-  const [form, setForm] = useState<FormState>(empty);
+  // Em homologação, "Paciente de teste" já vem marcado (prevenção de erros).
+  const [homologation, setHomologation] = useState(featureFlags.defaultTestPatient);
+  const [form, setForm] = useState<FormState>({ ...empty, isTest: featureFlags.defaultTestPatient });
   const [surgeryTypes, setSurgeryTypes] = useState<SurgeryType[]>([]);
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [teams, setTeams] = useState<MedicalTeam[]>([]);
@@ -41,6 +47,19 @@ export function PatientRegisterPage() {
         setTeams(t);
       })
       .catch(() => toast.error('Erro ao carregar as listas de cadastro.'));
+  }, []);
+
+  // Modo de homologação ligado pelo Admin no banco (além do env): pré-marca o teste.
+  useEffect(() => {
+    if (featureFlags.defaultTestPatient) return;
+    homologationService
+      .isActive()
+      .then((active) => {
+        if (!active) return;
+        setHomologation(true);
+        setForm((p) => ({ ...p, isTest: true }));
+      })
+      .catch(() => {});
   }, []);
 
   const age = useMemo(() => {
@@ -65,6 +84,7 @@ export function PatientRegisterPage() {
         hospital_discharge_date: form.dischargeDate || undefined,
         hospital_id: form.hospitalId,
         team_id: form.teamId,
+        is_test: form.isTest,
       });
       // Link público do paciente: rota sem login, validada por token seguro.
       // Usa o domínio de produção (VITE_PUBLIC_APP_URL) para nunca gerar link de
@@ -72,7 +92,7 @@ export function PatientRegisterPage() {
       const link = patientVitalsLink(patient.secure_token);
       toast.success('Paciente cadastrado e link gerado!');
       setResult({ link, phone: form.phone, name: form.name });
-      setForm(empty);
+      setForm({ ...empty, isTest: homologation });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao cadastrar paciente.');
     } finally {
@@ -128,6 +148,20 @@ export function PatientRegisterPage() {
             options={teams.map((t) => ({ value: t.id, label: `Equipe ${String(t.team_number).padStart(2, '0')}` }))}
             required
           />
+
+          {(homologation || form.isTest) && (
+            <div className="mt-4 flex flex-col gap-2 rounded-lg border border-warning/30 bg-warning/5 p-4">
+              <ToggleSwitch
+                checked={form.isTest}
+                onChange={(v) => set('isTest', v)}
+                label="Paciente de teste (homologação)"
+              />
+              <p className="text-xs text-muted-foreground">
+                Pacientes de teste ficam marcados como fictícios e podem ser filtrados e removidos com segurança antes
+                da liberação oficial para pacientes reais.
+              </p>
+            </div>
+          )}
         </Block>
 
         <div className="flex justify-end">
