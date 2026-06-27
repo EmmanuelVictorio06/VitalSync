@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   AlertCircle,
@@ -9,6 +9,7 @@ import {
   Heart,
   HeartPulse,
   Moon,
+  ShieldCheck,
   Sun,
   Thermometer,
   Wind,
@@ -16,8 +17,10 @@ import {
 import { Period, calculateAge, formatCivilDate } from '@vitalsync/shared';
 import { useToast } from '../components/Toast';
 import { PatientPhotoUploadSection } from '../components/photo';
-import { Field, IntensityScale, Loading, YesNo, cn } from '../components/ui';
+import { Field, IntensityScale, YesNo, cn } from '../components/ui';
+import { formatCpf } from '../lib/cpfUtils';
 import { storageService } from '../services/storageService';
+import { publicAccessService } from '../services/publicAccessService';
 import { vitalSignsService, type PatientLinkInfo } from '../services/vitalSignsService';
 
 type Step = 'choose' | 'form' | 'success';
@@ -36,47 +39,15 @@ const INPUT_RANGES: InputRanges = {
   steps: { min: 0, max: 100000, example: '2000', unit: 'passos', PENDING_MEDICAL_VALIDATION: false },
 };
 
-/**
- * Traduz o erro de carregamento em mensagem amigável ao paciente — nunca
- * vaza erro técnico (ex.: "Failed to fetch") na tela pública.
- */
-function friendlyLoadError(err: unknown): string {
-  const msg = err instanceof Error ? err.message : '';
-  // Falha de rede/conexão (fetch): o paciente pode estar sem internet.
-  if (/failed to fetch|networkerror|fetch|load failed/i.test(msg)) {
-    return 'Não foi possível carregar suas informações. Verifique sua conexão e tente novamente.';
-  }
-  // Token inexistente/expirado (vindo da RPC) ou qualquer outro caso.
-  return msg || 'Link inválido ou não encontrado. Entre em contato com sua equipe médica.';
-}
-
 export function VitalsRegisterPage() {
   const { token } = useParams<{ token: string }>();
-  const toast = useToast();
   const [link, setLink] = useState<PatientLinkInfo | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<Step>('choose');
   const [period, setPeriod] = useState<Period>(Period.MORNING);
   const [photoSent, setPhotoSent] = useState(false);
 
-  useEffect(() => {
-    if (!token) return;
-    vitalSignsService
-      .getByToken(token)
-      .then(setLink)
-      .catch((err) => setError(friendlyLoadError(err)))
-      .finally(() => setLoading(false));
-  }, [token]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background grid place-items-center p-6">
-        <Loading label="Abrindo seu registro…" />
-      </div>
-    );
-  }
-  if (error || !link) {
+  // Token ausente na URL: link malformado.
+  if (!token) {
     return (
       <div className="min-h-screen bg-background grid place-items-center p-6">
         <div className="bg-card border border-border rounded-2xl shadow-sm p-8 w-full max-w-sm text-center animate-entry">
@@ -84,11 +55,16 @@ export function VitalsRegisterPage() {
             <AlertCircle className="size-7" />
           </div>
           <h2 className="text-lg font-extrabold tracking-tight">Link indisponível</h2>
-          <p className="text-sm text-muted-foreground mt-2">{error ?? 'Não foi possível abrir este link.'}</p>
+          <p className="text-sm text-muted-foreground mt-2">Não foi possível abrir este link.</p>
           <p className="text-xs text-muted-foreground mt-3">Solicite um novo link à sua equipe médica.</p>
         </div>
       </div>
     );
+  }
+
+  // Gate de identidade: só libera os dados após confirmar o CPF (server-side).
+  if (!link) {
+    return <CpfGate token={token} onValidated={setLink} />;
   }
 
   const p = {
@@ -191,6 +167,72 @@ export function VitalsRegisterPage() {
           />
         )}
       </main>
+    </div>
+  );
+}
+
+/**
+ * Gate de identidade: pede o CPF e valida no servidor antes de revelar
+ * qualquer dado do paciente. Erro sempre genérico (não revela existência).
+ */
+function CpfGate({ token, onValidated }: { token: string; onValidated: (info: PatientLinkInfo) => void }) {
+  const [cpf, setCpf] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function confirm() {
+    setBusy(true);
+    setError(null);
+    try {
+      const info = await publicAccessService.validate(token, cpf);
+      onValidated(info);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'CPF não confere com este link.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-background grid place-items-center p-6">
+      <div className="bg-card border border-border rounded-2xl shadow-sm p-8 w-full max-w-sm animate-entry">
+        <div className="size-14 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto mb-4">
+          <ShieldCheck className="size-7" />
+        </div>
+        <h2 className="text-lg font-extrabold tracking-tight text-center">Confirme sua identidade</h2>
+        <p className="text-sm text-muted-foreground mt-2 text-center">
+          Para sua segurança, digite seu CPF para acessar o registro de sinais vitais.
+        </p>
+
+        <form
+          className="mt-6 space-y-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!busy) void confirm();
+          }}
+        >
+          <input
+            value={cpf}
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="000.000.000-00"
+            onChange={(e) => setCpf(formatCpf(e.target.value))}
+            className="w-full bg-muted/60 border border-border rounded-xl px-4 py-3.5 text-lg font-semibold text-center tracking-wider focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+          />
+          {error && <p className="text-sm text-alert font-semibold text-center">{error}</p>}
+          <button
+            type="submit"
+            disabled={busy}
+            className="w-full py-3.5 bg-primary text-primary-foreground rounded-xl font-bold text-sm hover:bg-primary/90 shadow-lg shadow-primary/20 disabled:opacity-55"
+          >
+            {busy ? 'Validando…' : 'Acessar meu registro'}
+          </button>
+        </form>
+
+        <p className="text-xs text-muted-foreground mt-4 text-center">
+          Em caso de dúvida, entre em contato com sua equipe médica.
+        </p>
+      </div>
     </div>
   );
 }
