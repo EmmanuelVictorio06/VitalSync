@@ -125,6 +125,8 @@ export interface Patient {
   secure_token: string;
   status: EntityStatus;
   current_status: ClinicalStatus;
+  /** Paciente fictício cadastrado durante a homologação médica. */
+  is_test: boolean;
   created_at: string;
 }
 
@@ -173,21 +175,39 @@ export interface ClinicalAlert {
   updated_at: string | null;
 }
 
-/** Registro de notificação (WhatsApp simulado até existir provedor real). */
+/** Status de uma notificação de WhatsApp. Em homologação, números fora da
+ *  whitelist ficam SKIPPED_TEST_MODE. (Linhas antigas usam minúsculas.) */
+export type NotificationStatus =
+  | 'PENDING'
+  | 'SENT'
+  | 'DELIVERED'
+  | 'READ'
+  | 'FAILED'
+  | 'SKIPPED_TEST_MODE'
+  | 'logged'
+  | (string & {});
+
+/** Registro de notificação (WhatsApp via Meta Cloud API / Edge Function). */
 export interface NotificationLog {
   id: string;
   patient_id: string | null;
   alert_id: string | null;
   recipient_profile_id: string | null;
+  recipient_name: string | null;
   recipient_phone: string | null;
   channel: string;
-  status: string; // pending | sent | delivered | failed
+  status: NotificationStatus;
   message: string | null;
+  template_name: string | null;
+  /** 'production' ou 'homologation'. */
+  environment: string;
+  is_test: boolean;
   provider_message_id: string | null;
   error_message: string | null;
   created_at: string;
   sent_at: string | null;
   delivered_at: string | null;
+  read_at: string | null;
 }
 
 /** Evento de atendimento (linha do tempo do alerta). */

@@ -17,11 +17,18 @@ export interface NewPatientInput {
   hospital_discharge_date?: string;
   hospital_id: string;
   team_id: string;
+  /** Paciente fictício da homologação médica. */
+  is_test?: boolean;
 }
+
+/** Filtro de procedência: reais, de teste ou ambos. */
+export type PatientKind = 'all' | 'real' | 'test';
 
 export const patientService = {
   /** Lista pacientes visíveis ao usuário; filtros opcionais. */
-  async list(opts: { status?: ClinicalStatus; teamId?: string; search?: string } = {}): Promise<PatientWithNames[]> {
+  async list(
+    opts: { status?: ClinicalStatus; teamId?: string; search?: string; kind?: PatientKind } = {},
+  ): Promise<PatientWithNames[]> {
     let q = supabase
       .from('patients')
       .select('*, surgery_type:surgery_types(name), hospital:hospitals(name), medical_team:medical_teams(team_number)')
@@ -29,6 +36,8 @@ export const patientService = {
       .order('created_at', { ascending: false });
     if (opts.status) q = q.eq('current_status', opts.status);
     if (opts.teamId) q = q.eq('team_id', opts.teamId);
+    if (opts.kind === 'test') q = q.eq('is_test', true);
+    if (opts.kind === 'real') q = q.eq('is_test', false);
     if (opts.search) q = q.ilike('name', `%${opts.search}%`);
     const { data, error } = await q;
     if (error) throw new Error(error.message);

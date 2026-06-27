@@ -3,8 +3,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Calendar, Copy, Eye, MessageCircle, Search, Trash2, X } from 'lucide-react';
 import { ClinicalStatus, formatCivilDate, whatsappLink } from '@vitalsync/shared';
 import { useToast } from '../components/Toast';
+import { SegmentedFilter } from '../components/admin';
 import { ConfirmModal, PageContainer, PageHeader, StatusBadge, cn, statusBorder } from '../components/ui';
-import { patientService, type PatientWithNames } from '../services/patientService';
+import { homologationService } from '../services/homologationService';
+import { patientService, type PatientKind, type PatientWithNames } from '../services/patientService';
 
 const STATUS_OPTIONS: Array<{ value: '' | ClinicalStatus; label: string }> = [
   { value: '', label: 'Todos' },
@@ -51,22 +53,29 @@ export function MonitoringPage() {
   });
   const [toDelete, setToDelete] = useState<PatientWithNames | null>(null);
   const [confirmText, setConfirmText] = useState('');
+  const [kind, setKind] = useState<PatientKind>('all');
+  const [homologation, setHomologation] = useState(false);
   const team = searchParams.get('team') ?? '';
 
   const load = useCallback(async () => {
     setPatients(null);
     try {
-      const items = await patientService.list({ status: status || undefined, search: search || undefined });
+      const items = await patientService.list({ status: status || undefined, search: search || undefined, kind });
       setPatients(items);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao carregar pacientes.');
       setPatients([]);
     }
-  }, [search, status]);
+  }, [search, status, kind]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Filtro Reais/Teste só faz sentido durante a homologação — fica oculto fora dela.
+  useEffect(() => {
+    homologationService.isActive().then(setHomologation).catch(() => {});
+  }, []);
 
   // Filtro por equipe (vindo de "Minhas Equipes"/"Minha Equipe") — client-side.
   const visible = (patients ?? []).filter(
@@ -157,6 +166,17 @@ export function MonitoringPage() {
             className="bg-transparent outline-none flex-1 placeholder:text-muted-foreground"
           />
         </div>
+        {homologation && (
+          <SegmentedFilter
+            value={kind}
+            onChange={setKind}
+            options={[
+              { value: 'all', label: 'Todos' },
+              { value: 'real', label: 'Reais' },
+              { value: 'test', label: 'Teste' },
+            ]}
+          />
+        )}
         <div className="flex gap-1 bg-muted rounded-lg p-1 self-start lg:self-auto">
           {STATUS_OPTIONS.map((s) => (
               <button
@@ -239,6 +259,11 @@ function PatientCard({
         <div className="min-w-0 flex-1">
           <h3 className="font-bold text-base leading-tight truncate cursor-pointer hover:text-primary" onClick={onOpen}>
             {p.name}
+            {p.is_test && (
+              <span className="ml-2 inline-flex items-center rounded-full border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-warning align-middle">
+                Teste
+              </span>
+            )}
           </h3>
           <p className="text-xs text-muted-foreground mt-0.5 truncate">
             {p.surgery_type?.name ?? '—'}

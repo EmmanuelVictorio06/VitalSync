@@ -676,8 +676,13 @@ export function AlertTimeline({ alert, timeline, logs }: {
   const events = useMemo(() => {
     const out: Array<{ at: string; label: string }> = [];
     out.push({ at: alert.created_at, label: `Alerta gerado (${alert.status === 'RED' ? 'vermelho' : 'amarelo'})` });
-    const sent = (logs ?? []).filter((l) => l.sent_at).length;
-    if (sent > 0) out.push({ at: (logs ?? []).find((l) => l.sent_at)?.sent_at ?? alert.created_at, label: `WhatsApp enviado para a equipe (${sent})` });
+    // Só conta envios efetivos (ignora SKIPPED_TEST_MODE e pendentes).
+    const SENT_STATUSES = ['SENT', 'DELIVERED', 'READ', 'sent', 'delivered', 'logged'];
+    const delivered = (logs ?? []).filter((l) => l.sent_at && SENT_STATUSES.includes(l.status));
+    const firstSent = delivered[0];
+    if (firstSent) {
+      out.push({ at: firstSent.sent_at ?? alert.created_at, label: `WhatsApp enviado para a equipe (${delivered.length})` });
+    }
     for (const t of timeline ?? []) {
       const label = t.status === 'ATTENDED' ? 'Marcado como atendido'
         : t.status === 'IN_ANALYSIS' ? 'Marcado como em análise'
@@ -708,7 +713,16 @@ export function AlertTimeline({ alert, timeline, logs }: {
 
 /* ============================ Notification logs ============================ */
 
+// Aceita o vocabulário novo (maiúsculas, 0010) e o legado (minúsculas).
 const LOG_META: Record<string, { label: string; cls: string }> = {
+  PENDING: { label: 'Pendente', cls: 'text-warning' },
+  SENT: { label: 'Enviado', cls: 'text-primary' },
+  DELIVERED: { label: 'Entregue', cls: 'text-stable' },
+  READ: { label: 'Lido', cls: 'text-stable' },
+  FAILED: { label: 'Falhou', cls: 'text-alert' },
+  SKIPPED_TEST_MODE: { label: 'Bloqueado (teste)', cls: 'text-muted-foreground' },
+  // Legado / simulado.
+  logged: { label: 'Registrado', cls: 'text-primary' },
   sent: { label: 'Enviado', cls: 'text-primary' },
   delivered: { label: 'Entregue', cls: 'text-stable' },
   failed: { label: 'Falhou', cls: 'text-alert' },
@@ -728,7 +742,7 @@ export function AlertNotificationLogs({ logs }: { logs: NotificationLog[] | null
           <li key={l.id} className="flex items-center gap-3 text-xs border border-border rounded-lg p-2.5">
             <MessageCircle className={cn('size-4 shrink-0', meta.cls)} />
             <div className="flex-1 min-w-0">
-              <p className="font-semibold">{l.recipient_phone ?? 'Equipe médica'}</p>
+              <p className="font-semibold">{l.recipient_name ?? l.recipient_phone ?? 'Equipe médica'}</p>
               <p className="text-muted-foreground">{fmtDateTime(l.sent_at ?? l.created_at)}</p>
               {l.error_message && <p className="text-alert">{l.error_message}</p>}
             </div>

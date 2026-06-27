@@ -129,7 +129,11 @@ export type AuditAction =
   | 'PROFILE_UPDATE'
   | 'ACCOUNT_DEACTIVATION_REQUEST'
   | 'USER_CREATE'
-  | 'USER_ROLE_CHANGE';
+  | 'USER_ROLE_CHANGE'
+  | 'HOMOLOGATION_ON'
+  | 'HOMOLOGATION_OFF'
+  | 'HOMOLOGATION_RECIPIENTS'
+  | 'HOMOLOGATION_CLEAR';
 
 export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   LOGIN: 'Login',
@@ -147,6 +151,10 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   ACCOUNT_DEACTIVATION_REQUEST: 'Solicitação de desativação de conta',
   USER_CREATE: 'Cadastro de usuário',
   USER_ROLE_CHANGE: 'Alteração de papel de usuário',
+  HOMOLOGATION_ON: 'Homologação ativada',
+  HOMOLOGATION_OFF: 'Homologação desativada',
+  HOMOLOGATION_RECIPIENTS: 'Whitelist de homologação alterada',
+  HOMOLOGATION_CLEAR: 'Limpeza de dados de teste',
 };
 
 export interface AuditEvent {

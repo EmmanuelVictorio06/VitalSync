@@ -44,7 +44,7 @@ serve(async (req) => {
 
     const { data: patient, error: pErr } = await supabase
       .from('patients')
-      .select('id, team_id, status')
+      .select('id, team_id, status, is_test')
       .eq('secure_token', token)
       .single();
     if (pErr || !patient || patient.status !== 'ACTIVE') return json({ error: 'Link inválido' }, 404);
@@ -69,6 +69,7 @@ serve(async (req) => {
         steps: body.steps,
         wound_photo_path: body.wound_photo_path,
         clinical_status,
+        is_test: patient.is_test ?? false,
       })
       .select('id')
       .single();
@@ -82,6 +83,7 @@ serve(async (req) => {
         team_id: patient.team_id,
         vital_record_id: record.id,
         status: clinical_status,
+        is_test: patient.is_test ?? false,
         description:
           clinical_status === 'RED'
             ? 'Alerta vermelho: sinais vitais críticos.'
