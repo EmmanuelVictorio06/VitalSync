@@ -153,7 +153,7 @@ export const userService = {
 
     // contagem de pacientes ativos por equipe (uma query só)
     if (teamIds.size) {
-      const { data: patients } = await supabase.from('patients').select('team_id').eq('status', 'ACTIVE').in('team_id', [...teamIds]);
+      const { data: patients } = await supabase.from('patients').select('team_id').is('deleted_at', null).in('team_id', [...teamIds]);
       const counts = new Map<string, number>();
       for (const p of (patients ?? []) as Array<{ team_id: string }>) counts.set(p.team_id, (counts.get(p.team_id) ?? 0) + 1);
       for (const l of links) l.patientCount = counts.get(l.teamId) ?? 0;

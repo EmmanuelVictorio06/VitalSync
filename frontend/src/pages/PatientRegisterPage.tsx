@@ -6,6 +6,7 @@ import { ToggleSwitch } from '../components/admin';
 import { Button, Field, PageContainer, PageHeader, PhoneInput, SelectField, TextInput } from '../components/ui';
 import { featureFlags } from '../config/featureFlags';
 import { patientVitalsLink } from '../lib/publicUrl';
+import { formatCpf, validateCpf } from '../lib/cpfUtils';
 import { hospitalService } from '../services/hospitalService';
 import { surgeryTypeService } from '../services/surgeryTypeService';
 import { teamService } from '../services/teamService';
@@ -15,6 +16,7 @@ import type { Hospital, MedicalTeam, SurgeryType } from '../services/types';
 
 interface FormState {
   name: string;
+  cpf: string;
   birthDate: string;
   phone: string;
   surgeryTypeId: string;
@@ -25,7 +27,7 @@ interface FormState {
   isTest: boolean;
 }
 const empty: FormState = {
-  name: '', birthDate: '', phone: '', surgeryTypeId: '', surgeryDate: '', dischargeDate: '', hospitalId: '', teamId: '', isTest: false,
+  name: '', cpf: '', birthDate: '', phone: '', surgeryTypeId: '', surgeryDate: '', dischargeDate: '', hospitalId: '', teamId: '', isTest: false,
 };
 
 export function PatientRegisterPage() {
@@ -73,10 +75,15 @@ export function PatientRegisterPage() {
   }
 
   async function submit() {
+    if (!validateCpf(form.cpf)) {
+      toast.error('CPF inválido. Verifique os dígitos e tente novamente.');
+      return;
+    }
     setBusy(true);
     try {
       const patient = await patientService.create({
         name: form.name,
+        cpf: form.cpf,
         birth_date: form.birthDate || undefined,
         phone: form.phone || undefined,
         surgery_type_id: form.surgeryTypeId,
@@ -122,6 +129,15 @@ export function PatientRegisterPage() {
         <Block index={1} title="Identificação do Paciente">
           <div className="grid md:grid-cols-2 gap-4">
             <TextInput label="Nome do paciente" placeholder="Ex. Maria Aparecida" value={form.name} onChange={(e) => set('name', e.target.value)} required />
+            <TextInput
+              label="CPF"
+              hint="Usado para o paciente confirmar a identidade no link de medição."
+              placeholder="000.000.000-00"
+              inputMode="numeric"
+              value={form.cpf}
+              onChange={(e) => set('cpf', formatCpf(e.target.value))}
+              required
+            />
             <PhoneInput label="Telefone (WhatsApp)" value={form.phone} onChange={(v) => set('phone', v)} required />
             <TextInput label="Data de nascimento" type="date" value={form.birthDate} onChange={(e) => set('birthDate', e.target.value)} required />
             <Field label="Idade" hint="Calculada automaticamente.">

@@ -128,6 +128,10 @@ export interface Patient {
   /** Paciente fictício cadastrado durante a homologação médica. */
   is_test: boolean;
   created_at: string;
+  /** Exclusão lógica: nulo = ativo; preenchido = arquivado (some das telas). */
+  deleted_at: string | null;
+  deleted_by?: string | null;
+  updated_at?: string | null;
 }
 
 export interface VitalSignRecord {
