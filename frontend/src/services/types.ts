@@ -158,6 +158,22 @@ export interface VitalSignRecord {
   created_at: string;
 }
 
+/** Tipo da foto de acompanhamento. */
+export type PhotoType = 'SURGICAL_WOUND' | 'DRAIN';
+
+/** Foto de acompanhamento (cicatriz/dreno) — espelha public.measurement_photos. */
+export interface MeasurementPhoto {
+  id: string;
+  patient_id: string;
+  vital_record_id: string | null;
+  photo_type: PhotoType;
+  storage_path: string;
+  file_name: string | null;
+  mime_type: string | null;
+  file_size: number | null;
+  created_at: string;
+}
+
 /** Status do ATENDIMENTO do alerta (diferente do status clínico GREEN/YELLOW/RED). */
 export type AttendanceStatus = 'PENDING' | 'IN_ANALYSIS' | 'ATTENDED' | 'IGNORED';
 
