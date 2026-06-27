@@ -83,6 +83,13 @@ export const DASHBOARD_ROLE_CONFIG: Record<Role, DashboardRoleConfig> = {
     showAdminKpis: false,
     showSystemOverview: false,
   },
+  SUPPORT: {
+    subtitle: 'Acompanhamento operacional dos pacientes.',
+    sectionTitle: 'Pacientes',
+    monitoringLabel: 'Em monitoramento',
+    showAdminKpis: false,
+    showSystemOverview: false,
+  },
 };
 
 /** Painel real: busca dados agregados via backend. */

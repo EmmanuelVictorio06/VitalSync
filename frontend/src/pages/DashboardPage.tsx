@@ -98,6 +98,7 @@ export function DashboardPage() {
     [Role.ADM]: { subtitle: 'Visão geral de todas as equipes e pacientes do sistema.', sectionTitle: 'Visão Geral do Sistema' },
     [Role.SURGEON]: { subtitle: 'Visão geral dos pacientes monitorados pelas suas equipes.', sectionTitle: 'Resumo das Minhas Equipes' },
     [Role.ASSOCIATE]: { subtitle: 'Visão geral dos pacientes das equipes em que você participa.', sectionTitle: 'Resumo dos Meus Pacientes' },
+    [Role.SUPPORT]: { subtitle: 'Acompanhamento operacional dos pacientes.', sectionTitle: 'Pacientes' },
   }[user?.role ?? Role.ASSOCIATE];
 
   return (
