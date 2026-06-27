@@ -469,7 +469,7 @@ function MyTeamsProfileSection() {
                 </button>
                 {isSurgeon && t.myRole === 'MAIN_SURGEON' && (
                   <Link to="/my-team" className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-primary/30 text-primary rounded-md text-xs font-semibold hover:bg-accent">
-                    <Users className="size-3.5" /> Minha Equipe
+                    <Users className="size-3.5" /> Minhas Equipes
                   </Link>
                 )}
               </div>

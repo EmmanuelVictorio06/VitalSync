@@ -32,12 +32,55 @@ export interface TeamMemberView {
   isSurgeon: boolean;
 }
 
+export interface TeamPatientAlert {
+  /** Sinal que disparou (Temperatura, Saturação, Dor…) — "principal alteração". */
+  type: string | null;
+  status: ClinicalStatus;
+  createdAt: string;
+}
+
 export interface TeamPatientView {
   id: string;
   name: string;
   surgeryType: string;
+  surgeryDate: string | null;
   dischargeDate: string | null;
   status: ClinicalStatus;
+  /** Há alerta clínico ainda não atendido (Pendente/Em análise). */
+  hasUnattendedAlert: boolean;
+  /** Alerta não atendido mais recente — alimenta a "principal alteração". */
+  lastAlert: TeamPatientAlert | null;
+}
+
+const STATUS_PRIORITY: Record<ClinicalStatus, number> = { RED: 0, YELLOW: 1, GREEN: 2 };
+
+/**
+ * Ordena pacientes por prioridade clínica: vermelho → amarelo → verde; depois,
+ * quem tem alerta não atendido; depois, alerta mais recente primeiro.
+ */
+export function byClinicalPriority(a: TeamPatientView, b: TeamPatientView): number {
+  const w = STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status];
+  if (w !== 0) return w;
+  if (a.hasUnattendedAlert !== b.hasUnattendedAlert) return a.hasUnattendedAlert ? -1 : 1;
+  return (b.lastAlert?.createdAt ?? '').localeCompare(a.lastAlert?.createdAt ?? '');
+}
+
+/** Pacientes que exigem atenção: em alerta, em atenção ou com alerta não atendido. */
+export function getPriorityPatients(patients: TeamPatientView[]): TeamPatientView[] {
+  return patients
+    .filter((p) => p.status === 'RED' || p.status === 'YELLOW' || p.hasUnattendedAlert)
+    .sort(byClinicalPriority);
+}
+
+/** Dia pós-operatório (D+N) a partir da data da cirurgia. Null se inválido/futuro. */
+export function postOpDay(surgeryDate: string | null): number | null {
+  if (!surgeryDate) return null;
+  const surgery = new Date(`${surgeryDate.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(surgery.getTime())) return null;
+  const today = new Date();
+  const t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const days = Math.floor((t.getTime() - surgery.getTime()) / 86_400_000);
+  return days >= 0 ? days : null;
 }
 
 export interface TeamDetail {
@@ -129,19 +172,33 @@ export const teamViewService = {
     const [patientsRes, alertsRes] = await Promise.all([
       supabase
         .from('patients')
-        .select('id, name, current_status, hospital_discharge_date, surgery_type:surgery_types(name)')
+        .select('id, name, current_status, surgery_date, hospital_discharge_date, surgery_type:surgery_types(name)')
         .eq('team_id', teamId)
         .eq('status', 'ACTIVE'),
-      supabase.from('clinical_alerts').select('team_id').eq('attended', false).eq('team_id', teamId),
+      supabase
+        .from('clinical_alerts')
+        .select('team_id, patient_id, type, status, created_at')
+        .eq('attended', false)
+        .eq('team_id', teamId)
+        .order('created_at', { ascending: false }),
     ]);
 
     const patientsRaw = (patientsRes.data ?? []) as unknown as Array<{
       id: string;
       name: string;
       current_status: ClinicalStatus;
+      surgery_date: string | null;
       hospital_discharge_date: string | null;
       surgery_type: { name: string } | null;
     }>;
+
+    // Alerta não atendido mais recente por paciente (lista já vem ordenada desc).
+    const alertsByPatient = new Map<string, TeamPatientAlert>();
+    for (const a of (alertsRes.data ?? []) as Array<{ patient_id: string; type: string | null; status: ClinicalStatus; created_at: string }>) {
+      if (!alertsByPatient.has(a.patient_id)) {
+        alertsByPatient.set(a.patient_id, { type: a.type, status: a.status, createdAt: a.created_at });
+      }
+    }
 
     const members: TeamMemberView[] = [];
     if (t.surgeon) {
@@ -155,8 +212,11 @@ export const teamViewService = {
       id: p.id,
       name: p.name,
       surgeryType: p.surgery_type?.name ?? '—',
+      surgeryDate: p.surgery_date,
       dischargeDate: p.hospital_discharge_date,
       status: p.current_status,
+      hasUnattendedAlert: alertsByPatient.has(p.id),
+      lastAlert: alertsByPatient.get(p.id) ?? null,
     }));
 
     const activeMembers = t.members.filter((m) => m.status === 'ACTIVE').length;
@@ -185,5 +245,36 @@ export const teamViewService = {
     const { data: team } = await supabase.from('medical_teams').select('id').eq('main_surgeon_id', uid).limit(1).maybeSingle();
     if (!team) return null;
     return this.getTeamDetail((team as { id: string }).id);
+  },
+
+  /** Todas as equipes em que o cirurgião logado é o responsável. */
+  async getMyMainTeams(): Promise<TeamDetail[]> {
+    const { data: u } = await supabase.auth.getUser();
+    const uid = u.user?.id;
+    if (!uid) return [];
+    const { data: teams, error } = await supabase
+      .from('medical_teams')
+      .select('id')
+      .eq('main_surgeon_id', uid)
+      .order('team_number');
+    if (error) throw new Error(error.message);
+    const ids = ((teams ?? []) as Array<{ id: string }>).map((t) => t.id);
+    return Promise.all(ids.map((id) => this.getTeamDetail(id)));
+  },
+
+  /** Todas as equipes em que o médico logado participa como associado. */
+  async getMyAssociatedTeams(): Promise<TeamDetail[]> {
+    const { data: u } = await supabase.auth.getUser();
+    const uid = u.user?.id;
+    if (!uid) return [];
+    const { data, error } = await supabase
+      .from('team_members')
+      .select('team_id')
+      .eq('doctor_id', uid)
+      .eq('status', 'ACTIVE');
+    if (error) throw new Error(error.message);
+    const ids = [...new Set(((data ?? []) as Array<{ team_id: string }>).map((r) => r.team_id))];
+    const details = await Promise.all(ids.map((id) => this.getTeamDetail(id)));
+    return details.sort((a, b) => a.summary.number - b.summary.number);
   },
 };

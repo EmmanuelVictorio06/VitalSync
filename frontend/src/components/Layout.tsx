@@ -24,7 +24,7 @@ const PAGE_TITLES: Array<{ match: (path: string) => boolean; title: string }> = 
   { match: (p) => p.startsWith('/admin/teams'), title: 'Gerenciar Equipes' },
   { match: (p) => p.startsWith('/teams'), title: 'Gerenciar Equipes' },
   { match: (p) => p.startsWith('/my-teams'), title: 'Minhas Equipes' },
-  { match: (p) => p.startsWith('/my-team'), title: 'Minha Equipe' },
+  { match: (p) => p.startsWith('/my-team'), title: 'Minhas Equipes' },
   { match: (p) => p.startsWith('/alerts'), title: 'Alertas' },
   { match: (p) => p.startsWith('/my-care'), title: 'Meus Atendimentos' },
   { match: (p) => p.startsWith('/profile'), title: 'Meu Perfil' },
