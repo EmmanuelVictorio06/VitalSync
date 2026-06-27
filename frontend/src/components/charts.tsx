@@ -52,7 +52,7 @@ function ChartCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-card border border-border rounded-xl shadow-sm p-4 flex flex-col">
+    <div className="bg-card border border-border rounded-xl shadow-sm p-4 flex flex-col min-w-0">
       <div className="flex items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-2 min-w-0">
           {Icon && (
