@@ -23,7 +23,7 @@ oficiais.
 Rode no **SQL Editor** do Supabase, após `0001..0009`:
 
 ```
-supabase/migrations/0010_homologation.sql
+supabase/migrations/0018_homologation.sql
 ```
 
 É aditivo e idempotente (não apaga dados).
