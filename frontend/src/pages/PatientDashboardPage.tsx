@@ -9,6 +9,7 @@ import {
   Gauge,
   HeartPulse,
   MessageCircle,
+  Pencil,
   Thermometer,
   Wind,
 } from 'lucide-react';
@@ -21,6 +22,8 @@ import {
   whatsappLink,
   type VitalThreshold,
 } from '@vitalsync/shared';
+import { useAuth } from '../auth/AuthContext';
+import { PatientEditModal } from '../components/PatientEditModal';
 import { useToast } from '../components/Toast';
 import {
   BloodPressureChart,
@@ -33,6 +36,7 @@ import {
 import { PatientMeasurementPhotoSection } from '../components/photo';
 import { Button, Loading, PageContainer, StatusBadge, cn, statusBorder } from '../components/ui';
 import { patientDashboardService } from '../services/patientDashboardService';
+import { permissionService } from '../services/permissionService';
 import type { PatientDashboard, VitalRecord } from '../lib/dto';
 
 type PeriodFilter = 'MORNING' | 'NIGHT' | 'BOTH';
@@ -46,12 +50,16 @@ const PERIOD_OPTIONS: Array<{ value: PeriodFilter; label: string }> = [
 
 export function PatientDashboardPage() {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
   const toast = useToast();
   const [data, setData] = useState<PatientDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<PeriodFilter>('BOTH');
   const [attendant, setAttendant] = useState('');
   const [marking, setMarking] = useState(false);
+  const [editing, setEditing] = useState(false);
+
+  const canEditPatient = permissionService.isAdmin(user);
 
   async function load() {
     if (!id) return;
@@ -196,6 +204,11 @@ export function PatientDashboardPage() {
             </dl>
           </div>
           <div className="flex flex-col gap-2 lg:items-end lg:min-w-64">
+            {canEditPatient && (
+              <Button variant="secondary" onClick={() => setEditing(true)} className="w-full lg:w-auto">
+                <Pencil className="size-4" /> Editar paciente
+              </Button>
+            )}
             <Button
               variant="whatsapp"
               onClick={() => window.open(whatsappLink(p.phone, `Olá, ${p.name}! Aqui é da sua equipe médica.`), '_blank')}
@@ -303,6 +316,17 @@ export function PatientDashboardPage() {
           {/* Foto da ferida operatória ou do dreno (período selecionado) */}
           <PatientMeasurementPhotoSection records={periodRecords} />
         </>
+      )}
+
+      {editing && id && (
+        <PatientEditModal
+          patientId={id}
+          onClose={() => setEditing(false)}
+          onSaved={async () => {
+            setEditing(false);
+            await load();
+          }}
+        />
       )}
     </PageContainer>
   );

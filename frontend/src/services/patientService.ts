@@ -1,6 +1,6 @@
 /** Pacientes (RLS aplica o escopo por equipe). */
 import { supabase } from '../lib/supabase';
-import { patientSecurityService } from './patientSecurityService';
+import { patientSecurityService, type SecurePatientUpdate } from './patientSecurityService';
 import type { ClinicalStatus, Patient } from './types';
 
 export interface PatientWithNames extends Patient {
@@ -78,6 +78,16 @@ export const patientService = {
    */
   async create(input: NewPatientInput): Promise<Patient> {
     return patientSecurityService.createWithCpf(input);
+  },
+
+  /**
+   * Atualiza dados de um paciente (ADMIN ou cirurgião responsável da equipe
+   * atual). O CPF é opcional — vazio preserva o atual; preenchido é re-hasheado
+   * na Edge Function `update-patient` (service_role + segredos), nunca no
+   * frontend. A troca de equipe é permitida só ao ADMIN (revalidada no servidor).
+   */
+  async update(input: SecurePatientUpdate): Promise<Patient> {
+    return patientSecurityService.updateWithCpf(input);
   },
 
   /** Exclusão lógica: marca deleted_at/deleted_by e silencia alertas pendentes. */
