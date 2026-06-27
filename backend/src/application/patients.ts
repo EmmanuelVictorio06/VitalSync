@@ -25,7 +25,7 @@ import type { AuditLogger, LinkTokenService, PhotoStorageService } from './ports
 
 /** Somente ADM e médicos cadastrados acessam os menus de pacientes. */
 function assertCanAccessPatients(user: AuthenticatedUser): void {
-  if ([Role.ADM, Role.SURGEON, Role.ASSOCIATE].includes(user.role)) return;
+  if (([Role.ADM, Role.SURGEON, Role.ASSOCIATE] as Role[]).includes(user.role)) return;
   throw new ForbiddenError('Acesso restrito a profissionais cadastrados.');
 }
 

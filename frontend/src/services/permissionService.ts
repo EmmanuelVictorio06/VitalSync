@@ -15,6 +15,11 @@ export const permissionService = {
     return user?.role === Role.ADM;
   },
 
+  /** Perfil de Suporte (operacional, não clínico). */
+  isSupport(user: AuthUser | null | undefined): boolean {
+    return user?.role === Role.SUPPORT;
+  },
+
   /** Pode gerenciar equipes (criar/editar/inativar/excluir) — só Admin. */
   canManageTeams(user: AuthUser | null | undefined): boolean {
     return canManageTeamsByRole(user?.role);
@@ -25,7 +30,7 @@ export const permissionService = {
    * cirurgião e associado). O paciente não tem login — não chega aqui.
    */
   canAccessMyProfile(user: AuthUser | null | undefined): boolean {
-    return !!user && [Role.ADM, Role.SURGEON, Role.ASSOCIATE].includes(user.role);
+    return !!user && [Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.SUPPORT].includes(user.role);
   },
 
   /** Pode editar o próprio perfil (mesma regra do acesso). */
@@ -62,7 +67,7 @@ export const permissionService = {
 
   /** Ver a aba Alertas: Admin, Cirurgião Principal e Médico Associado. */
   canViewAlerts(user: AuthUser | null | undefined): boolean {
-    return !!user && [Role.ADM, Role.SURGEON, Role.ASSOCIATE].includes(user.role);
+    return !!user && ([Role.ADM, Role.SURGEON, Role.ASSOCIATE] as Role[]).includes(user.role);
   },
 
   /**

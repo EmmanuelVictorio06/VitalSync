@@ -89,6 +89,17 @@ export function useRoleMenus(): { main: NavItem[]; admin: NavItem[] } {
     };
   }
 
+  // Suporte: perfil operacional (não clínico) — pacientes e perfil.
+  if (hasRole(Role.SUPPORT)) {
+    return {
+      main: [
+        { to: '/monitoring', label: 'Pacientes em Monitoramento', short: 'Pacientes', icon: Activity },
+        { to: '/profile', label: 'Meu Perfil', short: 'Perfil', icon: User },
+      ],
+      admin: [],
+    };
+  }
+
   // Médico Associado: somente visualização das equipes em que participa.
   return {
     main: [
