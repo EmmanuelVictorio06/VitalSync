@@ -96,7 +96,7 @@ export function DashboardPage() {
   // Configuração de cabeçalho e subtítulo por perfil.
   const profileLabel = {
     [Role.ADM]: { subtitle: 'Visão geral de todas as equipes e pacientes do sistema.', sectionTitle: 'Visão Geral do Sistema' },
-    [Role.SURGEON]: { subtitle: 'Visão geral dos pacientes monitorados pelas suas equipes.', sectionTitle: 'Resumo da Minha Equipe' },
+    [Role.SURGEON]: { subtitle: 'Visão geral dos pacientes monitorados pelas suas equipes.', sectionTitle: 'Resumo das Minhas Equipes' },
     [Role.ASSOCIATE]: { subtitle: 'Visão geral dos pacientes das equipes em que você participa.', sectionTitle: 'Resumo dos Meus Pacientes' },
   }[user?.role ?? Role.ASSOCIATE];
 

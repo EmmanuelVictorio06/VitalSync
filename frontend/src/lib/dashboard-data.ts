@@ -71,7 +71,7 @@ export const DASHBOARD_ROLE_CONFIG: Record<Role, DashboardRoleConfig> = {
   },
   SURGEON: {
     subtitle: 'Visão geral dos pacientes monitorados pelas suas equipes.',
-    sectionTitle: 'Resumo da Minha Equipe',
+    sectionTitle: 'Resumo das Minhas Equipes',
     monitoringLabel: 'Minha equipe',
     showAdminKpis: false,
     showSystemOverview: false,
