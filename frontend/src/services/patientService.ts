@@ -35,15 +35,21 @@ const PATIENT_COLUMNS =
   'medical_team:medical_teams(team_number)';
 
 export const patientService = {
-  /** Lista pacientes visíveis ao usuário (exclui excluídos); filtros opcionais. */
+  /**
+   * Lista pacientes visíveis ao usuário (exclui excluídos por padrão).
+   * `includeDeleted` traz também os arquivados — uso restrito (Admin, RLS revalida).
+   */
   async list(
-    opts: { status?: ClinicalStatus; teamId?: string; search?: string; kind?: PatientKind } = {},
+    opts: {
+      status?: ClinicalStatus;
+      teamId?: string;
+      search?: string;
+      kind?: PatientKind;
+      includeDeleted?: boolean;
+    } = {},
   ): Promise<PatientWithNames[]> {
-    let q = supabase
-      .from('patients')
-      .select(PATIENT_COLUMNS)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false });
+    let q = supabase.from('patients').select(PATIENT_COLUMNS).order('created_at', { ascending: false });
+    if (!opts.includeDeleted) q = q.is('deleted_at', null);
     if (opts.status) q = q.eq('current_status', opts.status);
     if (opts.teamId) q = q.eq('team_id', opts.teamId);
     if (opts.kind === 'test') q = q.eq('is_test', true);

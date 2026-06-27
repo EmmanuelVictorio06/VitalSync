@@ -24,3 +24,8 @@ export function publicAppBaseUrl(): string {
 export function patientVitalsLink(secureToken: string): string {
   return `${publicAppBaseUrl()}/registro-sinais/${secureToken}`;
 }
+
+/** Link público (sem login) de auto-cadastro do profissional por convite. */
+export function professionalInviteLink(token: string): string {
+  return `${publicAppBaseUrl()}/convite/${token}`;
+}
