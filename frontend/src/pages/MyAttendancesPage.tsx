@@ -7,7 +7,6 @@
  * (ATTENDED ou IGNORED), sem ações de resolução.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
 import { Button, PageContainer, PageHeader } from '../components/ui';
@@ -35,7 +34,6 @@ import { permissionService } from '../services/permissionService';
 export function MyAttendancesPage() {
   const { user } = useAuth();
   const toast = useToast();
-  const navigate = useNavigate();
 
   const [rows, setRows] = useState<AttendanceRow[] | null>(null);
   const [error, setError] = useState(false);
@@ -187,18 +185,7 @@ export function MyAttendancesPage() {
           </div>
           <ul className="space-y-3">
             {filtered.map((row) => (
-              <AttendanceCard
-                key={row.id}
-                row={row}
-                canEdit={canEdit}
-                onDetails={() => setSelected(row)}
-                onFollow={() => {
-                  if (row.patient?.id) navigate(`/patients/${row.patient.id}`);
-                }}
-                onViewMeasurement={() => setSelected(row)}
-                onViewAlert={() => setSelected(row)}
-                onEditObservation={() => setEditTarget(row)}
-              />
+              <AttendanceCard key={row.id} row={row} onDetails={() => setSelected(row)} />
             ))}
           </ul>
         </>
