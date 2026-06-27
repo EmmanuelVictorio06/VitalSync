@@ -1,8 +1,12 @@
 -- ============================================================================
 -- VitalSync — Modo de Homologação Médica (semana de testes com médicos)
 --
--- ADITIVO e IDEMPOTENTE. Rode no SQL Editor DEPOIS de 0001..0009.
--- Não apaga dados.
+-- ADITIVO e IDEMPOTENTE. Não apaga dados.
+--
+-- NOTA: este arquivo era 0010_homologation.sql, mas havia DOIS arquivos com o
+-- prefixo 0010 (junto de 0010_alert_attendance_guard.sql), o que quebra o
+-- `supabase db push` (colisão de versão em schema_migrations). Foi renomeado
+-- para 0018 para ter uma versão única. O conteúdo permanece idempotente.
 --
 -- Objetivo: permitir simular o uso real (pacientes fictícios, sinais vitais,
 -- alertas, WhatsApp) sem disparar mensagens para números indevidos nem poluir
