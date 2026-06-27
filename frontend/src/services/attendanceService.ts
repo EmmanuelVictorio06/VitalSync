@@ -4,8 +4,7 @@
  * FONTE DE DADOS: `attendance_confirmations`. Toda ação clínica já registra uma
  * linha nessa tabela:
  *  - Alertas (RPCs do 0008): IN_ANALYSIS / ATTENDED / IGNORED, com `alert_id`.
- *  - Acompanhamento Individual ("Atendido por"): linha SEM `alert_id`
- *    (patientDashboardService.markAttended), tratada como acompanhamento manual.
+ *  - Registros antigos sem `alert_id` continuam como acompanhamento manual.
  *
  * ESCOPO POR PERFIL: garantido pelo SUPABASE (RLS `attendance_rw`):
  *   is_admin() OR is_team_member(patient.team_id). Admin vê tudo; cirurgião e
