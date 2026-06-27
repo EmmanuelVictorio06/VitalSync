@@ -26,6 +26,7 @@ const ROLE_MAP: Record<UserRole, Role> = {
   ADMIN: Role.ADM,
   MAIN_SURGEON: Role.SURGEON,
   ASSOCIATED_DOCTOR: Role.ASSOCIATE,
+  SUPPORT: Role.SUPPORT,
 };
 
 function toAuthUser(profile: Profile): AuthUser {

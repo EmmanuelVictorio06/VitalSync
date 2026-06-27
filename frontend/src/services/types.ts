@@ -1,6 +1,6 @@
 /** Tipos das linhas das tabelas do Supabase (camada de serviços). */
 
-export type UserRole = 'ADMIN' | 'MAIN_SURGEON' | 'ASSOCIATED_DOCTOR';
+export type UserRole = 'ADMIN' | 'MAIN_SURGEON' | 'ASSOCIATED_DOCTOR' | 'SUPPORT';
 export type RoleInTeam = 'MAIN_SURGEON' | 'ASSOCIATED_DOCTOR';
 export type EntityStatus = 'ACTIVE' | 'INACTIVE';
 export type MeasurementPeriod = 'MORNING' | 'NIGHT';
@@ -155,6 +155,22 @@ export interface VitalSignRecord {
   has_drain: boolean | null;
   drain_photo_path: string | null;
   clinical_status: ClinicalStatus;
+  created_at: string;
+}
+
+/** Tipo da foto de acompanhamento. */
+export type PhotoType = 'SURGICAL_WOUND' | 'DRAIN';
+
+/** Foto de acompanhamento (cicatriz/dreno) — espelha public.measurement_photos. */
+export interface MeasurementPhoto {
+  id: string;
+  patient_id: string;
+  vital_record_id: string | null;
+  photo_type: PhotoType;
+  storage_path: string;
+  file_name: string | null;
+  mime_type: string | null;
+  file_size: number | null;
   created_at: string;
 }
 

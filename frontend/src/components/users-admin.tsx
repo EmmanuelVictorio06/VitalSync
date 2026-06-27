@@ -25,6 +25,7 @@ export const ROLE_META: Record<UserRole, { label: string; badge: string; dot: st
   ADMIN: { label: 'Administrador', badge: 'bg-primary/10 text-primary border-primary/20', dot: 'bg-primary' },
   MAIN_SURGEON: { label: 'Cirurgião Principal', badge: 'bg-stable/10 text-stable border-stable/20', dot: 'bg-stable' },
   ASSOCIATED_DOCTOR: { label: 'Médico Associado', badge: 'bg-muted text-muted-foreground border-border', dot: 'bg-muted-foreground' },
+  SUPPORT: { label: 'Suporte', badge: 'bg-warning/10 text-warning border-warning/20', dot: 'bg-warning' },
 };
 
 /** Opções de papel para selects/segmentos (sem PACIENTE — não tem login aqui). */
@@ -32,6 +33,7 @@ export const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
   { value: 'ADMIN', label: 'Administrador' },
   { value: 'MAIN_SURGEON', label: 'Cirurgião Principal' },
   { value: 'ASSOCIATED_DOCTOR', label: 'Médico Associado' },
+  { value: 'SUPPORT', label: 'Suporte' },
 ];
 
 /* ---------------- Badge de papel ---------------- */
@@ -373,7 +375,7 @@ export function UserAdvancedFilters({ value, onApply, onClose }: {
 
         <div className="p-5 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FilterSelect label="Perfil do usuário" value={draft.role} onChange={(v) => set('role', v as UserRoleFilter)}
-            options={[{ value: 'ALL', label: 'Todos' }, { value: 'ADMIN', label: 'Administrador' }, { value: 'MAIN_SURGEON', label: 'Cirurgião Principal' }, { value: 'ASSOCIATED_DOCTOR', label: 'Médico Associado' }]} />
+            options={[{ value: 'ALL', label: 'Todos' }, { value: 'ADMIN', label: 'Administrador' }, { value: 'MAIN_SURGEON', label: 'Cirurgião Principal' }, { value: 'ASSOCIATED_DOCTOR', label: 'Médico Associado' }, { value: 'SUPPORT', label: 'Suporte' }]} />
           <FilterSelect label="Status" value={draft.status} onChange={(v) => set('status', v as UserStatusFilter)}
             options={[{ value: 'ALL', label: 'Todos' }, { value: 'ACTIVE', label: 'Ativos' }, { value: 'INACTIVE', label: 'Inativos' }]} />
           <FilterSelect label="Equipe" value={draft.team} onChange={(v) => set('team', v as UserTeamFilter)}

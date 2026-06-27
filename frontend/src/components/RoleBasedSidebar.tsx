@@ -16,6 +16,7 @@ import {
   FileDown,
   LayoutDashboard,
   Scissors,
+  Send,
   Settings,
   User,
   UserCog,
@@ -63,6 +64,7 @@ export function useRoleMenus(): { main: NavItem[]; admin: NavItem[] } {
       main: [
         { to: '/dashboard', label: 'Dashboard', short: 'Início', icon: LayoutDashboard },
         { to: '/admin/users', label: 'Gerenciar Usuários', short: 'Usuários', icon: UserCog },
+        { to: '/invites', label: 'Convidar Profissional', short: 'Convites', icon: Send },
         { to: '/teams', label: 'Gerenciar Equipes', short: 'Equipes', icon: Users },
         { to: '/patients/new', label: 'Cadastro de Pacientes', short: 'Cadastrar', icon: UserPlus },
         { to: '/monitoring', label: 'Pacientes em Monitoramento', short: 'Pacientes', icon: Activity },
@@ -86,6 +88,18 @@ export function useRoleMenus(): { main: NavItem[]; admin: NavItem[] } {
         { to: '/profile', label: 'Meu Perfil', short: 'Perfil', icon: User },
       ],
       admin, // vazio, salvo autorização específica
+    };
+  }
+
+  // Suporte: perfil operacional (não clínico) — pacientes e perfil.
+  if (hasRole(Role.SUPPORT)) {
+    return {
+      main: [
+        { to: '/monitoring', label: 'Pacientes em Monitoramento', short: 'Pacientes', icon: Activity },
+        { to: '/invites', label: 'Convidar Profissional', short: 'Convites', icon: Send },
+        { to: '/profile', label: 'Meu Perfil', short: 'Perfil', icon: User },
+      ],
+      admin: [],
     };
   }
 
