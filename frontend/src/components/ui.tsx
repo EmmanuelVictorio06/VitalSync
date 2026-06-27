@@ -1,5 +1,5 @@
 import { type ButtonHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type InputHTMLAttributes } from 'react';
-import { ClinicalStatus, formatPhoneBR } from '@vitalsync/shared';
+import { ClinicalStatus, formatPhoneBR, onlyDigits } from '@vitalsync/shared';
 
 /** Junta classes condicionalmente (equivalente leve do `cn` da referência). */
 export function cn(...classes: Array<string | false | null | undefined>): string {
@@ -187,7 +187,7 @@ export function PhoneInput({
         placeholder="(00) 00000-0000"
         className={cn('input', error && 'invalid')}
         value={formatPhoneBR(value)}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => onChange(onlyDigits(e.target.value))}
       />
     </Field>
   );

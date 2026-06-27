@@ -107,6 +107,8 @@ export interface PatientDashboard {
     dischargeDate: string;
     phone: string;
     currentStatus: ClinicalStatus;
+    currentAlertId: string | null;
+    currentAlertStatus: 'PENDING' | 'IN_ANALYSIS' | 'ATTENDED' | 'IGNORED' | null;
     attendedById: string | null;
     attendedByName: string | null;
     daysSinceDischarge: number;

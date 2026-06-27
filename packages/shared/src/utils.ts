@@ -63,6 +63,7 @@ export function onlyDigits(value: string): string {
 /** Aplica a máscara (xx) xxxxx-xxxx ou (xx) xxxx-xxxx conforme o tamanho. */
 export function formatPhoneBR(value: string): string {
   const d = onlyDigits(value).slice(0, 11);
+  if (d.length === 0) return '';
   if (d.length <= 2) return d.replace(/(\d{0,2})/, '($1');
   if (d.length <= 6) return d.replace(/(\d{2})(\d{0,4})/, '($1) $2');
   if (d.length <= 10) return d.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');

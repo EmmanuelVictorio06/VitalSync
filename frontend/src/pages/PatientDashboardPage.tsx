@@ -68,6 +68,10 @@ export function PatientDashboardPage() {
     void load();
   }, [id]);
 
+  useEffect(() => {
+    setAttendant('');
+  }, [data?.patient.currentAlertId]);
+
   // Indexa registros por dia (manhã/noite) para montar as séries dos gráficos.
   const byDay = useMemo(() => {
     const map = new Map<number, { morning?: VitalRecord; night?: VitalRecord }>();
@@ -130,14 +134,20 @@ export function PatientDashboardPage() {
   }, [data, period]);
 
   async function markAttended() {
-    if (!id || !attendant) {
+    const currentAlertId = data?.patient.currentAlertId;
+    if (!currentAlertId) {
+      toast.error('Não há alerta atual para marcar.');
+      return;
+    }
+    if (!attendant) {
       toast.error('Selecione o profissional que atendeu.');
       return;
     }
     setMarking(true);
     try {
-      await patientDashboardService.markAttended(id, attendant);
-      toast.success('Alertas do paciente marcados como atendidos.');
+      await patientDashboardService.markAttended(currentAlertId, attendant);
+      toast.success('Alerta marcado como atendido.');
+      setAttendant('');
       await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao registrar atendimento.');
@@ -193,15 +203,18 @@ export function PatientDashboardPage() {
             >
               <MessageCircle className="size-4" /> Conversar no WhatsApp
             </Button>
-            {p.attendedByName ? (
-              <p className="text-xs text-muted-foreground lg:text-right">
-                ✓ Atendido por <strong className="text-foreground">{p.attendedByName}</strong>. Será resetado
-                quando o paciente enviar nova medição.
+            {p.currentAlertStatus === 'ATTENDED' ? (
+              <p className="max-w-full break-words text-xs text-muted-foreground lg:text-right">
+                Atendimento já marcado{p.attendedByName ? <> por <strong className="text-foreground">{p.attendedByName}</strong></> : ''}.
               </p>
-            ) : (
-              <div className="flex items-center gap-2 text-xs font-medium w-full lg:w-auto">
+            ) : p.currentAlertStatus === 'IGNORED' ? (
+              <p className="max-w-full break-words text-xs text-muted-foreground lg:text-right">
+                Este alerta já foi finalizado.
+              </p>
+            ) : p.currentAlertId ? (
+              <div className="flex w-full min-w-0 items-center gap-2 text-xs font-medium lg:w-auto">
                 <select
-                  className="bg-card border border-border rounded-md text-xs px-2 py-2 flex-1 outline-none focus:border-primary"
+                  className="max-w-full min-w-0 flex-1 rounded-md border border-border bg-card px-2 py-2 text-xs outline-none focus:border-primary"
                   value={attendant}
                   onChange={(e) => setAttendant(e.target.value)}
                 >
@@ -212,11 +225,11 @@ export function PatientDashboardPage() {
                     </option>
                   ))}
                 </select>
-                <Button size="sm" onClick={markAttended} loading={marking}>
+                <Button size="sm" onClick={markAttended} loading={marking} disabled={!attendant} className="shrink-0">
                   Marcar
                 </Button>
               </div>
-            )}
+            ) : null}
           </div>
         </div>
       </section>
