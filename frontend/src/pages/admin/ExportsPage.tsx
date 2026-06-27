@@ -1,77 +1,28 @@
 /**
  * Exportações (Admin) — geram CSV no cliente a partir do Supabase (RLS aplica o
- * escopo). Substitui o endpoint Fastify /export. Datasets maiores/pesados
- * podem migrar para uma Edge Function no futuro.
+ * escopo). Formato pt-BR (UTF-8 BOM, separador ';', datas dd/mm/aaaa) centralizado
+ * em services/exportService. Pacientes excluídos ficam ocultos por padrão;
+ * o Admin pode incluir os arquivados.
  */
 import { useState } from 'react';
-import { Activity, Bell, FileDown } from 'lucide-react';
+import { Activity, Bell, FileDown, Users, UserCog } from 'lucide-react';
 import { useToast } from '../../components/Toast';
-import { AdminPageHeader } from '../../components/admin';
+import { AdminPageHeader, ToggleSwitch } from '../../components/admin';
 import { Button, PageContainer } from '../../components/ui';
-import { alertService } from '../../services/alertService';
-import { patientService } from '../../services/patientService';
-
-const STATUS_LABEL: Record<string, string> = { GREEN: 'Estável', YELLOW: 'Atenção', RED: 'Alerta' };
-
-function downloadCsv(filename: string, rows: Array<Array<string | number | null | undefined>>): void {
-  const escape = (c: string | number | null | undefined) => `"${String(c ?? '').replace(/"/g, '""')}"`;
-  const csv = rows.map((r) => r.map(escape).join(',')).join('\r\n');
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
+import { exportService } from '../../services/exportService';
 
 export function ExportsPage() {
   const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
-  const today = new Date().toISOString().slice(0, 10);
+  const [includeArchived, setIncludeArchived] = useState(false);
 
-  async function exportPatients() {
-    setBusy('patients');
+  async function run(key: string, fn: () => Promise<number>, noun: string) {
+    setBusy(key);
     try {
-      const items = await patientService.list();
-      const rows: Array<Array<string | number | null>> = [
-        ['Nome', 'Status', 'Tipo de cirurgia', 'Hospital', 'Equipe', 'Alta hospitalar'],
-        ...items.map((p) => [
-          p.name,
-          STATUS_LABEL[p.current_status] ?? p.current_status,
-          p.surgery_type?.name ?? '',
-          p.hospital?.name ?? '',
-          p.medical_team ? `Equipe ${String(p.medical_team.team_number).padStart(2, '0')}` : '',
-          p.hospital_discharge_date ?? '',
-        ]),
-      ];
-      downloadCsv(`vitalsync_pacientes_${today}.csv`, rows);
-      toast.success(`${items.length} paciente(s) exportado(s).`);
+      const n = await fn();
+      toast.success(`${n} ${noun} exportado(s).`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao exportar pacientes.');
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function exportAlerts() {
-    setBusy('alerts');
-    try {
-      const items = await alertService.getAlerts();
-      const rows: Array<Array<string | number | null>> = [
-        ['Paciente', 'Status', 'Descrição', 'Atendido', 'Data'],
-        ...items.map((a) => [
-          a.patient?.name ?? '',
-          STATUS_LABEL[a.status] ?? a.status,
-          a.description,
-          a.attended ? 'Sim' : 'Não',
-          new Date(a.created_at).toLocaleString('pt-BR'),
-        ]),
-      ];
-      downloadCsv(`vitalsync_alertas_${today}.csv`, rows);
-      toast.success(`${items.length} alerta(s) exportado(s).`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao exportar alertas.');
+      toast.error(err instanceof Error ? err.message : 'Erro ao exportar.');
     } finally {
       setBusy(null);
     }
@@ -84,20 +35,45 @@ export function ExportsPage() {
         subtitle="Baixe os dados em CSV (abre no Excel/Google Sheets). A exportação respeita o seu perfil de acesso."
       />
 
+      <div className="bg-card border border-border rounded-xl shadow-sm p-4 mb-4 animate-entry">
+        <ToggleSwitch
+          checked={includeArchived}
+          onChange={setIncludeArchived}
+          label="Incluir pacientes arquivados (excluídos)"
+        />
+        <p className="text-xs text-muted-foreground mt-1">
+          Por padrão os pacientes excluídos ficam ocultos. Marque para incluí-los na exportação de pacientes.
+        </p>
+      </div>
+
       <div className="grid sm:grid-cols-2 gap-4 animate-entry [animation-delay:100ms]">
         <ExportCard
           icon={Activity}
           title="Pacientes"
-          description="Lista de pacientes em monitoramento com status, cirurgia, hospital e equipe."
+          description="Lista de pacientes com status, cirurgia, hospital e equipe."
           loading={busy === 'patients'}
-          onExport={exportPatients}
+          onExport={() => run('patients', () => exportService.patients({ includeArchived }), 'paciente(s)')}
         />
         <ExportCard
           icon={Bell}
           title="Alertas clínicos"
-          description="Alertas gerados pelas medições, com status, descrição e se foram atendidos."
+          description="Alertas gerados pelas medições, com status, descrição e atendimento."
           loading={busy === 'alerts'}
-          onExport={exportAlerts}
+          onExport={() => run('alerts', () => exportService.alerts(), 'alerta(s)')}
+        />
+        <ExportCard
+          icon={Users}
+          title="Equipes médicas"
+          description="Equipes cadastradas, com status e data de criação."
+          loading={busy === 'teams'}
+          onExport={() => run('teams', () => exportService.teams(), 'equipe(s)')}
+        />
+        <ExportCard
+          icon={UserCog}
+          title="Usuários"
+          description="Usuários do painel, com papel, status e contato."
+          loading={busy === 'users'}
+          onExport={() => run('users', () => exportService.users(), 'usuário(s)')}
         />
       </div>
     </PageContainer>
