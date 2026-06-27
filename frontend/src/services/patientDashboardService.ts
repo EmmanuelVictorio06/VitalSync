@@ -10,7 +10,7 @@ import { supabase } from '../lib/supabase';
 import { patientService } from './patientService';
 import { storageService } from './storageService';
 import { teamViewService } from './teamViewService';
-import type { VitalSignRecord } from './types';
+import type { AttendanceStatus, VitalSignRecord } from './types';
 import type { PatientDashboard, VitalRecord } from '../lib/dto';
 
 function daysSince(date?: string | null): number {
@@ -86,6 +86,11 @@ async function toVitalRecord(v: VitalSignRecord): Promise<VitalRecord> {
   };
 }
 
+function profileName(profile: { name: string } | { name: string }[] | null | undefined): string | null {
+  if (Array.isArray(profile)) return profile[0]?.name ?? null;
+  return profile?.name ?? null;
+}
+
 export const patientDashboardService = {
   async getDashboard(patientId: string): Promise<PatientDashboard> {
     const patient = await patientService.getById(patientId);
@@ -109,6 +114,33 @@ export const patientDashboardService = {
       teamMembers = [];
     }
 
+    // O controle de atendimento pertence ao alerta atual, nunca ao paciente inteiro.
+    const { data: currentAlert, error: alertError } = await supabase
+      .from('clinical_alerts')
+      .select('id, attendance_status, attended, attended_by, profiles:attended_by(name)')
+      .eq('patient_id', patientId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (alertError) throw new Error(alertError.message);
+
+    let attendedById: string | null = null;
+    let attendedByName: string | null = null;
+    const alertRow = currentAlert as
+      | {
+          id: string;
+          attendance_status: AttendanceStatus;
+          attended: boolean;
+          attended_by: string | null;
+          profiles?: { name: string } | { name: string }[] | null;
+        }
+      | null;
+    const currentAlertStatus = alertRow?.attended ? 'ATTENDED' : alertRow?.attendance_status ?? null;
+    if (alertRow && currentAlertStatus === 'ATTENDED') {
+      attendedById = alertRow.attended_by;
+      attendedByName = profileName(alertRow.profiles);
+    }
+
     const days = daysSince(patient.hospital_discharge_date);
     return {
       patient: {
@@ -121,8 +153,10 @@ export const patientDashboardService = {
         dischargeDate: patient.hospital_discharge_date ?? '',
         phone: patient.phone ?? '',
         currentStatus: patient.current_status,
-        attendedById: null,
-        attendedByName: null,
+        currentAlertId: alertRow?.id ?? null,
+        currentAlertStatus,
+        attendedById,
+        attendedByName,
         daysSinceDischarge: days,
         monitoringDay: patient.hospital_discharge_date && days <= 10 ? Math.max(1, days + 1) : null,
       },
@@ -132,26 +166,31 @@ export const patientDashboardService = {
   },
 
   /**
-   * Marca os alertas pendentes do paciente como atendidos e registra o
-   * atendimento no histórico ("Meus Atendimentos"). A linha em
-   * attendance_confirmations (sem alert_id) representa o acompanhamento manual
-   * feito pelo checkbox "Atendido por"; a RLS (attendance_rw) garante o escopo.
+   * Marca o alerta atual como atendido e registra o atendimento no histórico
+   * com alert_id, preservando atendimentos antigos do mesmo paciente.
    */
-  async markAttended(patientId: string, attendedBy: string): Promise<void> {
-    const { error } = await supabase
+  async markAttended(alertId: string, attendedBy: string): Promise<void> {
+    const { data: alert, error: alertError } = await supabase
       .from('clinical_alerts')
-      .update({ attended: true, attended_by: attendedBy, attended_at: new Date().toISOString() })
-      .eq('patient_id', patientId)
-      .eq('attended', false);
-    if (error) throw new Error(error.message);
+      .select('id, attendance_status, attended')
+      .eq('id', alertId)
+      .maybeSingle();
+    if (alertError) throw new Error(alertError.message);
+    if (!alert) throw new Error('Alerta não encontrado.');
 
-    // Histórico de atendimento (não bloqueia o fluxo se a inserção falhar).
-    const { error: confirmError } = await supabase.from('attendance_confirmations').insert({
-      patient_id: patientId,
-      attended_by: attendedBy,
-      status: 'ATTENDED',
-      observation: 'Paciente marcado como atendido no acompanhamento individual.',
+    const { attendance_status: status, attended } = alert as { attendance_status: AttendanceStatus; attended: boolean };
+    if (status === 'ATTENDED' || attended) {
+      throw new Error('Este alerta já foi atendido e não pode ser marcado novamente.');
+    }
+    if (status === 'IGNORED') {
+      throw new Error('Este alerta já foi finalizado.');
+    }
+
+    const { error } = await supabase.rpc('alert_mark_attended', {
+      p_alert: alertId,
+      p_professional: attendedBy,
+      p_observation: 'Paciente marcado como atendido no acompanhamento individual.',
     });
-    if (confirmError) throw new Error(confirmError.message);
+    if (error) throw new Error(error.message);
   },
 };

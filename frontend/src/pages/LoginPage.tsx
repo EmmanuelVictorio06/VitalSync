@@ -47,7 +47,7 @@ export function LoginPage() {
     [leaving, navigate],
   );
 
-  if (user) return <Navigate to="/monitoring" replace />;
+  if (user) return <Navigate to="/dashboard" replace />;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -55,7 +55,7 @@ export function LoginPage() {
     try {
       await login(email.trim(), password);
       toast.success('Bem-vindo(a) ao VitalSync!');
-      navigate('/monitoring');
+      navigate('/dashboard');
     } catch (err) {
       // Mensagem clara, sem termos técnicos (heurística de Nielsen).
       const msg = err instanceof Error ? err.message : '';
