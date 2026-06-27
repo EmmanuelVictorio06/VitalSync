@@ -2,6 +2,7 @@
 import type { ReactNode } from 'react';
 import { AlertCircle, Inbox, Plus, Search } from 'lucide-react';
 import type { EntityStatus } from '../lib/admin-types';
+import { Responsive } from './responsive/Responsive';
 import { Button, PageHeader, cn } from './ui';
 
 /* ---------------- Cabeçalho de página administrativa ---------------- */
@@ -186,8 +187,10 @@ export function AdminTable<T>({
 }) {
   return (
     <>
-      {/* Desktop */}
-      <div className="hidden md:block bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+      {/* Desktop: tabela tradicional. `Responsive` evita montar a versão mobile
+          em paralelo (sem rodar hooks/render dela fora do breakpoint). */}
+      <Responsive min="md">
+      <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/40">
@@ -220,9 +223,11 @@ export function AdminTable<T>({
           </tbody>
         </table>
       </div>
+      </Responsive>
 
-      {/* Mobile: cards */}
-      <div className="md:hidden space-y-3">
+      {/* Mobile: cada linha vira card. */}
+      <Responsive max="sm">
+      <div className="space-y-3">
         {rows.map((row) => (
           <div key={keyFor(row)} className="bg-card border border-border rounded-xl shadow-sm p-4 space-y-2">
             {columns
@@ -239,6 +244,7 @@ export function AdminTable<T>({
           </div>
         ))}
       </div>
+      </Responsive>
     </>
   );
 }

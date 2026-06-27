@@ -259,9 +259,16 @@
     scroll-margin-top: 96px;
   }
 
-  /* Evita rolagem horizontal indesejada sem quebrar sticky sidebar/topbar. */
-  body {
+  /* Evita rolagem horizontal indesejada em toda a árvore (viewport → #root).
+     Usamos `clip` (e não `hidden`) de propósito: ele recorta o transbordo sem
+     criar um contêiner de rolagem, preservando o `position: sticky` da topbar/
+     sidebar. Aplicar em html/#root, além do body, garante o comportamento no
+     mobile (Safari/Chrome iOS), onde só o body não basta. */
+  html,
+  body,
+  #root {
     overflow-x: clip;
+    max-width: 100%;
   }
 
   /* Mídia flexível: nunca estoura o container. */

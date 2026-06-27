@@ -114,7 +114,7 @@ function TeamBlock({ detail, roleLabel, currentUserId }: { detail: TeamDetail; r
 
       <div className="grid gap-4 lg:grid-cols-5">
         {/* Médicos (preview) */}
-        <section className="lg:col-span-2 bg-card border border-border rounded-xl shadow-sm p-5 space-y-4 animate-entry [animation-delay:150ms]">
+        <section className="min-w-0 lg:col-span-2 bg-card border border-border rounded-xl shadow-sm p-5 space-y-4 animate-entry [animation-delay:150ms]">
           <div className="flex items-center justify-between gap-3">
             <h3 className="font-bold tracking-tight inline-flex items-center gap-2">
               <Users className="size-4 text-primary" /> Médicos da Equipe
@@ -139,7 +139,7 @@ function TeamBlock({ detail, roleLabel, currentUserId }: { detail: TeamDetail; r
         </section>
 
         {/* Pacientes prioritários */}
-        <section className="lg:col-span-3 bg-card border border-border rounded-xl shadow-sm p-5 space-y-4 animate-entry [animation-delay:200ms]">
+        <section className="min-w-0 lg:col-span-3 bg-card border border-border rounded-xl shadow-sm p-5 space-y-4 animate-entry [animation-delay:200ms]">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <h3 className="font-bold tracking-tight inline-flex items-center gap-2">
               <Activity className="size-4 text-primary" /> Pacientes que precisam de atenção
@@ -231,9 +231,10 @@ function DoctorRow({ m, isMe = false }: { m: TeamMemberView; isMe?: boolean }) {
             <span className="text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 text-primary bg-primary/15">Você</span>
           )}
         </p>
-        <p className="text-xs text-muted-foreground truncate inline-flex items-center gap-1">
-          <Mail className="size-3 shrink-0" /> {m.email}
-          {m.whatsapp && <span className="ml-2">{formatPhoneBR(m.whatsapp)}</span>}
+        <p className="text-xs text-muted-foreground flex items-center gap-1 min-w-0">
+          <Mail className="size-3 shrink-0" />
+          <span className="truncate">{m.email}</span>
+          {m.whatsapp && <span className="shrink-0 ml-1 tabular-nums">{formatPhoneBR(m.whatsapp)}</span>}
         </p>
       </div>
       {wa && (
@@ -257,8 +258,9 @@ function PriorityPatientCard({ p, onOpen }: { p: TeamPatientView; onOpen: () => 
           {d !== null && <> · D+{d} pós-op</>}
         </p>
         {p.lastAlert ? (
-          <p className={cn('text-[11px] font-semibold mt-0.5 inline-flex items-center gap-1 truncate', alertTone)}>
-            <AlertTriangle className="size-3 shrink-0" /> {p.lastAlert.type ?? 'Alerta clínico'}
+          <p className={cn('text-[11px] font-semibold mt-0.5 flex items-center gap-1 min-w-0', alertTone)}>
+            <AlertTriangle className="size-3 shrink-0" />
+            <span className="truncate">{p.lastAlert.type ?? 'Alerta clínico'}</span>
           </p>
         ) : p.dischargeDate ? (
           <p className="text-[11px] text-muted-foreground mt-0.5 inline-flex items-center gap-1">
