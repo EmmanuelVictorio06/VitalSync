@@ -98,12 +98,22 @@ serve(async (req) => {
       .eq('id', userId);
     if (profErr) return json({ error: profErr.message }, 400);
 
-    // 6. Vincula à equipe do convite (se houver).
+    // 6. Vincula à equipe do convite (se houver). O cirurgião principal fica em
+    //    medical_teams.main_surgeon_id (só se a equipe estiver SEM líder — não
+    //    desloca um existente); team_members guarda apenas associados (M-12).
     if (invite.team_id) {
-      await admin.from('team_members').upsert(
-        { team_id: invite.team_id, doctor_id: userId, role_in_team: invite.role, status: 'ACTIVE' },
-        { onConflict: 'team_id,doctor_id' },
-      );
+      if (invite.role === 'MAIN_SURGEON') {
+        await admin
+          .from('medical_teams')
+          .update({ main_surgeon_id: userId })
+          .eq('id', invite.team_id)
+          .is('main_surgeon_id', null);
+      } else {
+        await admin.from('team_members').upsert(
+          { team_id: invite.team_id, doctor_id: userId, role_in_team: 'ASSOCIATED_DOCTOR', status: 'ACTIVE' },
+          { onConflict: 'team_id,doctor_id' },
+        );
+      }
     }
 
     // 7. Marca o convite como usado.
