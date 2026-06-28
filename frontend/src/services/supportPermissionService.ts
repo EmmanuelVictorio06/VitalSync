@@ -37,8 +37,13 @@ export const supportPermissionService = {
   /** Ver status básico de WhatsApp / logs de notificação (Admin e Suporte). */
   canViewBasicLogs: (user: U) => is(user, Role.ADM, Role.SUPPORT),
 
-  /** Reenviar um WhatsApp que falhou (Admin e Suporte). */
-  canResendWhatsapp: (user: U) => is(user, Role.ADM, Role.SUPPORT),
+  /**
+   * Reenviar a notificação de alerta por WhatsApp à equipe. NÃO é ação do
+   * Suporte — a RPC `alert_resend_notification` só aceita Admin ou Cirurgião
+   * Principal da equipe (M-02). Mantido aqui só para deixar explícito que o
+   * Suporte não pode; o botão é gated por permissionService.canResendAlertNotification.
+   */
+  canResendWhatsapp: (user: U) => is(user, Role.ADM),
 
   /** Gerar convite de médico/cirurgião (Admin e Suporte) — usado no fluxo de convites. */
   canGenerateInvite: (user: U) => is(user, Role.ADM, Role.SUPPORT),

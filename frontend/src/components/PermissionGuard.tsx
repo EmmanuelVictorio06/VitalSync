@@ -8,6 +8,7 @@
 import { Navigate } from 'react-router-dom';
 import { type ReactElement } from 'react';
 import { Role, useAuth } from '../auth/AuthContext';
+import { homeRouteFor } from '../lib/permissions';
 import { Loading } from './ui';
 
 export function PermissionGuard({ children, roles }: { children: ReactElement; roles?: Role[] }) {
@@ -20,6 +21,8 @@ export function PermissionGuard({ children, roles }: { children: ReactElement; r
     );
   }
   if (!user) return <Navigate to="/login" replace />;
-  if (roles && !roles.includes(user.role)) return <Navigate to="/dashboard" replace />;
+  // Redireciona para a home do PRÓPRIO perfil (não /dashboard fixo) — evita loop
+  // quando o perfil não acessa /dashboard (ex.: Suporte → /monitoring). (M-03)
+  if (roles && !roles.includes(user.role)) return <Navigate to={homeRouteFor(user.role)} replace />;
   return children;
 }

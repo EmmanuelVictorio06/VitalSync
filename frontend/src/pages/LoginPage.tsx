@@ -2,6 +2,7 @@ import { useCallback, useState, type FormEvent, type MouseEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Activity, Lock, Mail, ShieldCheck, Stethoscope } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
+import { homeRouteFor } from '../lib/permissions';
 import { BackToHomeButton } from '../components/BackToHomeButton';
 import { VitalSyncLogo } from '../components/VitalSyncLogo';
 import { useToast } from '../components/Toast';
@@ -47,7 +48,7 @@ export function LoginPage() {
     [leaving, navigate],
   );
 
-  if (user) return <Navigate to="/dashboard" replace />;
+  if (user) return <Navigate to={homeRouteFor(user.role)} replace />;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
