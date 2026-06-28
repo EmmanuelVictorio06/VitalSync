@@ -33,6 +33,8 @@ export interface Profile {
   crm: string | null;
   notes: string | null;
   status: EntityStatus;
+  /** Tag única do profissional (ex.: "Joao#4821"). Só papéis médicos; pode ser nula. */
+  professional_tag: string | null;
   notification_prefs: Partial<NotificationPrefs> | null;
   created_at: string;
   updated_at: string | null;
@@ -50,6 +52,8 @@ export interface UserOverview {
   specialty: string | null;
   crm: string | null;
   notes: string | null;
+  /** Tag única do profissional (ex.: "Joao#4821"). Só papéis médicos; pode ser nula. */
+  professional_tag: string | null;
   created_at: string;
   updated_at: string | null;
   last_sign_in_at: string | null;

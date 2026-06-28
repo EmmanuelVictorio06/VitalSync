@@ -1,4 +1,15 @@
-import { type ButtonHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type InputHTMLAttributes } from 'react';
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ButtonHTMLAttributes,
+  type ReactNode,
+  type SelectHTMLAttributes,
+  type InputHTMLAttributes,
+} from 'react';
+import { Check, ChevronDown, Search } from 'lucide-react';
 import { ClinicalStatus, formatPhoneBR, onlyDigits } from '@vitalsync/shared';
 
 /** Junta classes condicionalmente (equivalente leve do `cn` da referência). */
@@ -350,4 +361,206 @@ export function YesNo({ value, onChange }: { value: boolean | null; onChange: (v
 
 export function Loading({ label = 'Carregando…' }: { label?: string }) {
   return <div className="text-center text-muted-foreground py-6 animate-pulse">{label}</div>;
+}
+
+/* ---------------- Tag única do profissional (identificador visual/busca) ----------------
+   Badge discreta exibida ao lado/abaixo do nome. Não compete com o nome: tipografia
+   menor, monoespaçada e tom suave. Não renderiza nada quando não há tag. */
+export function ProfessionalTag({ tag, className }: { tag?: string | null; className?: string }) {
+  if (!tag) return null;
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 font-mono text-[11px] font-semibold tracking-tight text-muted-foreground',
+        className,
+      )}
+      title={`Identificador do profissional: ${tag}`}
+    >
+      {tag}
+    </span>
+  );
+}
+
+/* ---------------- Combobox pesquisável de profissionais ----------------
+   Substitui o <select> simples quando há muitos profissionais: busca por nome,
+   tag ou e-mail, com resultado mostrando nome + tag + papel/e-mail. Salva sempre
+   o id interno (value/onChange) — a tag é só apoio à identificação. Mobile-friendly. */
+export interface ProfessionalOption {
+  id: string;
+  name: string;
+  tag: string | null;
+  email?: string | null;
+  roleLabel?: string | null;
+}
+
+export function ProfessionalCombobox({
+  label,
+  value,
+  onChange,
+  options,
+  placeholder = 'Buscar por nome ou tag…',
+  hint,
+  error,
+  required,
+  disabled,
+  emptyText = 'Nenhum profissional encontrado.',
+}: {
+  label: string;
+  value: string;
+  onChange: (id: string) => void;
+  options: ProfessionalOption[];
+  placeholder?: string;
+  hint?: string;
+  error?: string;
+  required?: boolean;
+  disabled?: boolean;
+  emptyText?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [highlight, setHighlight] = useState(0);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listId = useId();
+
+  const selected = useMemo(() => options.find((o) => o.id === value) ?? null, [options, value]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter(
+      (o) =>
+        o.name.toLowerCase().includes(q) ||
+        (o.tag ?? '').toLowerCase().includes(q) ||
+        (o.email ?? '').toLowerCase().includes(q),
+    );
+  }, [options, query]);
+
+  // Fecha ao clicar fora.
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [open]);
+
+  // Foca a busca ao abrir; limpa o termo ao fechar.
+  useEffect(() => {
+    if (open) {
+      setHighlight(0);
+      const t = setTimeout(() => inputRef.current?.focus(), 0);
+      return () => clearTimeout(t);
+    }
+    setQuery('');
+  }, [open]);
+
+  function choose(id: string) {
+    onChange(id);
+    setOpen(false);
+  }
+
+  function onKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlight((h) => Math.min(h + 1, filtered.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlight((h) => Math.max(h - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const o = filtered[highlight];
+      if (o) choose(o.id);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setOpen(false);
+    }
+  }
+
+  return (
+    <Field label={label} hint={hint} error={error} required={required}>
+      <div className="relative" ref={wrapRef}>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => setOpen((v) => !v)}
+          className={cn(
+            'input flex items-center justify-between gap-2 text-left',
+            error && 'invalid',
+            disabled && 'opacity-55 cursor-not-allowed',
+          )}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+        >
+          <span className={cn('truncate', !selected && 'text-muted-foreground')}>
+            {selected ? (
+              <span className="inline-flex items-center gap-2 min-w-0">
+                <span className="truncate">{selected.name}</span>
+                {selected.tag && <span className="font-mono text-[11px] text-muted-foreground shrink-0">{selected.tag}</span>}
+              </span>
+            ) : (
+              placeholder
+            )}
+          </span>
+          <ChevronDown className="size-4 text-muted-foreground shrink-0" />
+        </button>
+
+        {open && (
+          <div className="absolute z-30 mt-1 w-full rounded-lg border border-border bg-card shadow-lg overflow-hidden">
+            <div className="relative border-b border-border">
+              <Search className="size-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                ref={inputRef}
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setHighlight(0);
+                }}
+                onKeyDown={onKeyDown}
+                placeholder={placeholder}
+                className="w-full bg-transparent py-2.5 pl-9 pr-3 text-sm outline-none"
+                aria-controls={listId}
+              />
+            </div>
+            <ul id={listId} role="listbox" className="max-h-60 overflow-y-auto py-1">
+              {filtered.length === 0 ? (
+                <li className="px-3 py-3 text-sm text-muted-foreground text-center">{emptyText}</li>
+              ) : (
+                filtered.map((o, i) => {
+                  const active = o.id === value;
+                  return (
+                    <li key={o.id} role="option" aria-selected={active}>
+                      <button
+                        type="button"
+                        onClick={() => choose(o.id)}
+                        onMouseEnter={() => setHighlight(i)}
+                        className={cn(
+                          'w-full text-left px-3 py-2.5 flex items-center gap-2 transition-colors',
+                          i === highlight ? 'bg-muted' : 'hover:bg-muted/60',
+                        )}
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-semibold truncate">{o.name}</span>
+                            {o.tag && <span className="font-mono text-[11px] text-muted-foreground">{o.tag}</span>}
+                          </span>
+                          {(o.email || o.roleLabel) && (
+                            <span className="block text-xs text-muted-foreground truncate">
+                              {[o.roleLabel, o.email].filter(Boolean).join(' · ')}
+                            </span>
+                          )}
+                        </span>
+                        {active && <Check className="size-4 text-primary shrink-0" />}
+                      </button>
+                    </li>
+                  );
+                })
+              )}
+            </ul>
+          </div>
+        )}
+      </div>
+    </Field>
+  );
 }

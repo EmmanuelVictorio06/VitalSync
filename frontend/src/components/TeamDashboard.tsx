@@ -12,7 +12,7 @@ import {
   MessageCircle, ShieldAlert, ShieldCheck, Stethoscope, Users, X,
 } from 'lucide-react';
 import { formatCivilDate, formatPhoneBR } from '@vitalsync/shared';
-import { Button, StatusBadge, cn } from './ui';
+import { Button, ProfessionalTag, StatusBadge, cn } from './ui';
 import { TeamCarousel } from './TeamCarousel';
 import { getPriorityPatients, postOpDay, type TeamDetail, type TeamMemberView, type TeamPatientView } from '../services/teamViewService';
 
@@ -231,7 +231,12 @@ function DoctorRow({ m, isMe = false }: { m: TeamMemberView; isMe?: boolean }) {
             <span className="text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 text-primary bg-primary/15">Você</span>
           )}
         </p>
-        <p className="text-xs text-muted-foreground flex items-center gap-1 min-w-0">
+        {m.tag && (
+          <div className="mt-0.5">
+            <ProfessionalTag tag={m.tag} />
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground flex items-center gap-1 min-w-0 mt-0.5">
           <Mail className="size-3 shrink-0" />
           <span className="truncate">{m.email}</span>
           {m.whatsapp && <span className="shrink-0 ml-1 tabular-nums">{formatPhoneBR(m.whatsapp)}</span>}

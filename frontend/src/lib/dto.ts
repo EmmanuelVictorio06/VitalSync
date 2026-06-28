@@ -8,6 +8,8 @@ export interface AuthUser {
   teamId: string | null;
   /** Caminho do avatar no bucket `profile-avatars` (null = sem foto). */
   avatarUrl: string | null;
+  /** Tag única do profissional (ex.: "Joao#4821"). Null para papéis não médicos. */
+  professionalTag: string | null;
 }
 
 export interface LoginResponse {
