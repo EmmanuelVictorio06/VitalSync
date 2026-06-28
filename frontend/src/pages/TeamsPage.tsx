@@ -106,8 +106,15 @@ export function TeamsPage() {
   const activeQuick = useMemo(() => activeTeamQuickCard(filters), [filters]);
   const advancedCount = useMemo(() => countTeamAdvancedFilters(filters), [filters]);
 
-  const surgeonOptions = useMemo(() => surgeons.map((s) => ({ value: s.id, label: s.name })), [surgeons]);
-  const associateOptions = useMemo(() => associates.map((a) => ({ value: a.id, label: a.name })), [associates]);
+  // Rótulos dos filtros/chips incluem a tag para distinguir nomes parecidos.
+  const surgeonOptions = useMemo(
+    () => surgeons.map((s) => ({ value: s.id, label: s.professional_tag ? `${s.name} · ${s.professional_tag}` : s.name })),
+    [surgeons],
+  );
+  const associateOptions = useMemo(
+    () => associates.map((a) => ({ value: a.id, label: a.professional_tag ? `${a.name} · ${a.professional_tag}` : a.name })),
+    [associates],
+  );
 
   const openTeam = openId ? (teams ?? []).find((t) => t.summary.id === openId) ?? null : null;
 
