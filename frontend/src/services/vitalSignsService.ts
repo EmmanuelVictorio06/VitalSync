@@ -21,6 +21,8 @@ export interface PatientLinkInfo {
 
 export interface VitalSubmission {
   secure_token: string;
+  /** CPF do paciente (reprova a identidade no envio — gate real, C-04). */
+  cpf: string;
   period: 'MORNING' | 'NIGHT';
   temperature?: number;
   oxygen_saturation?: number;
@@ -65,29 +67,54 @@ export const vitalSignsService = {
     return row;
   },
 
-  /** Envio do paciente (anônimo) — função RPC valida o token e cria o alerta. */
+  /**
+   * Envio do paciente (anônimo) — passa pela Edge Function `submit-vital-record`,
+   * que REVALIDA o CPF (gate real + rate-limit) e chama a RPC via service_role.
+   * As RPCs não são mais chamáveis direto pelo papel anon (migration 0022).
+   */
   async submitByToken(input: VitalSubmission): Promise<{ clinical_status: string }> {
-    const { data, error } = await supabase.rpc('submit_vital_record', {
-      p_token: input.secure_token,
-      p_period: input.period,
-      p_temperature: input.temperature ?? null,
-      p_oxygen_saturation: input.oxygen_saturation ?? null,
-      p_systolic: input.systolic_pressure ?? null,
-      p_diastolic: input.diastolic_pressure ?? null,
-      p_heart_rate: input.heart_rate ?? null,
-      p_pain: input.pain_level ?? null,
-      p_dyspnea: input.dyspnea_level ?? null,
-      p_urination_count: input.urination_count ?? null,
-      p_vomiting_count: input.vomiting_count ?? null,
-      p_has_bleeding: input.has_bleeding ?? false,
-      p_steps: input.steps ?? null,
-      p_wound_photo_path: input.wound_photo_path ?? null,
-      p_has_drain: input.has_drain ?? false,
-      p_drain_photo_path: input.drain_photo_path ?? null,
-      p_urinated_normally: input.urinated_normally ?? null,
-      p_had_vomit: input.had_vomit ?? null,
+    const { data, error } = await supabase.functions.invoke('submit-vital-record', {
+      body: {
+        token: input.secure_token,
+        cpf: input.cpf,
+        measurement: {
+          period: input.period,
+          temperature: input.temperature ?? null,
+          oxygen_saturation: input.oxygen_saturation ?? null,
+          systolic_pressure: input.systolic_pressure ?? null,
+          diastolic_pressure: input.diastolic_pressure ?? null,
+          heart_rate: input.heart_rate ?? null,
+          pain_level: input.pain_level ?? null,
+          dyspnea_level: input.dyspnea_level ?? null,
+          urination_count: input.urination_count ?? null,
+          urinated_normally: input.urinated_normally ?? null,
+          vomiting_count: input.vomiting_count ?? null,
+          had_vomit: input.had_vomit ?? null,
+          has_bleeding: input.has_bleeding ?? false,
+          steps: input.steps ?? null,
+          wound_photo_path: input.wound_photo_path ?? null,
+          has_drain: input.has_drain ?? false,
+          drain_photo_path: input.drain_photo_path ?? null,
+        },
+      },
     });
-    if (error) throw new Error(error.message);
-    return { clinical_status: data as string };
+    if (error) throw new Error(await extractEdgeError(error));
+    const status = (data as { clinical_status?: string })?.clinical_status;
+    if (!status) throw new Error('Não foi possível enviar sua medição. Tente novamente.');
+    return { clinical_status: status };
   },
 };
+
+/** Extrai a mensagem (genérica) retornada pela Edge Function de envio. */
+async function extractEdgeError(error: unknown): Promise<string> {
+  const ctx = (error as { context?: Response })?.context;
+  if (ctx && typeof ctx.json === 'function') {
+    try {
+      const body = await ctx.json();
+      if (body?.error) return String(body.error);
+    } catch {
+      // corpo não-JSON
+    }
+  }
+  return 'Não foi possível enviar sua medição. Tente novamente.';
+}

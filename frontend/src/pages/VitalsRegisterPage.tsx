@@ -18,6 +18,8 @@ type Step = 'choose' | 'form' | 'success';
 export function VitalsRegisterPage() {
   const { token } = useParams<{ token: string }>();
   const [link, setLink] = useState<PatientLinkInfo | null>(null);
+  // CPF confirmado no gate — reenviado no submit (gate real de identidade, C-04).
+  const [cpf, setCpf] = useState('');
   const [step, setStep] = useState<Step>('choose');
   const [period, setPeriod] = useState<Period>(Period.MORNING);
   const [photoSent, setPhotoSent] = useState(false);
@@ -38,7 +40,15 @@ export function VitalsRegisterPage() {
 
   // Gate de identidade: só libera os dados após confirmar o CPF (server-side).
   if (!link) {
-    return <CpfGate token={token} onValidated={setLink} />;
+    return (
+      <CpfGate
+        token={token}
+        onValidated={(info, confirmedCpf) => {
+          setCpf(confirmedCpf);
+          setLink(info);
+        }}
+      />
+    );
   }
 
   const patient: MeasurementPatient = {
@@ -70,6 +80,7 @@ export function VitalsRegisterPage() {
     return (
       <PatientMeasurementWizard
         token={token}
+        cpf={cpf}
         patient={patient}
         period={period}
         onSuccess={(photoAttached) => {
@@ -133,7 +144,7 @@ function PeriodChoice({ name, onChoose }: { name: string; onChoose: (p: Period) 
  * Pede o CPF e valida no servidor antes de revelar qualquer dado do paciente.
  * Erro sempre genérico (não revela existência).
  */
-function CpfGate({ token, onValidated }: { token: string; onValidated: (info: PatientLinkInfo) => void }) {
+function CpfGate({ token, onValidated }: { token: string; onValidated: (info: PatientLinkInfo, cpf: string) => void }) {
   const [cpf, setCpf] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -143,7 +154,7 @@ function CpfGate({ token, onValidated }: { token: string; onValidated: (info: Pa
     setError(null);
     try {
       const info = await publicAccessService.validate(token, cpf);
-      onValidated(info);
+      onValidated(info, cpf);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'CPF não confere com este link.');
     } finally {
