@@ -1,5 +1,6 @@
 /** Perfil do usuário (role, nome) — usado para menus e RBAC no frontend. */
 import { supabase } from '../lib/supabase';
+import { extractEdgeError } from '../lib/edgeError';
 import { storageService } from './storageService';
 import { teamViewService, type TeamSummary } from './teamViewService';
 import type { NotificationPrefs, Profile, RoleInTeam, UserRole } from './types';
@@ -59,8 +60,9 @@ export const profileService = {
 
   /**
    * Cria a CONTA de login + perfil de um médico (cirurgião ou associado). Só
-   * ADMIN — usa a RPC `admin_create_doctor` (SECURITY DEFINER); nunca expõe a
-   * service_role no frontend. Retorna o id do profile criado.
+   * ADMIN — via Edge Function `admin-create-user` (auth.admin.createUser; valida
+   * is_admin no servidor), substituindo a RPC admin_create_doctor que inseria à
+   * mão em auth.users (frágil — C-06). Retorna o id do profile criado.
    */
   async createDoctorProfile(input: {
     name: string;
@@ -69,15 +71,19 @@ export const profileService = {
     whatsapp: string;
     role: RoleInTeam;
   }): Promise<string> {
-    const { data, error } = await supabase.rpc('admin_create_doctor', {
-      p_name: input.name,
-      p_email: input.email,
-      p_password: input.password,
-      p_whatsapp: input.whatsapp ?? '',
-      p_role: input.role,
+    const { data, error } = await supabase.functions.invoke('admin-create-user', {
+      body: {
+        name: input.name,
+        email: input.email,
+        password: input.password,
+        whatsapp: input.whatsapp ?? '',
+        role: input.role,
+      },
     });
-    if (error) throw new Error(error.message);
-    return data as string;
+    if (error) throw new Error(await extractEdgeError(error, 'Não foi possível cadastrar o médico.'));
+    const id = (data as { id?: string })?.id;
+    if (!id) throw new Error('Não foi possível cadastrar o médico.');
+    return id;
   },
 
   /* ======================= "Meu Perfil" (próprio usuário) ======================= */
