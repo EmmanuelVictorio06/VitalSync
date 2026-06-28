@@ -1,7 +1,9 @@
 /** Componentes reutilizáveis da seção Administração. */
-import type { ReactNode } from 'react';
-import { AlertCircle, Inbox, Plus, Search } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { AlertCircle, Inbox, MoreHorizontal, Plus, Search } from 'lucide-react';
 import type { EntityStatus } from '../lib/admin-types';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 import { Responsive } from './responsive/Responsive';
 import { Button, PageHeader, cn } from './ui';
 
@@ -188,10 +190,12 @@ export function AdminTable<T>({
   return (
     <>
       {/* Desktop: tabela tradicional. `Responsive` evita montar a versão mobile
-          em paralelo (sem rodar hooks/render dela fora do breakpoint). */}
+          em paralelo (sem rodar hooks/render dela fora do breakpoint).
+          overflow-x-auto: se faltar largura, rola DENTRO do card (nunca na página);
+          os menus de ação usam portal, então não são cortados pelo container. */}
       <Responsive min="md">
-      <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="bg-card border border-border rounded-xl shadow-sm overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/40">
               {columns.map((c) => (
@@ -267,7 +271,7 @@ export function RowIconButton({
       title={label}
       aria-label={label}
       className={cn(
-        'size-8 rounded-md border flex items-center justify-center transition-colors',
+        'size-8 shrink-0 rounded-md border flex items-center justify-center transition-colors',
         danger
           ? 'border-alert/30 text-alert hover:bg-alert/5'
           : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -275,6 +279,127 @@ export function RowIconButton({
     >
       {children}
     </button>
+  );
+}
+
+/* ---------------- Menu "Mais ações" (três pontos) ----------------
+   Agrupa as ações secundárias da linha. O painel é renderizado via PORTAL no
+   document.body, então NUNCA é cortado por containers com overflow (cards,
+   tabela com overflow-x-auto). No desktop abre ancorado ao botão (com detecção
+   de colisão); no mobile abre como bottom sheet, com alvos de toque grandes. */
+export interface RowAction {
+  label: string;
+  icon?: ReactNode;
+  onClick: () => void;
+  danger?: boolean;
+}
+
+export function RowActionsMenu({ actions, label = 'Mais ações' }: { actions: RowAction[]; label?: string }) {
+  const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const bp = useBreakpoint();
+  const isMobile = bp === 'base' || bp === 'sm';
+  const MENU_W = 224;
+
+  // Fecha ao rolar/redimensionar (evita painel em posição obsoleta) e no Esc.
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  function toggle() {
+    if (open) { setOpen(false); return; }
+    const r = triggerRef.current?.getBoundingClientRect();
+    if (r && !isMobile) {
+      const left = Math.max(16, Math.min(r.right - MENU_W, window.innerWidth - MENU_W - 16));
+      const estH = actions.length * 40 + 8;
+      const top = r.bottom + 6 + estH > window.innerHeight - 16 ? Math.max(16, r.top - estH - 6) : r.bottom + 6;
+      setCoords({ top, left });
+    }
+    setOpen(true);
+  }
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={toggle}
+        title={label}
+        aria-label={label}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="size-8 shrink-0 rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center transition-colors"
+      >
+        <MoreHorizontal className="size-4" />
+      </button>
+
+      {open &&
+        createPortal(
+          <div className="fixed inset-0 z-[9998]" role="presentation" onClick={() => setOpen(false)}>
+            {isMobile ? (
+              <div
+                role="menu"
+                aria-label={label}
+                onClick={(e) => e.stopPropagation()}
+                className="absolute inset-x-0 bottom-0 bg-card border-t border-border rounded-t-2xl shadow-xl p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] animate-entry"
+              >
+                <div className="mx-auto mb-2 mt-1 h-1 w-10 rounded-full bg-border" aria-hidden />
+                {actions.map((a) => (
+                  <button
+                    key={a.label}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => { setOpen(false); a.onClick(); }}
+                    className={cn(
+                      'w-full flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-left transition-colors min-h-[44px]',
+                      a.danger ? 'text-alert hover:bg-alert/5' : 'text-foreground hover:bg-muted',
+                    )}
+                  >
+                    <span className="shrink-0">{a.icon}</span>
+                    <span className="truncate">{a.label}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div
+                role="menu"
+                aria-label={label}
+                onClick={(e) => e.stopPropagation()}
+                style={{ top: coords.top, left: coords.left, width: MENU_W }}
+                className="absolute z-[9999] bg-card border border-border rounded-lg shadow-lg py-1 animate-entry"
+              >
+                {actions.map((a) => (
+                  <button
+                    key={a.label}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => { setOpen(false); a.onClick(); }}
+                    className={cn(
+                      'w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors',
+                      a.danger ? 'text-alert hover:bg-alert/5' : 'text-foreground hover:bg-muted',
+                    )}
+                  >
+                    <span className="shrink-0 text-muted-foreground">{a.icon}</span>
+                    <span className="truncate">{a.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 
