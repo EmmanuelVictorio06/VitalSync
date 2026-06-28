@@ -30,7 +30,7 @@ export function RemoveImageButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg border border-alert/30 text-alert font-semibold text-sm hover:bg-alert/10"
+      className="w-full sm:flex-1 min-h-11 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg border border-alert/30 text-alert font-semibold text-sm hover:bg-alert/10"
     >
       <Trash2 className="size-4" /> Remover foto
     </button>
@@ -58,20 +58,27 @@ export function ImagePreviewCard({
   }, [file]);
 
   return (
-    <div className="space-y-3">
-      <div className="rounded-xl overflow-hidden border border-border bg-muted/40">
+    <div className="space-y-3 min-w-0">
+      {/* Container seguro: qualquer proporção fica contida, sem estourar o card. */}
+      <div className="w-full max-w-full rounded-xl overflow-hidden border border-border bg-muted/40 flex items-center justify-center">
         {url && (
-          <img src={url} alt="Prévia da foto da ferida" className="w-full max-h-72 object-contain bg-black/5" />
+          <img
+            src={url}
+            alt="Prévia da foto da ferida"
+            className="max-h-56 sm:max-h-64 w-full max-w-full object-contain bg-black/5"
+          />
         )}
       </div>
-      <p className="text-xs text-muted-foreground truncate">
+      {/* Nome do arquivo: trunca sem empurrar o layout. */}
+      <p className="min-w-0 max-w-full truncate text-xs text-muted-foreground">
         <span className="font-semibold text-foreground">{file.name}</span> · {humanSize(file.size)}
       </p>
-      <div className="grid grid-cols-2 gap-3">
+      {/* Ações: empilham no mobile, lado a lado no desktop. */}
+      <div className="flex flex-col sm:flex-row gap-2 w-full">
         <button
           type="button"
           onClick={onReplace}
-          className="inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg border border-primary/30 text-primary font-semibold text-sm hover:bg-accent"
+          className="w-full sm:flex-1 min-h-11 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg border border-primary/30 text-primary font-semibold text-sm hover:bg-accent"
         >
           <RefreshCw className="size-4" /> Trocar foto
         </button>
