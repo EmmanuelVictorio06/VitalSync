@@ -10,18 +10,13 @@
  * funções não substituem essa checagem — apenas montam/baixam os dados.
  */
 import { csvDate, csvDateTime, downloadCsv, type CsvCell } from '../lib/csv';
+import { dbRoleLabelPt } from '../lib/roles';
 import { patientService } from './patientService';
 import { alertService } from './alertService';
 import { teamService } from './teamService';
 import { userService } from './userService';
 
 const STATUS_LABEL: Record<string, string> = { GREEN: 'Estável', YELLOW: 'Atenção', RED: 'Alerta' };
-const ROLE_LABEL: Record<string, string> = {
-  ADMIN: 'Administrador',
-  MAIN_SURGEON: 'Cirurgião Principal',
-  ASSOCIATED_DOCTOR: 'Médico Associado',
-  SUPPORT: 'Suporte',
-};
 const ENTITY_STATUS_LABEL: Record<string, string> = { ACTIVE: 'Ativo', INACTIVE: 'Inativo' };
 
 function today(): string {
@@ -94,7 +89,7 @@ export const exportService = {
       ...items.map((u) => [
         u.name,
         u.email,
-        ROLE_LABEL[u.role] ?? u.role,
+        dbRoleLabelPt(u.role),
         ENTITY_STATUS_LABEL[u.status] ?? u.status,
         u.whatsapp ?? '',
         u.crm ?? '',

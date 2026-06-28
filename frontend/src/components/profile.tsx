@@ -20,11 +20,8 @@ export function initials(name?: string | null): string {
   return ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1]?.[0] ?? '' : '')).toUpperCase();
 }
 
-export const ROLE_LABEL_PT: Record<string, string> = {
-  ADM: 'Administrador',
-  SURGEON: 'Cirurgião Principal',
-  ASSOCIATE: 'Médico Associado',
-};
+/** Rótulos PT-BR por papel (Role). Fonte única em lib/roles (D-04). */
+export { APP_ROLE_LABEL_PT as ROLE_LABEL_PT } from '../lib/roles';
 
 /* ---------------- Validação do arquivo de avatar ---------------- */
 const AVATAR_MAX_BYTES = 5 * 1024 * 1024;

@@ -41,6 +41,7 @@ import { authService } from '../services/authService';
 import { permissionService } from '../services/permissionService';
 import { profileService } from '../services/profileService';
 import { storageService } from '../services/storageService';
+import { dbRoleLabelPt } from '../lib/roles';
 import type { TeamSummary } from '../services/teamViewService';
 import { DEFAULT_NOTIFICATION_PREFS, type NotificationPrefs, type Profile } from '../services/types';
 
@@ -72,7 +73,7 @@ export function MyProfilePage() {
   if (!permissionService.canAccessMyProfile(user)) return <AccessDenied />;
 
   const avatarUrl = profile?.avatar_url ? storageService.getProfileAvatarUrl(profile.avatar_url) : null;
-  const roleLabel = ROLE_LABEL_PT[user?.role ?? ''] ?? 'Usuário';
+  const roleLabel = user ? ROLE_LABEL_PT[user.role] : 'Usuário';
 
   return (
     <PageContainer>
@@ -277,7 +278,7 @@ function AccessDataCard({ profile, onChanged }: { profile: Profile; onChanged: (
     <SettingsSection title="Dados de acesso" description="Seu e-mail é usado para entrar no sistema. A alteração é confirmada pelo Supabase Auth.">
       <dl className="grid sm:grid-cols-3 gap-3 text-sm">
         <InfoItem label="E-mail atual" value={profile.email} />
-        <InfoItem label="Perfil de acesso" value={ROLE_LABEL_PT[roleKey(profile.role)] ?? profile.role} />
+        <InfoItem label="Perfil de acesso" value={dbRoleLabelPt(profile.role)} />
         <InfoItem label="Status da conta" value={profile.status === 'ACTIVE' ? 'Ativa' : 'Inativa'} />
       </dl>
 
@@ -518,7 +519,7 @@ function SecurityCard({ authUser, profile }: { authUser: User | null; profile: P
         <InfoItem label="Último login" value={authUser?.last_sign_in_at ? new Date(authUser.last_sign_in_at).toLocaleString('pt-BR') : '—'} />
         <InfoItem label="E-mail verificado" value={emailVerified ? 'Sim' : 'Não'} tone={emailVerified ? 'stable' : 'warning'} />
         <InfoItem label="Conta criada em" value={new Date(authUser?.created_at ?? profile.created_at).toLocaleDateString('pt-BR')} />
-        <InfoItem label="Perfil de acesso" value={ROLE_LABEL_PT[roleKey(profile.role)] ?? profile.role} />
+        <InfoItem label="Perfil de acesso" value={dbRoleLabelPt(profile.role)} />
       </dl>
 
       <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
@@ -603,9 +604,4 @@ function InfoItem({ label, value, tone }: { label: string; value: string; tone?:
       <dd className={`font-semibold mt-0.5 truncate ${cls}`}>{value}</dd>
     </div>
   );
-}
-
-/** Converte UserRole do banco (ADMIN/...) na chave de ROLE_LABEL_PT (ADM/...). */
-function roleKey(role: string): string {
-  return role === 'ADMIN' ? 'ADM' : role === 'MAIN_SURGEON' ? 'SURGEON' : role === 'ASSOCIATED_DOCTOR' ? 'ASSOCIATE' : role;
 }

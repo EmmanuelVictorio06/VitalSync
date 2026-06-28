@@ -5,18 +5,13 @@
  * - Calcula o statusByVital com as regras do @vitalsync/shared.
  * - Gera URL assinada (temporária) para a foto da ferida (bucket privado).
  */
-import { evaluateVitalSigns } from '@vitalsync/shared';
+import { daysSinceDischarge, evaluateVitalSigns, monitoringDay } from '@vitalsync/shared';
 import { supabase } from '../lib/supabase';
 import { patientService } from './patientService';
 import { storageService } from './storageService';
 import { teamViewService } from './teamViewService';
 import type { AttendanceStatus, VitalSignRecord } from './types';
 import type { PatientDashboard, VitalRecord } from '../lib/dto';
-
-function daysSince(date?: string | null): number {
-  if (!date) return 0;
-  return Math.max(0, Math.floor((Date.now() - new Date(date).getTime()) / 86_400_000));
-}
 
 async function toVitalRecord(v: VitalSignRecord): Promise<VitalRecord> {
   // Prefere os booleanos persistidos (M-01); cai para a inferência antiga só no
@@ -144,7 +139,9 @@ export const patientDashboardService = {
       attendedByName = profileName(alertRow.profiles);
     }
 
-    const days = daysSince(patient.hospital_discharge_date);
+    // Datas civis e dia de monitoramento no fuso da clínica (M-15/M-16).
+    const discharge = patient.hospital_discharge_date ? new Date(patient.hospital_discharge_date) : null;
+    const days = discharge ? daysSinceDischarge(discharge) : 0;
     return {
       patient: {
         id: patient.id,
@@ -161,7 +158,7 @@ export const patientDashboardService = {
         attendedById,
         attendedByName,
         daysSinceDischarge: days,
-        monitoringDay: patient.hospital_discharge_date && days <= 10 ? Math.max(1, days + 1) : null,
+        monitoringDay: discharge ? monitoringDay(discharge) : null,
       },
       records,
       teamMembers,

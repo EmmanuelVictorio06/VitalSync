@@ -1,6 +1,7 @@
 /** Equipes médicas e seus membros (RLS aplica o escopo por perfil). */
 import { supabase } from '../lib/supabase';
 import { profileService } from './profileService';
+import { homologationService } from './homologationService';
 import type { EntityStatus, MedicalTeam, Profile, RoleInTeam, TeamMember } from './types';
 
 export interface TeamMemberWithProfile extends TeamMember {
@@ -112,10 +113,15 @@ export const teamService = {
 
   /** Estatísticas de uma equipe (pacientes por status e alertas pendentes). */
   async getTeamStats(teamId: string): Promise<{ monitoring: number; stable: number; attention: number; alert: number; unattendedAlerts: number }> {
-    const [patientsRes, alertsRes] = await Promise.all([
-      supabase.from('patients').select('current_status').eq('team_id', teamId).is('deleted_at', null),
-      supabase.from('clinical_alerts').select('id', { count: 'exact', head: true }).eq('team_id', teamId).eq('attended', false),
-    ]);
+    // Fora do modo homologação, oculta pacientes/alertas de teste (is_test) — M-14.
+    const showTest = await homologationService.isActive();
+    let patientsQ = supabase.from('patients').select('current_status').eq('team_id', teamId).is('deleted_at', null);
+    let alertsQ = supabase.from('clinical_alerts').select('id', { count: 'exact', head: true }).eq('team_id', teamId).eq('attended', false);
+    if (!showTest) {
+      patientsQ = patientsQ.eq('is_test', false);
+      alertsQ = alertsQ.eq('is_test', false);
+    }
+    const [patientsRes, alertsRes] = await Promise.all([patientsQ, alertsQ]);
     const tp = (patientsRes.data ?? []) as Array<{ current_status: string }>;
     const cnt = (s: string) => tp.filter((p) => p.current_status === s).length;
     return {
@@ -129,11 +135,19 @@ export const teamService = {
 
   /** Cards de resumo do topo (calculados sobre todas as equipes visíveis). */
   async getAdminTeamSummary(): Promise<AdminTeamSummary> {
+    // Fora do modo homologação, oculta pacientes/alertas de teste (is_test) — M-14.
+    const showTest = await homologationService.isActive();
+    let patientsQ = supabase.from('patients').select('team_id').is('deleted_at', null);
+    let alertsQ = supabase.from('clinical_alerts').select('team_id').eq('attended', false);
+    if (!showTest) {
+      patientsQ = patientsQ.eq('is_test', false);
+      alertsQ = alertsQ.eq('is_test', false);
+    }
     const [teamsRes, membersRes, patientsRes, alertsRes] = await Promise.all([
       supabase.from('medical_teams').select('id, status, main_surgeon_id'),
       supabase.from('team_members').select('doctor_id, role_in_team').eq('status', 'ACTIVE'),
-      supabase.from('patients').select('team_id').is('deleted_at', null),
-      supabase.from('clinical_alerts').select('team_id').eq('attended', false),
+      patientsQ,
+      alertsQ,
     ]);
     if (teamsRes.error) throw new Error(teamsRes.error.message);
 

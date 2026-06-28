@@ -131,14 +131,4 @@ export interface PatientLinkInfo {
     daysSinceDischarge: number;
     withinWindow: boolean;
   };
-  inputRanges: Record<InputRangeKey, InputRangeInfo>;
-}
-
-export type InputRangeKey = 'temperature' | 'spo2' | 'systolic' | 'diastolic' | 'heartRate' | 'steps';
-export interface InputRangeInfo {
-  min: number;
-  max: number;
-  example: string;
-  unit: string;
-  PENDING_MEDICAL_VALIDATION: boolean;
 }

@@ -8,6 +8,7 @@
  * exigem campos obrigatórios, gravam a timeline e auditam.
  */
 import { supabase } from '../lib/supabase';
+import { homologationService } from './homologationService';
 import type {
   AttendanceConfirmation,
   ClinicalAlert,
@@ -76,10 +77,11 @@ function isToday(iso: string | null): boolean {
 export const alertService = {
   /** Lista os alertas visíveis ao usuário (RLS) já enriquecidos. */
   async getAlerts(): Promise<AlertRow[]> {
-    const { data, error } = await supabase
-      .from('clinical_alerts')
-      .select(ALERT_SELECT)
-      .order('created_at', { ascending: false });
+    // Fora do modo homologação, oculta alertas de teste (is_test) — M-14.
+    const showTest = await homologationService.isActive();
+    let query = supabase.from('clinical_alerts').select(ALERT_SELECT).order('created_at', { ascending: false });
+    if (!showTest) query = query.eq('is_test', false);
+    const { data, error } = await query;
     if (error) throw new Error(error.message);
     let rows = (data as unknown as AlertRow[]) ?? [];
 
