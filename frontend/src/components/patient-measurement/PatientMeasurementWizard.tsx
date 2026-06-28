@@ -40,12 +40,14 @@ import {
 
 export interface PatientMeasurementWizardProps {
   token: string;
+  /** CPF confirmado no gate — reenviado no submit para revalidar a identidade. */
+  cpf: string;
   patient: MeasurementPatient;
   period: Period;
   onSuccess: (photoAttached: boolean) => void;
 }
 
-export function PatientMeasurementWizard({ token, patient, period, onSuccess }: PatientMeasurementWizardProps) {
+export function PatientMeasurementWizard({ token, cpf, patient, period, onSuccess }: PatientMeasurementWizardProps) {
   const toast = useToast();
   const [step, setStep] = useState<MeasurementStep>(1);
   const [form, setForm] = useState<MeasurementFormState>(EMPTY_FORM);
@@ -93,6 +95,7 @@ export function PatientMeasurementWizard({ token, patient, period, onSuccess }: 
 
       await vitalSignsService.submitByToken({
         secure_token: token,
+        cpf,
         period,
         temperature: toNumber(form.temperature),
         oxygen_saturation: toNumber(form.spo2),
