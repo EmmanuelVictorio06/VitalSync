@@ -3,6 +3,7 @@
  * escopo: ADMIN vê todas; cirurgião/associado, apenas as suas.
  */
 import { supabase } from '../lib/supabase';
+import { homologationService } from './homologationService';
 import type { ClinicalStatus, EntityStatus, RoleInTeam } from './types';
 
 export interface TeamStats {
@@ -113,13 +114,22 @@ export const teamViewService = {
     const { data: u } = await supabase.auth.getUser();
     const uid = u.user?.id ?? '';
 
+    // Fora do modo homologação, oculta pacientes/alertas de teste (is_test) — M-14.
+    const showTest = await homologationService.isActive();
+    let patientsQ = supabase.from('patients').select('team_id, current_status').is('deleted_at', null);
+    let alertsQ = supabase.from('clinical_alerts').select('team_id').eq('attended', false);
+    if (!showTest) {
+      patientsQ = patientsQ.eq('is_test', false);
+      alertsQ = alertsQ.eq('is_test', false);
+    }
+
     const [teamsRes, patientsRes, alertsRes] = await Promise.all([
       supabase
         .from('medical_teams')
         .select('id, team_number, status, main_surgeon_id, surgeon:profiles!medical_teams_main_surgeon_id_fkey(name), members:team_members(status)')
         .order('team_number'),
-      supabase.from('patients').select('team_id, current_status').is('deleted_at', null),
-      supabase.from('clinical_alerts').select('team_id').eq('attended', false),
+      patientsQ,
+      alertsQ,
     ]);
     if (teamsRes.error) throw new Error(teamsRes.error.message);
 
@@ -169,19 +179,25 @@ export const teamViewService = {
       members: Array<{ id: string; status: string; doctor: { id: string; name: string; email: string; whatsapp: string | null } | null }>;
     };
 
-    const [patientsRes, alertsRes] = await Promise.all([
-      supabase
-        .from('patients')
-        .select('id, name, current_status, surgery_date, hospital_discharge_date, surgery_type:surgery_types(name)')
-        .eq('team_id', teamId)
-        .is('deleted_at', null),
-      supabase
-        .from('clinical_alerts')
-        .select('team_id, patient_id, type, status, created_at')
-        .eq('attended', false)
-        .eq('team_id', teamId)
-        .order('created_at', { ascending: false }),
-    ]);
+    // Fora do modo homologação, oculta pacientes/alertas de teste (is_test) — M-14.
+    const showTest = await homologationService.isActive();
+    let patientsQ = supabase
+      .from('patients')
+      .select('id, name, current_status, surgery_date, hospital_discharge_date, surgery_type:surgery_types(name)')
+      .eq('team_id', teamId)
+      .is('deleted_at', null);
+    let alertsQ = supabase
+      .from('clinical_alerts')
+      .select('team_id, patient_id, type, status, created_at')
+      .eq('attended', false)
+      .eq('team_id', teamId)
+      .order('created_at', { ascending: false });
+    if (!showTest) {
+      patientsQ = patientsQ.eq('is_test', false);
+      alertsQ = alertsQ.eq('is_test', false);
+    }
+
+    const [patientsRes, alertsRes] = await Promise.all([patientsQ, alertsQ]);
 
     const patientsRaw = (patientsRes.data ?? []) as unknown as Array<{
       id: string;

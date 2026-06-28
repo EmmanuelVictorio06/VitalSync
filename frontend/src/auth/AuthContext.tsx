@@ -2,7 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { Role } from '@vitalsync/shared';
 import { authService } from '../services/authService';
 import { profileService } from '../services/profileService';
-import type { Profile, UserRole } from '../services/types';
+import { dbRoleToAppRole } from '../lib/roles';
+import type { Profile } from '../services/types';
 import type { AuthUser } from '../lib/dto';
 
 interface AuthContextValue {
@@ -18,22 +19,12 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-/**
- * Mapeia o papel do Supabase (profiles.role) para o enum Role usado em todo o
- * app, mantendo PermissionGuard / sidebar / rotas inalterados (adaptador único).
- */
-const ROLE_MAP: Record<UserRole, Role> = {
-  ADMIN: Role.ADM,
-  MAIN_SURGEON: Role.SURGEON,
-  ASSOCIATED_DOCTOR: Role.ASSOCIATE,
-  SUPPORT: Role.SUPPORT,
-};
-
+// Mapeamento papel do banco → enum Role centralizado em lib/roles (D-04).
 function toAuthUser(profile: Profile): AuthUser {
   return {
     id: profile.id,
     name: profile.name,
-    role: ROLE_MAP[profile.role] ?? Role.ASSOCIATE,
+    role: dbRoleToAppRole(profile.role),
     teamId: null,
     avatarUrl: profile.avatar_url ?? null,
   };

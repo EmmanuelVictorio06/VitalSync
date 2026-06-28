@@ -1,12 +1,14 @@
+import { daysSinceDischarge } from '@vitalsync/shared';
 import { supabase } from '../lib/supabase';
+import { homologationService } from './homologationService';
 import type { CriticalPatient, DashboardAdminKpis, DashboardData, RecentAlert, WeeklyPoint } from '../lib/dashboard-data';
 import type { ClinicalStatus } from './types';
 
 const WEEKDAY = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
+/** Dias desde a alta (data civil, fuso da clínica) — M-15/M-16. */
 function daysSince(date?: string | null): number {
-  if (!date) return 0;
-  return Math.max(0, Math.floor((Date.now() - new Date(date).getTime()) / 86_400_000));
+  return date ? daysSinceDischarge(new Date(date)) : 0;
 }
 
 function pickVital(v: Record<string, unknown>): { value: string; label: string } {
@@ -29,20 +31,36 @@ export const dashboardService = {
     const todayIso = new Date().toISOString().slice(0, 10);
     const since14 = new Date(Date.now() - 14 * 86_400_000).toISOString().slice(0, 10);
 
+    // Fora do modo homologação, oculta linhas de teste (is_test) — M-14.
+    const showTest = await homologationService.isActive();
+
+    let patientsQ = supabase
+      .from('patients')
+      .select('id, name, current_status, hospital_discharge_date, surgery_type:surgery_types(name)')
+      .is('deleted_at', null);
+    let pendingQ = supabase.from('clinical_alerts').select('id, patient:patients(status)').eq('attended', false);
+    let todayQ = supabase.from('vital_sign_records').select('id', { count: 'exact', head: true }).eq('record_date', todayIso);
+    let recentQ = supabase
+      .from('clinical_alerts')
+      .select('id, status, description, created_at, patient:patients(name, status)')
+      .in('attendance_status', UNATTENDED_STATUSES)
+      .order('created_at', { ascending: false })
+      .limit(8);
+    let weeklyQ = supabase.from('vital_sign_records').select('record_date').gte('record_date', since14);
+    if (!showTest) {
+      patientsQ = patientsQ.eq('is_test', false);
+      pendingQ = pendingQ.eq('is_test', false);
+      todayQ = todayQ.eq('is_test', false);
+      recentQ = recentQ.eq('is_test', false);
+      weeklyQ = weeklyQ.eq('is_test', false);
+    }
+
     const [patientsRes, pendingRes, todayRes, alertsRes, weeklyRes, teamsRes, doctorsRes, hospitalsRes, surgeryTypesRes] = await Promise.all([
-      supabase
-        .from('patients')
-        .select('id, name, current_status, hospital_discharge_date, surgery_type:surgery_types(name)')
-        .is('deleted_at', null),
-      supabase.from('clinical_alerts').select('id, patient:patients(status)').eq('attended', false),
-      supabase.from('vital_sign_records').select('id', { count: 'exact', head: true }).eq('record_date', todayIso),
-      supabase
-        .from('clinical_alerts')
-        .select('id, status, description, created_at, patient:patients(name, status)')
-        .in('attendance_status', UNATTENDED_STATUSES)
-        .order('created_at', { ascending: false })
-        .limit(8),
-      supabase.from('vital_sign_records').select('record_date').gte('record_date', since14),
+      patientsQ,
+      pendingQ,
+      todayQ,
+      recentQ,
+      weeklyQ,
       supabase.from('medical_teams').select('id', { count: 'exact', head: true }).eq('status', 'ACTIVE'),
       supabase.from('profiles').select('id', { count: 'exact', head: true }).in('role', ['MAIN_SURGEON', 'ASSOCIATED_DOCTOR']).eq('status', 'ACTIVE'),
       supabase.from('hospitals').select('id', { count: 'exact', head: true }).eq('status', 'ACTIVE'),

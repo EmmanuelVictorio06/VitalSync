@@ -18,9 +18,24 @@ export function calculateAge(birthDate: Date, reference: Date = new Date()): num
  * que evita o erro de off-by-one ao misturar fuso local com UTC.
  */
 
-/** Meia-noite UTC do dia de calendário LOCAL atual (o "hoje" do paciente). */
+/**
+ * Fuso de referência da clínica (M-15/M-16). O "hoje" do paciente e os cálculos
+ * de dia de monitoramento usam ESTE fuso — de forma determinística, independente
+ * de onde o código roda (navegador em qualquer fuso, Edge Function em UTC, etc.).
+ */
+export const CLINIC_TIMEZONE = 'America/Sao_Paulo';
+
+/** Meia-noite UTC do dia de calendário ATUAL no fuso da clínica (o "hoje"). */
 export function startOfToday(now: Date = new Date()): Date {
-  return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  // Lê o dia civil no fuso de referência (en-CA → componentes YYYY-MM-DD).
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: CLINIC_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? '0');
+  return new Date(Date.UTC(get('year'), get('month') - 1, get('day')));
 }
 
 /** Timestamp (ms) da data civil, lendo sempre os componentes UTC. */
