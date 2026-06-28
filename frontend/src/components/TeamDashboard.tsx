@@ -26,16 +26,18 @@ interface TeamDashboardProps {
   roleLabel: string;
   /** Id do usuário logado — destaca "Você" na lista de médicos. */
   currentUserId?: string;
+  /** Quando fornecido (cirurgião dono), exibe "Gerenciar equipe" no bloco. */
+  onManageTeam?: (teamId: string) => void;
 }
 
-export function TeamDashboard({ teams, roleLabel, currentUserId }: TeamDashboardProps) {
+export function TeamDashboard({ teams, roleLabel, currentUserId, onManageTeam }: TeamDashboardProps) {
   const [active, setActive] = useState(0);
   const current = teams[Math.min(active, teams.length - 1)]!;
 
   return (
     <>
       {teams.length > 1 && <TeamCarousel teams={teams} activeIndex={active} onSelect={setActive} />}
-      <TeamBlock key={current.summary.id} detail={current} roleLabel={roleLabel} currentUserId={currentUserId} />
+      <TeamBlock key={current.summary.id} detail={current} roleLabel={roleLabel} currentUserId={currentUserId} onManageTeam={onManageTeam} />
     </>
   );
 }
@@ -47,7 +49,7 @@ function whatsappUrl(digits: string | null): string | null {
 
 /* ------------------------------ Bloco da equipe --------------------------- */
 
-function TeamBlock({ detail, roleLabel, currentUserId }: { detail: TeamDetail; roleLabel: string; currentUserId?: string }) {
+function TeamBlock({ detail, roleLabel, currentUserId, onManageTeam }: { detail: TeamDetail; roleLabel: string; currentUserId?: string; onManageTeam?: (teamId: string) => void }) {
   const navigate = useNavigate();
   const { summary, members, patients } = detail;
   const teamParam = String(summary.number);
@@ -108,6 +110,11 @@ function TeamBlock({ detail, roleLabel, currentUserId }: { detail: TeamDetail; r
             <Button variant="ghost" size="sm" className="justify-center col-span-2 sm:col-span-1" onClick={() => setRosterOpen(true)}>
               <Users className="size-3.5" /> Ver detalhes
             </Button>
+            {onManageTeam && (
+              <Button variant="secondary" size="sm" className="justify-center col-span-2 sm:col-span-1" onClick={() => onManageTeam(summary.id)}>
+                <Users className="size-3.5" /> Gerenciar equipe
+              </Button>
+            )}
           </div>
         </div>
       </section>
