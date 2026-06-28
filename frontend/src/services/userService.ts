@@ -10,6 +10,7 @@
  * "Gerenciar Equipes" (sem duplicar o gerenciamento de equipe aqui).
  */
 import { supabase } from '../lib/supabase';
+import { extractEdgeError } from '../lib/edgeError';
 import { authService } from './authService';
 import type { EntityStatus, UserOverview, UserRole, UserTeamLink } from './types';
 
@@ -50,21 +51,29 @@ export const userService = {
     return rows.find((u) => u.id === userId) ?? null;
   },
 
-  /** Cria a conta de login + profile (RPC admin_create_user). */
+  /**
+   * Cria a conta de login + profile via Edge Function `admin-create-user`
+   * (auth.admin.createUser; valida is_admin no servidor). Substitui a RPC
+   * admin_create_user, que inseria à mão em auth.users (frágil — C-06).
+   */
   async createUser(input: CreateUserInput): Promise<string> {
-    const { data, error } = await supabase.rpc('admin_create_user', {
-      p_name: input.name.trim(),
-      p_email: input.email.trim(),
-      p_password: input.password,
-      p_whatsapp: input.whatsapp ?? '',
-      p_role: input.role,
-      p_status: input.status ?? 'ACTIVE',
-      p_specialty: input.specialty ?? null,
-      p_crm: input.crm ?? null,
-      p_notes: input.notes ?? null,
+    const { data, error } = await supabase.functions.invoke('admin-create-user', {
+      body: {
+        name: input.name.trim(),
+        email: input.email.trim(),
+        password: input.password,
+        whatsapp: input.whatsapp ?? '',
+        role: input.role,
+        status: input.status ?? 'ACTIVE',
+        specialty: input.specialty ?? null,
+        crm: input.crm ?? null,
+        notes: input.notes ?? null,
+      },
     });
-    if (error) throw new Error(translateError(error.message));
-    return data as string;
+    if (error) throw new Error(await extractEdgeError(error, 'Não foi possível criar o usuário.'));
+    const id = (data as { id?: string })?.id;
+    if (!id) throw new Error('Não foi possível criar o usuário.');
+    return id;
   },
 
   /** Atualiza dados básicos (não toca e-mail/senha/role — têm fluxo próprio). */
