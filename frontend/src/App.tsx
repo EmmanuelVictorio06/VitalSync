@@ -51,7 +51,16 @@ export function App() {
           </PermissionGuard>
         }
       >
-        <Route path="/dashboard" element={<DashboardPage />} />
+        {/* Dashboard — clínicos e Admin. O Suporte não tem Dashboard (M-03):
+            o guard o redireciona para a sua home (/monitoring). */}
+        <Route
+          path="/dashboard"
+          element={
+            <PermissionGuard roles={[Role.ADM, Role.SURGEON, Role.ASSOCIATE]}>
+              <DashboardPage />
+            </PermissionGuard>
+          }
+        />
         <Route path="/monitoring" element={<MonitoringPage />} />
         {/* Cadastro de pacientes: Administrador e Cirurgião Principal */}
         <Route

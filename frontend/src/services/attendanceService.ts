@@ -141,7 +141,8 @@ export const attendanceService = {
     }
     const profiles = new Map<string, { name: string; role: UserRole }>();
     if (ids.size > 0) {
-      const { data: profs } = await supabase.from('profiles').select('id, name, role').in('id', [...ids]);
+      // Nome/papel (não sensíveis) via view pública — M-09.
+      const { data: profs } = await supabase.from('profiles_public').select('id, name, role').in('id', [...ids]);
       for (const p of profs ?? []) profiles.set(p.id, { name: p.name, role: p.role as UserRole });
     }
 
@@ -237,14 +238,12 @@ export const attendanceService = {
   },
 
   /**
-   * Atualiza a observação/conduta registrada. Permitido pela policy
-   * `attendance_rw` (membro da equipe do paciente); o backend revalida.
+   * Atualiza a observação/conduta registrada via RPC `alert_update_observation`
+   * (SECURITY DEFINER; revalida o vínculo por equipe). A escrita direta na tabela
+   * foi removida (M-08): a trilha de atendimento só muda por RPC.
    */
   async updateObservation(id: string, observation: string): Promise<void> {
-    const { error } = await supabase
-      .from('attendance_confirmations')
-      .update({ observation })
-      .eq('id', id);
+    const { error } = await supabase.rpc('alert_update_observation', { p_id: id, p_observation: observation });
     if (error) throw new Error(error.message);
   },
 

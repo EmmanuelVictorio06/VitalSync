@@ -94,7 +94,8 @@ export const alertService = {
     }
     const names = new Map<string, string>();
     if (ids.size > 0) {
-      const { data: profs } = await supabase.from('profiles').select('id, name').in('id', [...ids]);
+      // Resolução de nome (campo não sensível) via view pública — M-09.
+      const { data: profs } = await supabase.from('profiles_public').select('id, name').in('id', [...ids]);
       for (const p of profs ?? []) names.set(p.id, p.name);
     }
     for (const r of rows) {
@@ -199,7 +200,7 @@ export const alertService = {
 
     const ids = [...new Set(list.map((x) => x.id))];
     if (ids.length === 0) return [];
-    const { data: profs } = await supabase.from('profiles').select('id, name').in('id', ids);
+    const { data: profs } = await supabase.from('profiles_public').select('id, name').in('id', ids);
     const names = new Map((profs ?? []).map((p) => [p.id, p.name]));
     // dedup mantendo a primeira ocorrência (cirurgião primeiro)
     const seen = new Set<string>();

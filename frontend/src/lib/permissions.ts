@@ -70,3 +70,13 @@ export function canManageTeamMembers(role: Role | undefined): boolean {
 export function canRegisterPatients(role: Role | undefined): boolean {
   return role === Role.ADM || role === Role.SURGEON;
 }
+
+/**
+ * Rota inicial (home) por perfil. O Suporte é operacional e NÃO tem Dashboard;
+ * sua home é "Pacientes em Monitoramento". Usado no login e como destino de
+ * redirecionamento quando o perfil não pode acessar uma rota (evita cair em
+ * tela vazia ou em loop de redirecionamento — M-03).
+ */
+export function homeRouteFor(role: Role | undefined): string {
+  return role === Role.SUPPORT ? '/monitoring' : '/dashboard';
+}

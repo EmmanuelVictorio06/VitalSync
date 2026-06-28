@@ -2,11 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Calendar, Copy, Eye, MessageCircle, Search, Trash2, X } from 'lucide-react';
 import { ClinicalStatus, formatCivilDate, whatsappLink } from '@vitalsync/shared';
+import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
 import { SegmentedFilter } from '../components/admin';
 import { ConfirmModal, PageContainer, PageHeader, StatusBadge, cn, statusBorder } from '../components/ui';
 import { homologationService } from '../services/homologationService';
 import { patientService, type PatientKind, type PatientWithNames } from '../services/patientService';
+import { supportPermissionService } from '../services/supportPermissionService';
 
 const STATUS_OPTIONS: Array<{ value: '' | ClinicalStatus; label: string }> = [
   { value: '', label: 'Todos' },
@@ -40,6 +42,12 @@ function patientLink(p: PatientWithNames): string {
 export function MonitoringPage() {
   const toast = useToast();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  // Suporte é operacional: não abre o detalhe clínico (/patients/:id é barrado a
+  // ele) nem exclui paciente. Esconde essas ações para não habilitar o que o
+  // backend recusaria (M-03).
+  const canOpen = !supportPermissionService.isSupport(user);
+  const canDelete = supportPermissionService.canDeletePatient(user);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [patients, setPatients] = useState<PatientWithNames[] | null>(null);
@@ -216,10 +224,10 @@ export function MonitoringPage() {
             <PatientCard
               key={p.id}
               p={p}
-              onOpen={() => navigate(`/patients/${p.id}`)}
+              onOpen={canOpen ? () => navigate(`/patients/${p.id}`) : undefined}
               onCopy={() => share(p, 'copy')}
               onWhats={() => share(p, 'whatsapp')}
-              onDelete={() => setToDelete(p)}
+              onDelete={canDelete ? () => setToDelete(p) : undefined}
             />
           ))}
         </div>
@@ -248,16 +256,18 @@ function PatientCard({
   p, onOpen, onCopy, onWhats, onDelete,
 }: {
   p: PatientWithNames;
-  onOpen: () => void;
+  /** Indefinido = perfil não abre o detalhe clínico (ex.: Suporte). */
+  onOpen?: () => void;
   onCopy: () => void;
   onWhats: () => void;
-  onDelete: () => void;
+  /** Indefinido = perfil não pode excluir (ex.: Suporte). */
+  onDelete?: () => void;
 }) {
   return (
     <article className={cn('bg-card border border-border rounded-xl p-4 md:p-5 shadow-sm border-l-4 flex flex-col gap-4', statusBorder(p.current_status))}>
       <header className="flex items-start justify-between gap-3 min-w-0">
         <div className="min-w-0 flex-1">
-          <h3 className="font-bold text-base leading-tight truncate cursor-pointer hover:text-primary" onClick={onOpen}>
+          <h3 className={cn('font-bold text-base leading-tight truncate', onOpen && 'cursor-pointer hover:text-primary')} onClick={onOpen}>
             {p.name}
             {p.is_test && (
               <span className="ml-2 inline-flex items-center rounded-full border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-warning align-middle">
@@ -291,18 +301,22 @@ function PatientCard({
       </dl>
 
       <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border">
-        <button onClick={onOpen} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-primary text-primary-foreground rounded-md text-xs font-semibold hover:bg-primary/90 transition-colors">
-          <Eye className="size-3.5" /> Acompanhar
-        </button>
+        {onOpen && (
+          <button onClick={onOpen} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-primary text-primary-foreground rounded-md text-xs font-semibold hover:bg-primary/90 transition-colors">
+            <Eye className="size-3.5" /> Acompanhar
+          </button>
+        )}
         <button onClick={onWhats} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-border rounded-md text-xs font-semibold hover:bg-muted transition-colors">
           <MessageCircle className="size-3.5" /> WhatsApp
         </button>
         <button onClick={onCopy} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-border rounded-md text-xs font-semibold hover:bg-muted transition-colors">
           <Copy className="size-3.5" /> Copiar link
         </button>
-        <button onClick={onDelete} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-alert/30 text-alert rounded-md text-xs font-semibold hover:bg-alert/5 transition-colors">
-          <Trash2 className="size-3.5" /> Excluir
-        </button>
+        {onDelete && (
+          <button onClick={onDelete} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-alert/30 text-alert rounded-md text-xs font-semibold hover:bg-alert/5 transition-colors">
+            <Trash2 className="size-3.5" /> Excluir
+          </button>
+        )}
       </div>
     </article>
   );
