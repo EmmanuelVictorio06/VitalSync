@@ -36,6 +36,7 @@ function toAuthUser(profile: Profile): AuthUser {
     role: ROLE_MAP[profile.role] ?? Role.ASSOCIATE,
     teamId: null,
     avatarUrl: profile.avatar_url ?? null,
+    professionalTag: profile.professional_tag ?? null,
   };
 }
 

@@ -95,6 +95,7 @@ export function MyProfilePage() {
               roleLabel={roleLabel}
               status={profile.status}
               avatarUrl={avatarUrl}
+              tag={profile.professional_tag}
               createdAt={authUser?.created_at ?? profile.created_at}
               lastSignInAt={authUser?.last_sign_in_at}
             />

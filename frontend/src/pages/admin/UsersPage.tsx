@@ -23,7 +23,7 @@ import {
 import { onlyDigits } from '@vitalsync/shared';
 import { useAuth } from '../../auth/AuthContext';
 import { useToast } from '../../components/Toast';
-import { Button, ConfirmModal, Field, PageContainer, PageHeader, PhoneInput, SelectField, TextInput } from '../../components/ui';
+import { Button, ConfirmModal, Field, PageContainer, PageHeader, PhoneInput, ProfessionalTag, SelectField, TextInput } from '../../components/ui';
 import {
   AdminTable,
   EmptyState,
@@ -218,7 +218,10 @@ export function UsersPage() {
                   <div className="flex items-center gap-3 min-w-0">
                     <UserAvatar name={u.name} avatarPath={u.avatar_url} />
                     <div className="min-w-0">
-                      <p className="font-semibold truncate">{u.name}</p>
+                      <p className="font-semibold truncate flex items-center gap-1.5">
+                        <span className="truncate">{u.name}</span>
+                        {u.professional_tag && <ProfessionalTag tag={u.professional_tag} className="shrink-0" />}
+                      </p>
                       <p className="text-xs text-muted-foreground truncate">{u.email}</p>
                     </div>
                   </div>

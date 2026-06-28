@@ -21,7 +21,7 @@ import { onlyDigits } from '@vitalsync/shared';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
-import { Button, ConfirmModal, PageContainer, PageHeader, SelectField, StatusBadge, TextInput } from '../components/ui';
+import { Button, ConfirmModal, PageContainer, PageHeader, ProfessionalCombobox, ProfessionalTag, StatusBadge, TextInput } from '../components/ui';
 import { EmptyState, ErrorState, LoadingState } from '../components/admin';
 import {
   AccessDenied,
@@ -288,6 +288,16 @@ function pad(n: number): string {
   return String(n).padStart(2, '0');
 }
 
+/** Opções do combobox de cirurgião (nome + tag + e-mail/papel para busca). */
+function surgeonComboOptions(surgeons: Profile[]) {
+  return surgeons.map((s) => ({ id: s.id, name: s.name, tag: s.professional_tag, email: s.email, roleLabel: 'Cirurgião Principal' }));
+}
+
+/** Opções do combobox de médico associado (nome + tag + e-mail/papel para busca). */
+function associateComboOptions(associates: Profile[]) {
+  return associates.map((a) => ({ id: a.id, name: a.name, tag: a.professional_tag, email: a.email, roleLabel: 'Médico Associado' }));
+}
+
 /* ============================ Card da equipe ============================ */
 function TeamCard({
   detail,
@@ -311,6 +321,11 @@ function TeamCard({
         <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Equipe nº {pad(summary.number)}</p>
           <h4 className="font-bold text-lg mt-0.5 truncate">{summary.surgeonName}</h4>
+          {surgeon?.tag && (
+            <div className="mt-0.5 mb-1">
+              <ProfessionalTag tag={surgeon.tag} />
+            </div>
+          )}
           <ContactLine email={surgeon?.email} whatsapp={surgeon?.whatsapp} />
         </div>
         <StatusTeamBadge active={active} />
@@ -484,12 +499,13 @@ function TeamFormModal({
             />
           </div>
           {surgeonMode === 'existing' ? (
-            <SelectField
+            <ProfessionalCombobox
               label="Cirurgião"
               value={surgeonId}
-              onChange={(e) => setSurgeonId(e.target.value)}
-              options={surgeons.map((s) => ({ value: s.id, label: s.name }))}
-              placeholder={surgeons.length ? 'Selecione…' : 'Nenhum cirurgião cadastrado'}
+              onChange={setSurgeonId}
+              options={surgeonComboOptions(surgeons)}
+              placeholder={surgeons.length ? 'Buscar por nome ou tag…' : 'Nenhum cirurgião cadastrado'}
+              hint="Busque por nome completo ou pela tag (ex.: Joao#4821)."
               required
             />
           ) : (
@@ -575,12 +591,12 @@ function AssocEntryFields({
         </div>
       </div>
       {entry.mode === 'existing' ? (
-        <SelectField
+        <ProfessionalCombobox
           label="Médico"
           value={entry.id}
-          onChange={(e) => onChange({ ...entry, id: e.target.value })}
-          options={associates.map((a) => ({ value: a.id, label: a.name }))}
-          placeholder={associates.length ? 'Selecione…' : 'Nenhum médico associado cadastrado'}
+          onChange={(id) => onChange({ ...entry, id })}
+          options={associateComboOptions(associates)}
+          placeholder={associates.length ? 'Buscar por nome ou tag…' : 'Nenhum médico associado cadastrado'}
         />
       ) : (
         <NewDoctorFields value={entry.draft} onChange={(draft) => onChange({ ...entry, draft })} />
@@ -740,17 +756,20 @@ function TeamDetailsModal({
             {surgeon && (
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="font-semibold truncate">{surgeon.name}</p>
+                  <p className="font-semibold truncate flex items-center gap-1.5">
+                    <span className="truncate">{surgeon.name}</span>
+                    {surgeon.tag && <ProfessionalTag tag={surgeon.tag} className="shrink-0" />}
+                  </p>
                   <ContactLine email={surgeon.email} whatsapp={surgeon.whatsapp} />
                 </div>
               </div>
             )}
-            <SelectField
+            <ProfessionalCombobox
               label="Trocar cirurgião principal"
               value={surgeonId}
-              onChange={(e) => setSurgeonId(e.target.value)}
-              options={surgeons.map((s) => ({ value: s.id, label: s.name }))}
-              placeholder="Selecione…"
+              onChange={setSurgeonId}
+              options={surgeonComboOptions(surgeons)}
+              placeholder="Buscar por nome ou tag…"
               hint="Ao salvar, o novo cirurgião passa a ser o responsável pela equipe."
             />
           </div>
@@ -770,7 +789,10 @@ function TeamDetailsModal({
               .map((m) => (
                 <li key={m.id} className="flex items-start justify-between gap-3 rounded-lg border border-border p-3">
                   <div className="min-w-0">
-                    <p className="font-semibold truncate">{m.name}</p>
+                    <p className="font-semibold truncate flex items-center gap-1.5">
+                      <span className="truncate">{m.name}</span>
+                      {m.tag && <ProfessionalTag tag={m.tag} className="shrink-0" />}
+                    </p>
                     <ContactLine email={m.email} whatsapp={m.whatsapp} />
                   </div>
                   {m.membershipId && (
@@ -799,13 +821,13 @@ function TeamDetailsModal({
             </div>
             {addMode === 'existing' ? (
               <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
-                <div className="flex-1">
-                  <SelectField
+                <div className="flex-1 min-w-0">
+                  <ProfessionalCombobox
                     label="Médico"
                     value={pick}
-                    onChange={(e) => setPick(e.target.value)}
-                    options={available.map((a) => ({ value: a.id, label: a.name }))}
-                    placeholder={available.length ? 'Selecione…' : 'Nenhum associado disponível'}
+                    onChange={setPick}
+                    options={associateComboOptions(available)}
+                    placeholder={available.length ? 'Buscar por nome ou tag…' : 'Nenhum associado disponível'}
                   />
                 </div>
                 <Button onClick={addAssociate} loading={adding} disabled={!pick}>
