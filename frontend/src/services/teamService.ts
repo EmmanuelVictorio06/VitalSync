@@ -55,6 +55,17 @@ export const teamService = {
     return data as MedicalTeam;
   },
 
+  /**
+   * Cria a PRÓPRIA equipe do cirurgião logado (autoatendimento) via RPC
+   * surgeon_create_team — o banco valida o papel + limite de 5 e gera o
+   * team_number. O responsável é sempre o próprio cirurgião (auth.uid()).
+   */
+  async createMyTeam(): Promise<MedicalTeam> {
+    const { data, error } = await supabase.rpc('surgeon_create_team');
+    if (error) throw new Error(translateError(error.message));
+    return data as MedicalTeam;
+  },
+
   /** Atualiza número, cirurgião responsável e/ou status da equipe (ADMIN). */
   async updateTeam(
     teamId: string,
@@ -186,6 +197,10 @@ export const teamService = {
 
 /** Traduz mensagens cruas do Postgres/PostgREST para o usuário final. */
 function translateError(message: string): string {
+  if (/TEAM_LIMIT_REACHED/.test(message)) return 'Limite de 5 equipes ativas atingido. Arquive uma equipe para criar outra.';
+  if (/TEAM_DOCTOR_LIMIT_REACHED/.test(message)) return 'Limite de 10 médicos associados nesta equipe atingido.';
+  if (/CANNOT_REMOVE_MAIN_SURGEON/.test(message)) return 'Não é possível remover o cirurgião responsável da equipe.';
+  if (/FORBIDDEN/.test(message)) return 'Você não tem permissão para esta ação.';
   if (/team_number/i.test(message) && /duplicate|unique/i.test(message)) return 'Número de equipe já utilizado.';
   if (/team_members.*team_id.*doctor_id|unique/i.test(message) && /team_members/i.test(message))
     return 'Este médico já está vinculado à equipe.';
