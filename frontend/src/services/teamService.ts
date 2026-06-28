@@ -4,7 +4,7 @@ import { profileService } from './profileService';
 import type { EntityStatus, MedicalTeam, Profile, RoleInTeam, TeamMember } from './types';
 
 export interface TeamMemberWithProfile extends TeamMember {
-  profile: Pick<Profile, 'id' | 'name' | 'email' | 'whatsapp' | 'role'> | null;
+  profile: Pick<Profile, 'id' | 'name' | 'email' | 'whatsapp' | 'role' | 'professional_tag'> | null;
 }
 
 /** Resumo geral exibido nos cards do topo de "Gerenciar Equipes". */
@@ -42,7 +42,7 @@ export const teamService = {
   async getMembers(teamId: string): Promise<TeamMemberWithProfile[]> {
     const { data, error } = await supabase
       .from('team_members')
-      .select('*, profile:profiles!team_members_doctor_id_fkey(id,name,email,whatsapp,role)')
+      .select('*, profile:profiles!team_members_doctor_id_fkey(id,name,email,whatsapp,role,professional_tag)')
       .eq('team_id', teamId);
     if (error) throw new Error(error.message);
     return (data as unknown as TeamMemberWithProfile[]) ?? [];

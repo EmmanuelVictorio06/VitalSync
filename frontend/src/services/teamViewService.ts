@@ -29,6 +29,8 @@ export interface TeamMemberView {
   name: string;
   email: string;
   whatsapp: string | null;
+  /** Tag única do profissional (ex.: "Joao#4821"). Pode ser nula. */
+  tag: string | null;
   isSurgeon: boolean;
 }
 
@@ -155,7 +157,7 @@ export const teamViewService = {
     const { data: team, error } = await supabase
       .from('medical_teams')
       .select(
-        'id, team_number, status, main_surgeon_id, surgeon:profiles!medical_teams_main_surgeon_id_fkey(id,name,email,whatsapp), members:team_members(id, status, doctor:profiles(id,name,email,whatsapp))',
+        'id, team_number, status, main_surgeon_id, surgeon:profiles!medical_teams_main_surgeon_id_fkey(id,name,email,whatsapp,professional_tag), members:team_members(id, status, doctor:profiles(id,name,email,whatsapp,professional_tag))',
       )
       .eq('id', teamId)
       .single();
@@ -165,8 +167,8 @@ export const teamViewService = {
       team_number: number;
       status: EntityStatus;
       main_surgeon_id: string | null;
-      surgeon: { id: string; name: string; email: string; whatsapp: string | null } | null;
-      members: Array<{ id: string; status: string; doctor: { id: string; name: string; email: string; whatsapp: string | null } | null }>;
+      surgeon: { id: string; name: string; email: string; whatsapp: string | null; professional_tag: string | null } | null;
+      members: Array<{ id: string; status: string; doctor: { id: string; name: string; email: string; whatsapp: string | null; professional_tag: string | null } | null }>;
     };
 
     const [patientsRes, alertsRes] = await Promise.all([
@@ -202,10 +204,10 @@ export const teamViewService = {
 
     const members: TeamMemberView[] = [];
     if (t.surgeon) {
-      members.push({ membershipId: null, id: t.surgeon.id, name: t.surgeon.name, email: t.surgeon.email, whatsapp: t.surgeon.whatsapp, isSurgeon: true });
+      members.push({ membershipId: null, id: t.surgeon.id, name: t.surgeon.name, email: t.surgeon.email, whatsapp: t.surgeon.whatsapp, tag: t.surgeon.professional_tag, isSurgeon: true });
     }
     for (const m of t.members.filter((x) => x.status === 'ACTIVE' && x.doctor)) {
-      members.push({ membershipId: m.id, id: m.doctor!.id, name: m.doctor!.name, email: m.doctor!.email, whatsapp: m.doctor!.whatsapp, isSurgeon: false });
+      members.push({ membershipId: m.id, id: m.doctor!.id, name: m.doctor!.name, email: m.doctor!.email, whatsapp: m.doctor!.whatsapp, tag: m.doctor!.professional_tag, isSurgeon: false });
     }
 
     const patients: TeamPatientView[] = patientsRaw.map((p) => ({

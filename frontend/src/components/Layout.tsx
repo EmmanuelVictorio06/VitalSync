@@ -7,7 +7,7 @@ import { HomologationBadge } from './HomologationBadge';
 import { canRegisterPatients } from '../lib/permissions';
 import { storageService } from '../services/storageService';
 import { initials } from './profile';
-import { cn } from './ui';
+import { ProfessionalTag, cn } from './ui';
 
 const ROLE_LABEL: Record<string, string> = {
   ADM: 'Administrador Geral',
@@ -125,6 +125,7 @@ function SidebarContent({
           <div className="flex-1 min-w-0">
             <p className="text-xs font-semibold truncate">{user?.name}</p>
             <p className="text-[10px] text-muted-foreground truncate">{ROLE_LABEL[user?.role ?? ''] ?? ''}</p>
+            {user?.professionalTag && <ProfessionalTag tag={user.professionalTag} className="mt-0.5 !text-[10px] !px-1" />}
           </div>
           <Stethoscope className="size-4 text-muted-foreground shrink-0" />
         </div>

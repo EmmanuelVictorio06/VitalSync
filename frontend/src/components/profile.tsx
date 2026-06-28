@@ -8,7 +8,7 @@
 import { useRef, useState } from 'react';
 import { Camera, Eye, EyeOff, RefreshCw, ShieldCheck, Trash2, UserRound } from 'lucide-react';
 import { isAcceptedWoundPhotoType } from '@vitalsync/shared';
-import { Field, cn } from './ui';
+import { Field, ProfessionalTag, cn } from './ui';
 import { StatusPill } from './admin';
 import { AvatarCropModal } from './AvatarCropModal';
 import type { EntityStatus } from '../services/types';
@@ -212,6 +212,7 @@ export function ProfileSummaryCard({
   roleLabel,
   status,
   avatarUrl,
+  tag,
   createdAt,
   lastSignInAt,
 }: {
@@ -220,6 +221,8 @@ export function ProfileSummaryCard({
   roleLabel: string;
   status: EntityStatus;
   avatarUrl: string | null;
+  /** Tag única do profissional (ex.: "Joao#4821"). Opcional. */
+  tag?: string | null;
   createdAt?: string | null;
   lastSignInAt?: string | null;
 }) {
@@ -234,7 +237,12 @@ export function ProfileSummaryCard({
       </div>
       <div className="min-w-0">
         <h3 className="text-lg font-extrabold tracking-tight truncate">{name}</h3>
-        <p className="text-sm text-muted-foreground truncate">{email}</p>
+        {tag && (
+          <div className="mt-1 flex justify-center">
+            <ProfessionalTag tag={tag} />
+          </div>
+        )}
+        <p className="text-sm text-muted-foreground truncate mt-1">{email}</p>
       </div>
       <div className="flex flex-wrap items-center justify-center gap-2">
         <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
