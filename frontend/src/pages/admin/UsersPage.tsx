@@ -29,6 +29,7 @@ import {
   EmptyState,
   ErrorState,
   LoadingState,
+  RowActionsMenu,
   RowIconButton,
   StatusPill,
   ToggleSwitch,
@@ -233,17 +234,22 @@ export function UsersPage() {
             ]}
             actions={(u) => (
               <>
+                {/* Só as 2 ações principais ficam na linha; o resto vai p/ "Mais
+                    ações" (menu via portal) — evita coluna larga e botões cortados. */}
                 <RowIconButton label="Ver detalhes" onClick={() => setDetails(u)}><Eye className="size-4" /></RowIconButton>
                 <RowIconButton label="Editar" onClick={() => setEditing(u)}><Pencil className="size-4" /></RowIconButton>
-                <RowIconButton label="Alterar papel" onClick={() => setChangingRole(u)}><UserCog className="size-4" /></RowIconButton>
-                <RowIconButton label="Enviar redefinição de senha" onClick={() => setToReset(u)}><KeyRound className="size-4" /></RowIconButton>
-                <RowIconButton
-                  label={u.status === 'ACTIVE' ? 'Inativar' : 'Ativar'}
-                  onClick={() => setToToggle(u)}
-                >
-                  <Power className="size-4" />
-                </RowIconButton>
-                <RowIconButton label="Excluir" danger onClick={() => setToDelete(u)}><Trash2 className="size-4" /></RowIconButton>
+                <RowActionsMenu
+                  actions={[
+                    { label: 'Alterar papel', icon: <UserCog className="size-4" />, onClick: () => setChangingRole(u) },
+                    { label: 'Redefinir senha', icon: <KeyRound className="size-4" />, onClick: () => setToReset(u) },
+                    {
+                      label: u.status === 'ACTIVE' ? 'Inativar usuário' : 'Ativar usuário',
+                      icon: <Power className="size-4" />,
+                      onClick: () => setToToggle(u),
+                    },
+                    { label: 'Excluir usuário', icon: <Trash2 className="size-4" />, onClick: () => setToDelete(u), danger: true },
+                  ]}
+                />
               </>
             )}
           />
