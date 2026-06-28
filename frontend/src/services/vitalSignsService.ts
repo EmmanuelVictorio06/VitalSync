@@ -30,7 +30,11 @@ export interface VitalSubmission {
   pain_level?: number;
   dyspnea_level?: number;
   urination_count?: number;
+  /** Resposta Sim/Não de "urinou normalmente" (resolve a ambiguidade — M-01). */
+  urinated_normally?: boolean;
   vomiting_count?: number;
+  /** Resposta Sim/Não de vômito (resolve a ambiguidade — M-01). */
+  had_vomit?: boolean;
   has_bleeding?: boolean;
   steps?: number;
   /** Foto da cicatriz operatória. */
@@ -80,6 +84,8 @@ export const vitalSignsService = {
       p_wound_photo_path: input.wound_photo_path ?? null,
       p_has_drain: input.has_drain ?? false,
       p_drain_photo_path: input.drain_photo_path ?? null,
+      p_urinated_normally: input.urinated_normally ?? null,
+      p_had_vomit: input.had_vomit ?? null,
     });
     if (error) throw new Error(error.message);
     return { clinical_status: data as string };

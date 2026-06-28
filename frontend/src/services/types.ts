@@ -152,7 +152,11 @@ export interface VitalSignRecord {
   pain_level: number | null;
   dyspnea_level: number | null;
   urination_count: number | null;
+  /** Resposta Sim/Não de "urinou normalmente" (a contagem é opcional). */
+  urinated_normally: boolean | null;
   vomiting_count: number | null;
+  /** Resposta Sim/Não de vômito (a contagem é opcional). */
+  had_vomit: boolean | null;
   has_bleeding: boolean | null;
   steps: number | null;
   wound_photo_path: string | null;

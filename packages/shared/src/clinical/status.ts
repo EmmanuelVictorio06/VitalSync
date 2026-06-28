@@ -87,11 +87,18 @@ export function evaluateVitalSigns(
     byVital[VitalKind.STEPS] = evaluateSteps(input.stepsCount, context.previousDaySteps);
   }
 
-  const triggers = (Object.entries(byVital) as Array<[VitalKind, ClinicalStatus]>)
+  // PRESSÃO ARTERIAL fica FORA do disparo/`overall` enquanto os limiares não são
+  // confirmados clinicamente (M-06). Continua em `byVital` apenas como informação
+  // (gráficos), espelhando exatamente o eval_clinical_status do banco.
+  // -- PENDENTE VALIDAÇÃO MÉDICA (M-06)
+  const driving = (Object.entries(byVital) as Array<[VitalKind, ClinicalStatus]>)
+    .filter(([kind]) => kind !== VitalKind.BLOOD_PRESSURE);
+
+  const triggers = driving
     .filter(([, status]) => status !== ClinicalStatus.GREEN)
     .map(([kind, status]) => ({ kind, status }));
 
-  const overall = worstStatus(Object.values(byVital));
+  const overall = worstStatus(driving.map(([, status]) => status));
 
   return { overall, byVital, triggers };
 }

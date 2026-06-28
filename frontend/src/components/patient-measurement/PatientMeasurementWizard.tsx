@@ -101,7 +101,10 @@ export function PatientMeasurementWizard({ token, patient, period, onSuccess }: 
         heart_rate: toNumber(form.heartRate),
         pain_level: form.pain ?? undefined,
         dyspnea_level: form.dyspnea ?? undefined,
+        // O booleano resolve a ambiguidade (M-01); a contagem segue opcional.
+        urinated_normally: form.urinatedNormally ?? undefined,
         urination_count: form.urinatedNormally && form.urinationCount ? Number(form.urinationCount) : undefined,
+        had_vomit: form.hadVomit ?? undefined,
         vomiting_count: form.hadVomit && form.vomitCount ? Number(form.vomitCount) : undefined,
         has_bleeding: form.hadBleeding ?? false,
         steps: isNight && form.steps ? Number(form.steps) : undefined,

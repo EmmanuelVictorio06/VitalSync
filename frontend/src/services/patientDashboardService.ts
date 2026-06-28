@@ -19,7 +19,10 @@ function daysSince(date?: string | null): number {
 }
 
 async function toVitalRecord(v: VitalSignRecord): Promise<VitalRecord> {
-  const urinatedNormally = v.urination_count != null;
+  // Prefere os booleanos persistidos (M-01); cai para a inferência antiga só no
+  // histórico anterior à migration.
+  const urinatedNormally = v.urinated_normally ?? v.urination_count != null;
+  const hadVomit = v.had_vomit ?? (v.vomiting_count ?? 0) > 0;
   const evalResult = evaluateVitalSigns({
     temperature: Number(v.temperature ?? 0),
     spo2: Number(v.oxygen_saturation ?? 0),
@@ -30,7 +33,7 @@ async function toVitalRecord(v: VitalSignRecord): Promise<VitalRecord> {
     dyspnea: Number(v.dyspnea_level ?? 0),
     urinatedNormally,
     urinationCount: v.urination_count ?? null,
-    hadVomit: (v.vomiting_count ?? 0) > 0,
+    hadVomit,
     hadBleeding: v.has_bleeding ?? false,
     stepsCount: v.steps ?? null,
   });
@@ -67,7 +70,7 @@ async function toVitalRecord(v: VitalSignRecord): Promise<VitalRecord> {
     dyspnea: Number(v.dyspnea_level ?? 0),
     urinatedNormally,
     urinationCount: v.urination_count,
-    hadVomit: (v.vomiting_count ?? 0) > 0,
+    hadVomit,
     vomitCount: v.vomiting_count,
     hadBleeding: v.has_bleeding ?? false,
     stepsCount: v.steps,
