@@ -45,7 +45,7 @@ serve(async (req) => {
     const teamId: string | undefined = body.team_id;
     if (!teamId) return json({ error: 'Equipe é obrigatória.' }, 400);
 
-    // 2. Autorização: ADMIN ou cirurgião responsável da equipe.
+    // 2. Autorização: ADMIN ou Gerente de Equipe vinculado à equipe informada.
     const { data: profile } = await admin
       .from('profiles')
       .select('role')
@@ -53,13 +53,23 @@ serve(async (req) => {
       .maybeSingle();
     const role = profile?.role;
     let allowed = role === 'ADMIN';
-    if (!allowed && role === 'MAIN_SURGEON') {
+    if (!allowed && role === 'TEAM_MANAGER') {
+      // Verifica se o gerente está vinculado ao cirurgião responsável da equipe.
       const { data: team } = await admin
         .from('medical_teams')
         .select('main_surgeon_id')
         .eq('id', teamId)
         .maybeSingle();
-      allowed = team?.main_surgeon_id === caller.id;
+      if (team?.main_surgeon_id) {
+        const { data: link } = await admin
+          .from('team_manager_surgeons')
+          .select('id')
+          .eq('team_manager_id', caller.id)
+          .eq('surgeon_id', team.main_surgeon_id)
+          .eq('is_active', true)
+          .maybeSingle();
+        allowed = !!link;
+      }
     }
     if (!allowed) return json({ error: 'Sem permissão para cadastrar pacientes nesta equipe.' }, 403);
 

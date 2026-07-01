@@ -91,6 +91,21 @@ export function useRoleMenus(): { main: NavItem[]; admin: NavItem[] } {
     };
   }
 
+  // Gerente de Equipe: gestão administrativa das equipes dos cirurgiões vinculados.
+  if (hasRole(Role.MANAGER)) {
+    return {
+      main: [
+        { to: '/dashboard', label: 'Dashboard', short: 'Início', icon: LayoutDashboard },
+        { to: '/patients/new', label: 'Cadastro de Pacientes', short: 'Cadastrar', icon: UserPlus },
+        { to: '/monitoring', label: 'Pacientes em Monitoramento', short: 'Pacientes', icon: Activity },
+        { to: '/alerts', label: 'Alertas', short: 'Alertas', icon: Bell, badge: unattended },
+        { to: '/manager-teams', label: 'Equipes Vinculadas', short: 'Equipes', icon: Users },
+        { to: '/profile', label: 'Meu Perfil', short: 'Perfil', icon: User },
+      ],
+      admin: [],
+    };
+  }
+
   // Suporte: perfil operacional (não clínico) — pacientes e perfil.
   if (hasRole(Role.SUPPORT)) {
     return {

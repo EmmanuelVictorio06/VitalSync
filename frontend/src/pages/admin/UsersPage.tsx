@@ -100,7 +100,7 @@ export function UsersPage() {
     return {
       total: u.length,
       admins: u.filter((x) => x.role === 'ADMIN').length,
-      surgeons: u.filter((x) => x.role === 'MAIN_SURGEON').length,
+      surgeons: u.filter((x) => x.role === 'MEDICAL_SURGEON').length,
       associates: u.filter((x) => x.role === 'ASSOCIATED_DOCTOR').length,
       active: u.filter((x) => x.status === 'ACTIVE').length,
       inactive: u.filter((x) => x.status === 'INACTIVE').length,
@@ -539,7 +539,7 @@ function ChangeUserRoleModal({ user, onClose, onSaved }: { user: UserOverview; o
   }, [user.id]);
 
   const mainSurgeonOf = (links ?? []).filter((l) => l.roleInTeam === 'MAIN_SURGEON');
-  const losingSurgeonRole = user.role === 'MAIN_SURGEON' && newRole !== 'MAIN_SURGEON' && mainSurgeonOf.length > 0;
+  const losingSurgeonRole = user.role === 'MEDICAL_SURGEON' && newRole !== 'MEDICAL_SURGEON' && mainSurgeonOf.length > 0;
   const noChange = newRole === user.role;
 
   async function submit() {

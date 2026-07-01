@@ -12,9 +12,10 @@ import type { UserRole } from '../services/types';
 /** profiles.role (banco) → enum Role (app). */
 export const DB_ROLE_TO_APP_ROLE: Record<UserRole, Role> = {
   ADMIN: Role.ADM,
-  MAIN_SURGEON: Role.SURGEON,
+  MEDICAL_SURGEON: Role.SURGEON,
   ASSOCIATED_DOCTOR: Role.ASSOCIATE,
   SUPPORT: Role.SUPPORT,
+  TEAM_MANAGER: Role.MANAGER,
 };
 
 /** Converte o papel do banco no papel do app (fallback: associado). */
@@ -25,9 +26,10 @@ export function dbRoleToAppRole(role: UserRole): Role {
 /** Rótulo PT-BR por papel do app (Role). */
 export const APP_ROLE_LABEL_PT: Record<Role, string> = {
   [Role.ADM]: 'Administrador',
-  [Role.SURGEON]: 'Cirurgião Principal',
+  [Role.SURGEON]: 'Médico Cirurgião',
   [Role.ASSOCIATE]: 'Médico Associado',
   [Role.SUPPORT]: 'Suporte',
+  [Role.MANAGER]: 'Gerente de Equipe',
 };
 
 /** Rótulo PT-BR a partir do papel do BANCO (profiles.role). */

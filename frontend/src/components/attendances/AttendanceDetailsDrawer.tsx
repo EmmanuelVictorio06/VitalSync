@@ -316,8 +316,8 @@ function roleLabel(role: AttendanceRow['professional_role']): string {
   switch (role) {
     case 'ADMIN':
       return 'Administrador';
-    case 'MAIN_SURGEON':
-      return 'Cirurgião Principal';
+    case 'MEDICAL_SURGEON':
+      return 'Médico Cirurgião';
     case 'ASSOCIATED_DOCTOR':
       return 'Médico Associado';
     default:

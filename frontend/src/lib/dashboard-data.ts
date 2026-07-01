@@ -90,6 +90,13 @@ export const DASHBOARD_ROLE_CONFIG: Record<Role, DashboardRoleConfig> = {
     showAdminKpis: false,
     showSystemOverview: false,
   },
+  MANAGER: {
+    subtitle: 'Visão geral das equipes e pacientes sob sua gestão.',
+    sectionTitle: 'Resumo das Equipes Vinculadas',
+    monitoringLabel: 'Em monitoramento',
+    showAdminKpis: false,
+    showSystemOverview: false,
+  },
 };
 
 /** Painel real: busca dados agregados via backend. */

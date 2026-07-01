@@ -35,7 +35,7 @@ function makeRow(overrides: Partial<AttendanceRow> = {}): AttendanceRow {
     alert: null,
     vital_record: null,
     professional_name: 'Dr. Bruno Tavares',
-    professional_role: 'MAIN_SURGEON',
+    professional_role: 'MEDICAL_SURGEON',
     surgeon_name: 'Dr. Cirurgião',
     origin: 'MANUAL_REVIEW',
     related_vital_sign: null,

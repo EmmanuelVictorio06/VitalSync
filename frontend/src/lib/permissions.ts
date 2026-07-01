@@ -66,17 +66,21 @@ export function canManageTeamMembers(role: Role | undefined): boolean {
   return role === Role.SURGEON && SURGEON_CAN_MANAGE_MEMBERS;
 }
 
-/** Cadastro de pacientes: Administrador e Cirurgião Principal (não o Associado). */
+/** Cadastro de pacientes: Administrador e Gerente de Equipe. */
 export function canRegisterPatients(role: Role | undefined): boolean {
-  return role === Role.ADM || role === Role.SURGEON;
+  return role === Role.ADM || role === Role.MANAGER;
 }
 
 /**
  * Rota inicial (home) por perfil. O Suporte é operacional e NÃO tem Dashboard;
  * sua home é "Pacientes em Monitoramento". Usado no login e como destino de
- * redirecionamento quando o perfil não pode acessar uma rota (evita cair em
- * tela vazia ou em loop de redirecionamento — M-03).
+ * redirecionamento quando o perfil não pode acessar uma rota.
  */
 export function homeRouteFor(role: Role | undefined): string {
   return role === Role.SUPPORT ? '/monitoring' : '/dashboard';
+}
+
+/** Gerente de Equipe visualiza equipes dos cirurgiões vinculados. */
+export function canManageLinkedTeams(role: Role | undefined): boolean {
+  return role === Role.MANAGER;
 }

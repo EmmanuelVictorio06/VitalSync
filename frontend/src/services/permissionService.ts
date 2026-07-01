@@ -30,7 +30,7 @@ export const permissionService = {
    * cirurgião e associado). O paciente não tem login — não chega aqui.
    */
   canAccessMyProfile(user: AuthUser | null | undefined): boolean {
-    return !!user && [Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.SUPPORT].includes(user.role);
+    return !!user && ([Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.SUPPORT, Role.MANAGER] as Role[]).includes(user.role);
   },
 
   /** Pode editar o próprio perfil (mesma regra do acesso). */

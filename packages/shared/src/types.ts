@@ -7,9 +7,10 @@
 /** Perfis de acesso do sistema. Novos perfis podem ser adicionados aqui. */
 export const Role = {
   ADM: 'ADM',
-  SURGEON: 'SURGEON', // Cirurgião responsável
+  SURGEON: 'SURGEON', // Médico Cirurgião (responsável ou associado em outra equipe)
   ASSOCIATE: 'ASSOCIATE', // Médico associado
   SUPPORT: 'SUPPORT', // Suporte operacional (não clínico)
+  MANAGER: 'MANAGER', // Gerente de Equipe (gestão administrativa, sem acesso clínico)
 } as const;
 export type Role = (typeof Role)[keyof typeof Role];
 

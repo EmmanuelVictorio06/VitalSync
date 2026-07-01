@@ -23,17 +23,19 @@ import { initials } from './profile';
 /* ---------------- Metadados dos papéis ---------------- */
 export const ROLE_META: Record<UserRole, { label: string; badge: string; dot: string }> = {
   ADMIN: { label: 'Administrador', badge: 'bg-primary/10 text-primary border-primary/20', dot: 'bg-primary' },
-  MAIN_SURGEON: { label: 'Cirurgião Principal', badge: 'bg-stable/10 text-stable border-stable/20', dot: 'bg-stable' },
+  MEDICAL_SURGEON: { label: 'Médico Cirurgião', badge: 'bg-stable/10 text-stable border-stable/20', dot: 'bg-stable' },
   ASSOCIATED_DOCTOR: { label: 'Médico Associado', badge: 'bg-muted text-muted-foreground border-border', dot: 'bg-muted-foreground' },
   SUPPORT: { label: 'Suporte', badge: 'bg-warning/10 text-warning border-warning/20', dot: 'bg-warning' },
+  TEAM_MANAGER: { label: 'Gerente de Equipe', badge: 'bg-info/10 text-info border-info/20', dot: 'bg-info' },
 };
 
-/** Opções de papel para selects/segmentos (sem PACIENTE — não tem login aqui). */
+/** Opções de papel para selects/segmentos. */
 export const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
   { value: 'ADMIN', label: 'Administrador' },
-  { value: 'MAIN_SURGEON', label: 'Cirurgião Principal' },
+  { value: 'MEDICAL_SURGEON', label: 'Médico Cirurgião' },
   { value: 'ASSOCIATED_DOCTOR', label: 'Médico Associado' },
   { value: 'SUPPORT', label: 'Suporte' },
+  { value: 'TEAM_MANAGER', label: 'Gerente de Equipe' },
 ];
 
 /* ---------------- Badge de papel ---------------- */
@@ -131,12 +133,12 @@ export interface UserSummary {
 
 /* ----------------- Cards de filtro rápido (topo) ----------------- */
 
-export type UserQuickKey = 'ALL' | 'ADMIN' | 'MAIN_SURGEON' | 'ASSOCIATED_DOCTOR' | 'ACTIVE' | 'INACTIVE';
+export type UserQuickKey = 'ALL' | 'ADMIN' | 'MEDICAL_SURGEON' | 'ASSOCIATED_DOCTOR' | 'ACTIVE' | 'INACTIVE';
 
 const USER_QUICK_PRESET: Record<UserQuickKey, Pick<UserFiltersState, 'role' | 'status'>> = {
   ALL: { role: 'ALL', status: 'ALL' },
   ADMIN: { role: 'ADMIN', status: 'ALL' },
-  MAIN_SURGEON: { role: 'MAIN_SURGEON', status: 'ALL' },
+  MEDICAL_SURGEON: { role: 'MEDICAL_SURGEON', status: 'ALL' },
   ASSOCIATED_DOCTOR: { role: 'ASSOCIATED_DOCTOR', status: 'ALL' },
   ACTIVE: { role: 'ALL', status: 'ACTIVE' },
   INACTIVE: { role: 'ALL', status: 'INACTIVE' },
@@ -168,7 +170,7 @@ const USER_QUICK_COLOR: Record<UserQuickColor, { icon: string; active: string; n
 const USER_QUICK_CARDS: Array<{ key: UserQuickKey; label: string; icon: typeof Users; color: UserQuickColor }> = [
   { key: 'ALL', label: 'Total de usuários', icon: Users, color: 'primary' },
   { key: 'ADMIN', label: 'Administradores', icon: ShieldCheck, color: 'primary' },
-  { key: 'MAIN_SURGEON', label: 'Cirurgiões principais', icon: Stethoscope, color: 'stable' },
+  { key: 'MEDICAL_SURGEON', label: 'Médicos cirurgiões', icon: Stethoscope, color: 'stable' },
   { key: 'ASSOCIATED_DOCTOR', label: 'Médicos associados', icon: UserCog, color: 'muted' },
   { key: 'ACTIVE', label: 'Usuários ativos', icon: CheckCircle2, color: 'stable' },
   { key: 'INACTIVE', label: 'Usuários inativos', icon: CircleSlash, color: 'alert' },
@@ -204,7 +206,7 @@ export function UserSummaryQuickFilters({ summary, active, onSelect }: {
   summary: UserSummary; active: UserQuickKey | null; onSelect: (key: UserQuickKey) => void;
 }) {
   const counts: Record<UserQuickKey, number> = {
-    ALL: summary.total, ADMIN: summary.admins, MAIN_SURGEON: summary.surgeons,
+    ALL: summary.total, ADMIN: summary.admins, MEDICAL_SURGEON: summary.surgeons,
     ASSOCIATED_DOCTOR: summary.associates, ACTIVE: summary.active, INACTIVE: summary.inactive,
   };
   return (

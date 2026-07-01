@@ -11,7 +11,7 @@ import { professionalInviteLink } from '../lib/publicUrl';
 import type { UserRole } from './types';
 
 /** Papéis que podem ser convidados (não inclui ADMIN/SUPPORT). */
-export type InviteRole = Extract<UserRole, 'MAIN_SURGEON' | 'ASSOCIATED_DOCTOR'>;
+export type InviteRole = 'MAIN_SURGEON' | 'ASSOCIATED_DOCTOR';
 
 export interface InviteInfo {
   role: InviteRole;

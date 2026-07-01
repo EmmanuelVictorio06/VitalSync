@@ -73,11 +73,15 @@ serve(async (req) => {
     if (dupEmail) return json({ error: 'Este e-mail já está em uso.' }, 409);
 
     // 4. Cria o usuário no Auth (senha do profissional; e-mail já confirmado).
+    // invite.role usa o vocabulário de role_in_team ('MAIN_SURGEON'/'ASSOCIATED_DOCTOR').
+    // O profiles.role usa o vocabulário do enum user_role — após 0031, cirurgião é
+    // 'MEDICAL_SURGEON'. O handle_new_user trigger faz o cast e precisa do valor certo.
+    const profileRole = invite.role === 'MAIN_SURGEON' ? 'MEDICAL_SURGEON' : invite.role;
     const { data: created, error: createErr } = await admin.auth.admin.createUser({
       email: cleanEmail,
       password: String(password),
       email_confirm: true,
-      user_metadata: { name: cleanName, role: invite.role },
+      user_metadata: { name: cleanName, role: profileRole },
     });
     if (createErr || !created?.user) {
       return json({ error: createErr?.message ?? 'Não foi possível criar a conta.' }, 400);
@@ -92,7 +96,7 @@ serve(async (req) => {
         whatsapp: cleanPhone,
         crm: cleanCrm,
         cpf_hash,
-        role: invite.role,
+        role: profileRole,
         status: 'ACTIVE',
       })
       .eq('id', userId);

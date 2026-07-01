@@ -22,7 +22,7 @@ import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 
-const ROLES = ['ADMIN', 'MAIN_SURGEON', 'ASSOCIATED_DOCTOR', 'SUPPORT'];
+const ROLES = ['ADMIN', 'MEDICAL_SURGEON', 'ASSOCIATED_DOCTOR', 'SUPPORT', 'TEAM_MANAGER'];
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 serve(async (req) => {

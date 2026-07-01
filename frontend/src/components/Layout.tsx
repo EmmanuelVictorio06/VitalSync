@@ -11,8 +11,10 @@ import { ProfessionalTag, cn } from './ui';
 
 const ROLE_LABEL: Record<string, string> = {
   ADM: 'Administrador Geral',
-  SURGEON: 'Cirurgião Principal',
+  SURGEON: 'Médico Cirurgião',
   ASSOCIATE: 'Médico Associado',
+  SUPPORT: 'Suporte',
+  MANAGER: 'Gerente de Equipe',
 };
 
 const PAGE_TITLES: Array<{ match: (path: string) => boolean; title: string }> = [
@@ -32,6 +34,7 @@ const PAGE_TITLES: Array<{ match: (path: string) => boolean; title: string }> = 
   { match: (p) => p.startsWith('/admin/surgery-types'), title: 'Tipos de Cirurgia' },
   { match: (p) => p.startsWith('/admin/exports'), title: 'Exportações' },
   { match: (p) => p.startsWith('/admin/settings'), title: 'Configurações' },
+  { match: (p) => p.startsWith('/manager-teams'), title: 'Equipes Vinculadas' },
 ];
 
 function SidebarLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {

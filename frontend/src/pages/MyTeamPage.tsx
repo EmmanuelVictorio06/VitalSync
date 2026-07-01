@@ -26,7 +26,6 @@ export function MyTeamPage() {
   const { user } = useAuth();
   const toast = useToast();
   const [teams, setTeams] = useState<TeamDetail[] | null>(null);
-  const [associates, setAssociates] = useState<Profile[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [manageId, setManageId] = useState<string | null>(null);
@@ -35,12 +34,8 @@ export function MyTeamPage() {
     setTeams(null);
     setError(null);
     try {
-      const [mine, assoc] = await Promise.all([
-        teamViewService.getMyMainTeams(),
-        profileService.getAssociatedDoctors(),
-      ]);
+      const mine = await teamViewService.getMyMainTeams();
       setTeams(mine);
-      setAssociates(assoc);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não foi possível carregar os dados das suas equipes.');
     }
@@ -114,7 +109,6 @@ export function MyTeamPage() {
       {manageTeam && (
         <ManageTeamDrawer
           team={manageTeam}
-          associates={associates}
           onClose={() => setManageId(null)}
           onChanged={load}
         />
@@ -126,12 +120,10 @@ export function MyTeamPage() {
 /* ============================ Drawer: gerenciar equipe ============================ */
 function ManageTeamDrawer({
   team,
-  associates,
   onClose,
   onChanged,
 }: {
   team: TeamDetail;
-  associates: Profile[];
   onClose: () => void;
   onChanged: () => Promise<void>;
 }) {
@@ -139,11 +131,18 @@ function ManageTeamDrawer({
   const { summary, members, patients } = team;
   const teamAssociates = members.filter((m) => !m.isSurgeon);
   const memberIds = new Set(members.map((m) => m.id));
-  const available = associates.filter((a) => !memberIds.has(a.id));
   const atDoctorLimit = teamAssociates.length >= TEAM_LIMITS.maxAssociatedDoctorsPerTeam;
 
+  const [eligible, setEligible] = useState<Profile[]>([]);
   const [pick, setPick] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // Busca elegíveis para esta equipe específica ao abrir o drawer.
+  useEffect(() => {
+    profileService.getEligibleAssociates(summary.id).then(setEligible).catch(() => {});
+  }, [summary.id]);
+
+  const available = eligible.filter((a) => !memberIds.has(a.id));
   const [toRemove, setToRemove] = useState<TeamMemberView | null>(null);
   const [toArchive, setToArchive] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);

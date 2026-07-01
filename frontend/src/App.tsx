@@ -24,6 +24,7 @@ import { ExportsPage } from './pages/admin/ExportsPage';
 import { HospitalsPage } from './pages/admin/HospitalsPage';
 import { SettingsPage } from './pages/admin/SettingsPage';
 import { SurgeryTypesPage } from './pages/admin/SurgeryTypesPage';
+import { ManagerTeamsPage } from './pages/ManagerTeamsPage';
 
 export function App() {
   return (
@@ -51,31 +52,31 @@ export function App() {
           </PermissionGuard>
         }
       >
-        {/* Dashboard — clínicos e Admin. O Suporte não tem Dashboard (M-03):
+        {/* Dashboard — clínicos, Admin e Gerente. O Suporte não tem Dashboard (M-03):
             o guard o redireciona para a sua home (/monitoring). */}
         <Route
           path="/dashboard"
           element={
-            <PermissionGuard roles={[Role.ADM, Role.SURGEON, Role.ASSOCIATE]}>
+            <PermissionGuard roles={[Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.MANAGER]}>
               <DashboardPage />
             </PermissionGuard>
           }
         />
         <Route path="/monitoring" element={<MonitoringPage />} />
-        {/* Cadastro de pacientes: Administrador e Cirurgião Principal */}
+        {/* Cadastro de pacientes: Administrador e Gerente de Equipe */}
         <Route
           path="/patients/new"
           element={
-            <PermissionGuard roles={[Role.ADM, Role.SURGEON]}>
+            <PermissionGuard roles={[Role.ADM, Role.MANAGER]}>
               <PatientRegisterPage />
             </PermissionGuard>
           }
         />
-        {/* Detalhe clínico do paciente (com fotos) — não acessível ao Suporte */}
+        {/* Detalhe clínico do paciente — não acessível ao Suporte */}
         <Route
           path="/patients/:id"
           element={
-            <PermissionGuard roles={[Role.ADM, Role.SURGEON, Role.ASSOCIATE]}>
+            <PermissionGuard roles={[Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.MANAGER]}>
               <PatientDashboardPage />
             </PermissionGuard>
           }
@@ -84,8 +85,18 @@ export function App() {
         <Route
           path="/alerts"
           element={
-            <PermissionGuard roles={[Role.ADM, Role.SURGEON, Role.ASSOCIATE]}>
+            <PermissionGuard roles={[Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.MANAGER]}>
               <AlertsPage />
+            </PermissionGuard>
+          }
+        />
+
+        {/* Equipes Vinculadas — exclusivo do Gerente de Equipe */}
+        <Route
+          path="/manager-teams"
+          element={
+            <PermissionGuard roles={[Role.MANAGER]}>
+              <ManagerTeamsPage />
             </PermissionGuard>
           }
         />
@@ -158,11 +169,11 @@ export function App() {
             </PermissionGuard>
           }
         />
-        {/* Meu Perfil — Administrador, Cirurgião Principal e Médico Associado */}
+        {/* Meu Perfil — todos os papéis autenticados */}
         <Route
           path="/profile"
           element={
-            <PermissionGuard roles={[Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.SUPPORT]}>
+            <PermissionGuard roles={[Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.SUPPORT, Role.MANAGER]}>
               <MyProfilePage />
             </PermissionGuard>
           }

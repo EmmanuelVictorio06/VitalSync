@@ -37,25 +37,51 @@ export const profileService = {
     return (data as Profile[]) ?? [];
   },
 
-  /** Todos os médicos (cirurgiões principais + associados). */
+  /** Todos os médicos (cirurgiões + associados). */
   async getDoctors(): Promise<Profile[]> {
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
-      .in('role', ['MAIN_SURGEON', 'ASSOCIATED_DOCTOR'])
+      .in('role', ['MEDICAL_SURGEON', 'ASSOCIATED_DOCTOR'])
       .order('name');
     if (error) throw new Error(error.message);
     return (data as Profile[]) ?? [];
   },
 
-  /** Cirurgiões principais (para escolher o responsável pela equipe). */
+  /** Médicos Cirurgiões (para escolher o responsável pela equipe). */
   getMainSurgeons(): Promise<Profile[]> {
-    return this.listByRole('MAIN_SURGEON');
+    return this.listByRole('MEDICAL_SURGEON');
   },
 
   /** Médicos associados (para vincular à equipe). */
   getAssociatedDoctors(): Promise<Profile[]> {
     return this.listByRole('ASSOCIATED_DOCTOR');
+  },
+
+  /**
+   * Médicos elegíveis para ser associados de uma equipe específica.
+   * Inclui MEDICAL_SURGEON e ASSOCIATED_DOCTOR ativos, excluindo:
+   * - o cirurgião principal da própria equipe;
+   * - quem já é membro (excluído no componente via memberIds).
+   */
+  async getEligibleAssociates(teamId: string): Promise<Profile[]> {
+    const { data: team } = await supabase
+      .from('medical_teams')
+      .select('main_surgeon_id')
+      .eq('id', teamId)
+      .maybeSingle();
+    const mainSurgeonId = team?.main_surgeon_id ?? null;
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .in('role', ['MEDICAL_SURGEON', 'ASSOCIATED_DOCTOR'])
+      .eq('status', 'ACTIVE')
+      .order('name');
+    if (error) throw new Error(error.message);
+
+    const all = (data as Profile[]) ?? [];
+    return mainSurgeonId ? all.filter((p) => p.id !== mainSurgeonId) : all;
   },
 
   /**
