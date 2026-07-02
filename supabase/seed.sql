@@ -1,30 +1,37 @@
 -- ============================================================================
 -- VitalSync — Seed de demonstração (robusto)
 --
--- PRÉ-REQUISITO: crie 3 usuários no Supabase (Authentication → Users → Add user,
--- "Auto Confirm User") com senha `senha123`:
---   admin@vitalsync.com · cirurgiao@vitalsync.com · medico@vitalsync.com
+-- PRÉ-REQUISITO: crie os usuários no Supabase (Authentication → Users → Add
+-- user, "Auto Confirm User") com senha `senha123`.
+--   Obrigatórios: admin@vitalsync.com · cirurgiao@vitalsync.com · medico@vitalsync.com
+--   Opcionais (montam o cenário do Gerente de Equipe — Fases 2/4/5):
+--     cirurgiao2@vitalsync.com · gerente@vitalsync.com
 --
 -- Este seed CRIA os profiles a partir de auth.users (não depende do trigger
 -- nem da ordem em que você rodou as migrações). Idempotente.
 -- ============================================================================
 
--- 1) Profiles dos 3 usuários (lidos de auth.users) com os papéis corretos.
+-- 1) Profiles dos usuários (lidos de auth.users) com os papéis corretos.
 insert into public.profiles (id, name, email, role)
 select u.id,
        case u.email
-         when 'admin@vitalsync.com'     then 'Administrador'
-         when 'cirurgiao@vitalsync.com' then 'Dra. Ana Souza'
-         when 'medico@vitalsync.com'    then 'Dr. Bruno Tavares'
+         when 'admin@vitalsync.com'      then 'Administrador'
+         when 'cirurgiao@vitalsync.com'  then 'Dra. Ana Souza'
+         when 'medico@vitalsync.com'     then 'Dr. Bruno Tavares'
+         when 'cirurgiao2@vitalsync.com' then 'Dr. Carlos Mendes'
+         when 'gerente@vitalsync.com'    then 'Gabriela Lima'
        end,
        u.email,
        (case u.email
-          when 'admin@vitalsync.com'     then 'ADMIN'
-          when 'cirurgiao@vitalsync.com' then 'MAIN_SURGEON'
-          when 'medico@vitalsync.com'    then 'ASSOCIATED_DOCTOR'
+          when 'admin@vitalsync.com'      then 'ADMIN'
+          when 'cirurgiao@vitalsync.com'  then 'MEDICAL_SURGEON'
+          when 'medico@vitalsync.com'     then 'ASSOCIATED_DOCTOR'
+          when 'cirurgiao2@vitalsync.com' then 'MEDICAL_SURGEON'
+          when 'gerente@vitalsync.com'    then 'TEAM_MANAGER'
         end)::public.user_role
 from auth.users u
-where u.email in ('admin@vitalsync.com', 'cirurgiao@vitalsync.com', 'medico@vitalsync.com')
+where u.email in ('admin@vitalsync.com', 'cirurgiao@vitalsync.com', 'medico@vitalsync.com',
+                  'cirurgiao2@vitalsync.com', 'gerente@vitalsync.com')
 on conflict (id) do update set role = excluded.role, name = excluded.name, email = excluded.email;
 
 -- Verificação amigável: aborta com mensagem clara se faltar algum usuário.
@@ -39,23 +46,51 @@ begin
   end if;
 end $$;
 
--- 2) Catálogos.
-insert into public.hospitals (name, city, state) values
+-- 2) Catálogos. WHERE NOT EXISTS (não ON CONFLICT): name não tem constraint
+--    única, então ON CONFLICT nunca dispara e re-rodar o seed duplicaria tudo.
+insert into public.hospitals (name, city, state)
+select v.name, v.city, v.state
+from (values
   ('Hospital Santa Vida', 'Curitiba', 'PR'),
   ('Hospital São Lucas', 'Curitiba', 'PR')
-on conflict do nothing;
+) as v(name, city, state)
+where not exists (select 1 from public.hospitals h where h.name = v.name);
 
-insert into public.surgery_types (name, specialty) values
+insert into public.surgery_types (name, specialty)
+select v.name, v.specialty
+from (values
   ('Bariátrica', 'Cirurgia Geral'),
   ('Ortopédica - Joelho', 'Ortopedia'),
   ('Artroplastia de Quadril', 'Ortopedia')
-on conflict do nothing;
+) as v(name, specialty)
+where not exists (select 1 from public.surgery_types s where s.name = v.name);
 
--- 3) Equipes (cirurgião responsável = cirurgiao@vitalsync.com).
+-- 3) Equipes — no máximo UMA equipe ativa por cirurgião (trigger da migration
+--    0033). Equipe 01 → Dra. Ana; equipe 03 → Dr. Carlos (só se o usuário
+--    opcional existir). Guardas WHERE NOT EXISTS em vez de ON CONFLICT: o
+--    trigger BEFORE INSERT dispara antes da resolução de conflito e quebraria
+--    a idempotência ao re-rodar o seed.
 insert into public.medical_teams (team_number, main_surgeon_id)
-select v.num, (select id from public.profiles where email = 'cirurgiao@vitalsync.com')
-from (values (1), (3), (7)) as v(num)
-on conflict (team_number) do nothing;
+select 1, (select id from public.profiles where email = 'cirurgiao@vitalsync.com')
+where not exists (select 1 from public.medical_teams where team_number = 1);
+
+insert into public.medical_teams (team_number, main_surgeon_id)
+select 3, p.id
+from public.profiles p
+where p.email = 'cirurgiao2@vitalsync.com'
+  and not exists (select 1 from public.medical_teams where team_number = 3);
+
+-- 3b) Vínculo Gerente↔Cirurgião (se gerente@vitalsync.com existir): Gabriela
+--     gerencia os dois cirurgiões — cenário das Fases 2/4/5.
+insert into public.team_manager_surgeons (team_manager_id, surgeon_id)
+select g.id, s.id
+from public.profiles g
+join public.profiles s on s.email in ('cirurgiao@vitalsync.com', 'cirurgiao2@vitalsync.com')
+where g.email = 'gerente@vitalsync.com'
+  and not exists (
+    select 1 from public.team_manager_surgeons t
+    where t.team_manager_id = g.id and t.surgeon_id = s.id and t.is_active
+  );
 
 -- 4) Vincula o médico associado à equipe 01.
 insert into public.team_members (team_id, doctor_id, role_in_team)

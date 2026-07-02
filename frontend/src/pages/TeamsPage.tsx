@@ -47,6 +47,7 @@ import {
 } from '../components/teams-admin';
 import { permissionService } from '../services/permissionService';
 import { profileService } from '../services/profileService';
+import { teamManagerService, type SurgeonManagerLink } from '../services/teamManagerService';
 import { teamService, type AdminTeamSummary } from '../services/teamService';
 import { teamViewService, type TeamDetail } from '../services/teamViewService';
 import type { Profile } from '../services/types';
@@ -117,6 +118,24 @@ export function TeamsPage() {
   );
 
   const openTeam = openId ? (teams ?? []).find((t) => t.summary.id === openId) ?? null : null;
+
+  // Cirurgiões que já respondem por uma equipe ATIVA — com o teto de 1 equipe
+  // por cirurgião (migration 0033), eles saem do combobox de "Nova Equipe" e
+  // da troca de responsável (o banco também bloqueia via trigger).
+  const surgeonsWithActiveTeam = useMemo(
+    () =>
+      new Set(
+        (teams ?? [])
+          .filter((t) => t.summary.status === 'ACTIVE')
+          .map((t) => t.members.find((m) => m.isSurgeon)?.id)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    [teams],
+  );
+  const availableSurgeons = useMemo(
+    () => surgeons.filter((s) => !surgeonsWithActiveTeam.has(s.id)),
+    [surgeons, surgeonsWithActiveTeam],
+  );
 
   async function toggleStatus() {
     if (!toToggle) return;
@@ -239,7 +258,7 @@ export function TeamsPage() {
       {/* Modais */}
       {creating && (
         <TeamFormModal
-          surgeons={surgeons}
+          surgeons={availableSurgeons}
           associates={associates}
           existingNumbers={(teams ?? []).map((t) => t.summary.number)}
           onClose={() => setCreating(false)}
@@ -254,7 +273,10 @@ export function TeamsPage() {
       {openTeam && (
         <TeamDetailsModal
           detail={openTeam}
-          surgeons={surgeons}
+          // O responsável atual continua listado; os demais só se não tiverem equipe ativa.
+          surgeons={surgeons.filter(
+            (s) => s.id === openTeam.members.find((m) => m.isSurgeon)?.id || !surgeonsWithActiveTeam.has(s.id),
+          )}
           associates={associates}
           existingNumbers={(teams ?? []).map((t) => t.summary.number)}
           onClose={() => setOpenId(null)}
@@ -511,8 +533,8 @@ function TeamFormModal({
               value={surgeonId}
               onChange={setSurgeonId}
               options={surgeonComboOptions(surgeons)}
-              placeholder={surgeons.length ? 'Buscar por nome ou tag…' : 'Nenhum cirurgião cadastrado'}
-              hint="Busque por nome completo ou pela tag (ex.: Joao#4821)."
+              placeholder={surgeons.length ? 'Buscar por nome ou tag…' : 'Nenhum cirurgião disponível'}
+              hint="Busque por nome completo ou pela tag (ex.: Joao#4821). Cirurgiões que já possuem uma equipe ativa não aparecem — cada cirurgião pode ter apenas uma equipe."
               required
             />
           ) : (
@@ -646,6 +668,60 @@ function TeamDetailsModal({
   const memberIds = new Set(members.map((m) => m.id));
   const available = associates.filter((a) => !memberIds.has(a.id));
 
+  // Gerentes de Equipe vinculados ao Cirurgião Principal desta equipe. Como o
+  // vínculo é Gerente↔Cirurgião (não Gerente↔Equipe) e cada cirurgião tem no
+  // máximo 1 equipe, vincular ao cirurgião equivale a dar acesso a esta equipe.
+  const surgeonProfileId = surgeon?.id ?? '';
+  const [managerLinks, setManagerLinks] = useState<SurgeonManagerLink[] | null>(null);
+  const [allManagers, setAllManagers] = useState<Profile[]>([]);
+  const [managerPick, setManagerPick] = useState('');
+  const [managerBusy, setManagerBusy] = useState(false);
+
+  useEffect(() => {
+    if (!surgeonProfileId) {
+      setManagerLinks([]);
+      return;
+    }
+    Promise.all([teamManagerService.getManagersOfSurgeon(surgeonProfileId), profileService.getTeamManagers()])
+      .then(([links, managers]) => {
+        setManagerLinks(links);
+        setAllManagers(managers);
+      })
+      .catch(() => setManagerLinks([]));
+  }, [surgeonProfileId]);
+
+  const linkedManagerIds = new Set((managerLinks ?? []).map((l) => l.team_manager_id));
+  const availableManagers = allManagers.filter((m) => !linkedManagerIds.has(m.id));
+
+  async function linkManager() {
+    if (!managerPick || !surgeonProfileId) return;
+    setManagerBusy(true);
+    try {
+      await teamManagerService.linkManagerToSurgeon(managerPick, surgeonProfileId);
+      toast.success('Gerente vinculado ao cirurgião desta equipe.');
+      setManagerPick('');
+      setManagerLinks(await teamManagerService.getManagersOfSurgeon(surgeonProfileId));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Não foi possível vincular o gerente.');
+    } finally {
+      setManagerBusy(false);
+    }
+  }
+
+  async function unlinkManager(managerId: string) {
+    if (!surgeonProfileId) return;
+    setManagerBusy(true);
+    try {
+      await teamManagerService.unlinkManagerFromSurgeon(managerId, surgeonProfileId);
+      toast.success('Gerente desvinculado.');
+      setManagerLinks(await teamManagerService.getManagersOfSurgeon(surgeonProfileId));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Não foi possível desvincular o gerente.');
+    } finally {
+      setManagerBusy(false);
+    }
+  }
+
   async function saveTeam() {
     const num = Number(onlyDigits(number));
     if (!num) return toast.error('Informe o número da equipe.');
@@ -777,8 +853,75 @@ function TeamDetailsModal({
               onChange={setSurgeonId}
               options={surgeonComboOptions(surgeons)}
               placeholder="Buscar por nome ou tag…"
-              hint="Ao salvar, o novo cirurgião passa a ser o responsável pela equipe."
+              hint="Ao salvar, o novo cirurgião passa a ser o responsável pela equipe. Cirurgiões que já possuem uma equipe ativa não aparecem."
             />
+          </div>
+        </section>
+
+        {/* Gerentes de Equipe (vínculo Gerente↔Cirurgião — RPCs validam no banco) */}
+        <section className="space-y-2">
+          <h3 className="text-sm font-bold">
+            Gerentes de Equipe{' '}
+            <span className="text-muted-foreground font-normal">({(managerLinks ?? []).length})</span>
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            Gerentes vinculados ao Cirurgião Principal desta equipe. Eles visualizam a equipe em “Equipes
+            Vinculadas” e cadastram pacientes nela.
+          </p>
+          <ul className="space-y-2">
+            {managerLinks === null ? (
+              <li className="text-sm text-muted-foreground">Carregando gerentes…</li>
+            ) : managerLinks.length === 0 ? (
+              <li className="text-sm text-muted-foreground">Nenhum gerente vinculado a este cirurgião.</li>
+            ) : (
+              managerLinks.map((l) => (
+                <li key={l.id} className="flex items-start justify-between gap-3 rounded-lg border border-border p-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold truncate flex items-center gap-1.5">
+                      <span className="truncate">{l.manager?.name ?? '—'}</span>
+                      {l.manager?.professional_tag && <ProfessionalTag tag={l.manager.professional_tag} className="shrink-0" />}
+                    </p>
+                    <ContactLine email={l.manager?.email} />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => unlinkManager(l.team_manager_id)}
+                    loading={managerBusy}
+                    className="shrink-0 text-alert"
+                  >
+                    <X className="size-3.5" /> Desvincular
+                  </Button>
+                </li>
+              ))
+            )}
+          </ul>
+
+          {/* Vincular gerente */}
+          <div className="rounded-lg border border-dashed border-border p-3 space-y-3">
+            <span className="text-xs font-bold text-muted-foreground inline-flex items-center gap-1.5">
+              <UserPlus className="size-3.5" /> Vincular gerente ao Cirurgião Principal
+            </span>
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+              <div className="flex-1 min-w-0">
+                <ProfessionalCombobox
+                  label="Gerente"
+                  value={managerPick}
+                  onChange={setManagerPick}
+                  options={availableManagers.map((m) => ({
+                    id: m.id,
+                    name: m.name,
+                    tag: m.professional_tag,
+                    email: m.email,
+                    roleLabel: 'Gerente de Equipe',
+                  }))}
+                  placeholder={availableManagers.length ? 'Buscar gerente por nome ou tag…' : 'Nenhum gerente disponível'}
+                />
+              </div>
+              <Button onClick={linkManager} loading={managerBusy} disabled={!managerPick}>
+                <Plus className="size-4" /> Vincular
+              </Button>
+            </div>
           </div>
         </section>
 

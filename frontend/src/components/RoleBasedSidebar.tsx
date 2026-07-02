@@ -75,12 +75,12 @@ export function useRoleMenus(): { main: NavItem[]; admin: NavItem[] } {
     };
   }
 
-  // Cirurgião Principal: foco na própria equipe.
+  // Cirurgião Principal: foco na própria equipe. Cadastro de pacientes é do
+  // Gerente de Equipe/Admin (a rota /patients/new também não o aceita).
   if (hasRole(Role.SURGEON)) {
     return {
       main: [
         { to: '/dashboard', label: 'Dashboard', short: 'Início', icon: LayoutDashboard },
-        { to: '/patients/new', label: 'Cadastro de Pacientes', short: 'Cadastrar', icon: UserPlus },
         { to: '/monitoring', label: 'Pacientes em Monitoramento', short: 'Pacientes', icon: Activity },
         { to: '/alerts', label: 'Alertas', short: 'Alertas', icon: Bell, badge: unattended },
         { to: '/my-team', label: 'Minhas Equipes', short: 'Equipes', icon: Users },

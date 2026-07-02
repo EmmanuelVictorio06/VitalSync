@@ -58,6 +58,18 @@ export const profileService = {
     return this.listByRole('ASSOCIATED_DOCTOR');
   },
 
+  /** Gerentes de Equipe ATIVOS (para o vínculo Gerente↔Cirurgião no admin). */
+  async getTeamManagers(): Promise<Profile[]> {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('role', 'TEAM_MANAGER')
+      .eq('status', 'ACTIVE')
+      .order('name');
+    if (error) throw new Error(error.message);
+    return (data as Profile[]) ?? [];
+  },
+
   /**
    * Médicos elegíveis para ser associados de uma equipe específica.
    * Inclui MEDICAL_SURGEON e ASSOCIATED_DOCTOR ativos, excluindo:

@@ -20,8 +20,10 @@ export function ManagerTeamsPage() {
     setTeams(null);
     setError(null);
     try {
+      // Equipes dos cirurgiões vinculados ao gerente (não getMyMainTeams, que
+      // filtra por main_surgeon_id = usuário logado e sempre retorna vazio).
       const [allTeams, myLinks] = await Promise.all([
-        teamViewService.getMyMainTeams().catch(() => [] as TeamDetail[]),
+        teamViewService.getManagerTeams().catch(() => [] as TeamDetail[]),
         teamManagerService.getMyLinks().catch(() => [] as ManagerSurgeonLink[]),
       ]);
       setTeams(allTeams);

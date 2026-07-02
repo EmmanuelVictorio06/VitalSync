@@ -33,3 +33,8 @@ jobs:
 
       - name: Build monorepo
         run: npm run build
+
+      - name: Testes automatizados (shared + frontend)
+        run: |
+          npm run test --workspace @vitalsync/shared
+          npm run test --workspace @vitalsync/frontend

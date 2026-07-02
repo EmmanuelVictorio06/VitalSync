@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Copy, MessageCircle, UserPlus } from 'lucide-react';
 import { calculateAge, whatsappLink } from '@vitalsync/shared';
+import { Role, useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
 import { ToggleSwitch } from '../components/admin';
 import { Button, Field, PageContainer, PageHeader, PhoneInput, SelectField, TextInput } from '../components/ui';
@@ -10,9 +11,10 @@ import { formatCpf, validateCpf } from '../lib/cpfUtils';
 import { hospitalService } from '../services/hospitalService';
 import { surgeryTypeService } from '../services/surgeryTypeService';
 import { teamService } from '../services/teamService';
+import { teamViewService } from '../services/teamViewService';
 import { homologationService } from '../services/homologationService';
 import { patientService } from '../services/patientService';
-import type { Hospital, MedicalTeam, SurgeryType } from '../services/types';
+import type { Hospital, SurgeryType } from '../services/types';
 
 interface FormState {
   name: string;
@@ -32,24 +34,39 @@ const empty: FormState = {
 
 export function PatientRegisterPage() {
   const toast = useToast();
+  const { hasRole } = useAuth();
+  // Gerente só cadastra em equipes de cirurgiões vinculados a ele; o rótulo
+  // identifica o cirurgião de cada equipe. Admin continua vendo todas.
+  // (O banco reforça: policy patients_insert + Edge Function create-patient.)
+  const isManager = hasRole(Role.MANAGER);
   // Em homologação, "Paciente de teste" já vem marcado (prevenção de erros).
   const [homologation, setHomologation] = useState(featureFlags.defaultTestPatient);
   const [form, setForm] = useState<FormState>({ ...empty, isTest: featureFlags.defaultTestPatient });
   const [surgeryTypes, setSurgeryTypes] = useState<SurgeryType[]>([]);
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
-  const [teams, setTeams] = useState<MedicalTeam[]>([]);
+  const [teamOptions, setTeamOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ link: string; phone: string; name: string } | null>(null);
 
   useEffect(() => {
-    Promise.all([surgeryTypeService.list(), hospitalService.list(), teamService.list()])
+    const teamsPromise = isManager
+      ? teamViewService.getManagerTeams().then((details) =>
+          details.map((d) => ({
+            value: d.summary.id,
+            label: `${d.summary.surgeonName} — Equipe nº ${String(d.summary.number).padStart(2, '0')}`,
+          })),
+        )
+      : teamService.list().then((t) =>
+          t.map((x) => ({ value: x.id, label: `Equipe ${String(x.team_number).padStart(2, '0')}` })),
+        );
+    Promise.all([surgeryTypeService.list(), hospitalService.list(), teamsPromise])
       .then(([st, h, t]) => {
         setSurgeryTypes(st.filter((x) => x.status === 'ACTIVE'));
         setHospitals(h.filter((x) => x.status === 'ACTIVE'));
-        setTeams(t);
+        setTeamOptions(t);
       })
       .catch(() => toast.error('Erro ao carregar as listas de cadastro.'));
-  }, []);
+  }, [isManager]);
 
   // Modo de homologação ligado pelo Admin no banco (além do env): pré-marca o teste.
   useEffect(() => {
@@ -158,10 +175,14 @@ export function PatientRegisterPage() {
         <Block index={3} title="Equipe Médica">
           <SelectField
             label="Equipe responsável"
-            hint="O paciente fica vinculado a esta equipe; os médicos dela receberão os alertas."
+            hint={
+              isManager
+                ? 'Você só pode cadastrar pacientes em equipes de cirurgiões vinculados a você.'
+                : 'O paciente fica vinculado a esta equipe; os médicos dela receberão os alertas.'
+            }
             value={form.teamId}
             onChange={(e) => set('teamId', e.target.value)}
-            options={teams.map((t) => ({ value: t.id, label: `Equipe ${String(t.team_number).padStart(2, '0')}` }))}
+            options={teamOptions}
             required
           />
 

@@ -1,8 +1,8 @@
 /**
- * "Minhas Equipes" — Cirurgião Principal. Cria e gerencia as PRÓPRIAS equipes
- * (autoatendimento), com limites garantidos no banco (5 equipes ativas; 10
- * associados por equipe — ver migration 0028). A visão rica (resumo, pacientes,
- * alertas) continua no painel compartilhado `TeamDashboard`.
+ * "Minhas Equipes" — Cirurgião Principal. Cria e gerencia a PRÓPRIA equipe
+ * (autoatendimento), com limites garantidos no banco (1 equipe ativa por
+ * cirurgião; 10 associados por equipe — ver migrations 0028/0033). A visão
+ * rica (resumo, pacientes, alertas) continua no painel `TeamDashboard`.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { Copy, Plus, Send, Trash2, UserPlus } from 'lucide-react';
@@ -68,7 +68,7 @@ export function MyTeamPage() {
       onClick={createTeam}
       loading={busy}
       disabled={atLimit}
-      title={atLimit ? `Limite de ${TEAM_LIMITS.maxTeamsPerSurgeon} equipes atingido.` : undefined}
+      title={atLimit ? 'Cada cirurgião pode ter apenas uma equipe.' : undefined}
     >
       <Plus className="size-4" /> Nova equipe
     </Button>
@@ -84,7 +84,7 @@ export function MyTeamPage() {
           <strong className="text-foreground">
             {activeCount}/{TEAM_LIMITS.maxTeamsPerSurgeon}
           </strong>
-          {atLimit && <span className="ml-2 text-warning">· limite atingido — arquive uma equipe para criar outra.</span>}
+          {atLimit && <span className="ml-2 text-warning">· cada cirurgião pode ter apenas uma equipe ativa.</span>}
         </p>
       )}
 

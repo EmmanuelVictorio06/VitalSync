@@ -28,8 +28,9 @@ function isRealSupabaseUrl(url: string | undefined): url is string {
   } catch {
     return false;
   }
-  if (parsed.protocol !== 'https:') return false;
   const host = parsed.hostname.toLowerCase();
+  const isLocalHttp = parsed.protocol === 'http:' && ['127.0.0.1', 'localhost', '::1'].includes(host);
+  if (parsed.protocol !== 'https:' && !isLocalHttp) return false;
   if (host === 'placeholder.supabase.co') return false;
   // Hosts de exemplo não preenchidos (mantém placeholders óbvios fora do ar).
   if (host.includes('seu-projeto') || host.includes('cole_aqui') || host.includes('xxxx')) return false;

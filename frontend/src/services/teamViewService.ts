@@ -280,6 +280,33 @@ export const teamViewService = {
     return Promise.all(ids.map((id) => this.getTeamDetail(id)));
   },
 
+  /**
+   * Equipes dos cirurgiões vinculados ao GERENTE logado (tela Equipes
+   * Vinculadas). Filtra explicitamente por surgeon_id dos vínculos ativos —
+   * NUNCA por main_surgeon_id = auth.uid() (o gerente não é responsável por
+   * equipe alguma; esse filtro era a causa do bug "Nenhuma equipe vinculada").
+   * O filtro explícito é preferido ao select sem filtro (que dependeria só da
+   * RLS teams_select) para a intenção ficar legível e não vazar equipes caso a
+   * policy seja ampliada no futuro.
+   */
+  async getManagerTeams(): Promise<TeamDetail[]> {
+    const { data: links, error: e1 } = await supabase
+      .from('team_manager_surgeons')
+      .select('surgeon_id')
+      .eq('is_active', true); // RLS (tms_own_select) já limita ao gerente logado
+    if (e1) throw new Error(e1.message);
+    const surgeonIds = ((links ?? []) as Array<{ surgeon_id: string }>).map((l) => l.surgeon_id);
+    if (surgeonIds.length === 0) return [];
+    const { data: teams, error: e2 } = await supabase
+      .from('medical_teams')
+      .select('id')
+      .in('main_surgeon_id', surgeonIds)
+      .order('team_number');
+    if (e2) throw new Error(e2.message);
+    const ids = ((teams ?? []) as Array<{ id: string }>).map((t) => t.id);
+    return Promise.all(ids.map((id) => this.getTeamDetail(id)));
+  },
+
   /** Todas as equipes em que o médico logado participa como associado. */
   async getMyAssociatedTeams(): Promise<TeamDetail[]> {
     const { data: u } = await supabase.auth.getUser();
