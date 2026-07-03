@@ -400,10 +400,10 @@ function WhatsAppTab() {
 
       <SettingsSection title="Templates de mensagem" description="Use {{nomePaciente}} para inserir o nome do paciente.">
         <Field label="Template — alerta amarelo (atenção)">
-          <textarea className="input min-h-20 resize-y" value={settings.templateYellow} onChange={(e) => set('templateYellow', e.target.value)} />
+          <textarea className="input min-h-20 resize-none" value={settings.templateYellow} onChange={(e) => set('templateYellow', e.target.value)} />
         </Field>
         <Field label="Template — alerta vermelho (crítico)">
-          <textarea className="input min-h-20 resize-y" value={settings.templateRed} onChange={(e) => set('templateRed', e.target.value)} />
+          <textarea className="input min-h-20 resize-none" value={settings.templateRed} onChange={(e) => set('templateRed', e.target.value)} />
         </Field>
         <div className="flex flex-col sm:flex-row gap-3 justify-end">
           <button
@@ -551,7 +551,7 @@ function HomologationTab() {
       >
         <Field label="Whitelist">
           <textarea
-            className="input min-h-28 resize-y font-mono text-sm"
+            className="input min-h-28 resize-none font-mono text-sm"
             placeholder={'5541999990000\n5541888880000'}
             value={recipientsText}
             onChange={(e) => setRecipientsText(e.target.value)}

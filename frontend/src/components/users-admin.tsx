@@ -6,12 +6,14 @@ import { useEffect, useState, type ReactNode } from 'react';
 import {
   CheckCircle2,
   CircleSlash,
+  Headphones,
   Search,
   ShieldCheck,
   SlidersHorizontal,
   Stethoscope,
   UserCog,
   Users,
+  UsersRound,
   X,
 } from 'lucide-react';
 import { onlyDigits } from '@vitalsync/shared';
@@ -42,9 +44,9 @@ export const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
 export function RoleBadge({ role }: { role: UserRole }) {
   const meta = ROLE_META[role] ?? ROLE_META.ASSOCIATED_DOCTOR;
   return (
-    <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider border', meta.badge)}>
-      <span className={cn('size-1.5 rounded-full', meta.dot)} aria-hidden />
-      {meta.label}
+    <span className={cn('inline-flex max-w-full items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider leading-tight border', meta.badge)}>
+      <span className={cn('size-1.5 shrink-0 rounded-full', meta.dot)} aria-hidden />
+      <span className="min-w-0 whitespace-normal">{meta.label}</span>
     </span>
   );
 }
@@ -127,19 +129,23 @@ export interface UserSummary {
   admins: number;
   surgeons: number;
   associates: number;
+  support: number;
+  teamManager: number;
   active: number;
   inactive: number;
 }
 
 /* ----------------- Cards de filtro rápido (topo) ----------------- */
 
-export type UserQuickKey = 'ALL' | 'ADMIN' | 'MEDICAL_SURGEON' | 'ASSOCIATED_DOCTOR' | 'ACTIVE' | 'INACTIVE';
+export type UserQuickKey = 'ALL' | 'ADMIN' | 'MEDICAL_SURGEON' | 'ASSOCIATED_DOCTOR' | 'SUPPORT' | 'TEAM_MANAGER' | 'ACTIVE' | 'INACTIVE';
 
 const USER_QUICK_PRESET: Record<UserQuickKey, Pick<UserFiltersState, 'role' | 'status'>> = {
   ALL: { role: 'ALL', status: 'ALL' },
   ADMIN: { role: 'ADMIN', status: 'ALL' },
   MEDICAL_SURGEON: { role: 'MEDICAL_SURGEON', status: 'ALL' },
   ASSOCIATED_DOCTOR: { role: 'ASSOCIATED_DOCTOR', status: 'ALL' },
+  SUPPORT: { role: 'SUPPORT', status: 'ALL' },
+  TEAM_MANAGER: { role: 'TEAM_MANAGER', status: 'ALL' },
   ACTIVE: { role: 'ALL', status: 'ACTIVE' },
   INACTIVE: { role: 'ALL', status: 'INACTIVE' },
 };
@@ -159,12 +165,14 @@ export function applyUserQuickCard(f: UserFiltersState, key: UserQuickKey): User
   return { ...f, ...USER_QUICK_PRESET[key] };
 }
 
-type UserQuickColor = 'primary' | 'stable' | 'muted' | 'alert';
+type UserQuickColor = 'primary' | 'stable' | 'muted' | 'alert' | 'warning' | 'info';
 const USER_QUICK_COLOR: Record<UserQuickColor, { icon: string; active: string; num: string }> = {
   primary: { icon: 'bg-primary/10 text-primary', active: 'border-primary ring-1 ring-primary bg-primary/5', num: 'text-primary' },
   stable: { icon: 'bg-stable/10 text-stable', active: 'border-stable ring-1 ring-stable bg-stable/5', num: 'text-stable' },
   muted: { icon: 'bg-muted text-muted-foreground', active: 'border-primary ring-1 ring-primary bg-primary/5', num: 'text-primary' },
   alert: { icon: 'bg-alert/10 text-alert', active: 'border-alert ring-1 ring-alert bg-alert/5', num: 'text-alert' },
+  warning: { icon: 'bg-warning/10 text-warning', active: 'border-warning ring-1 ring-warning bg-warning/5', num: 'text-warning' },
+  info: { icon: 'bg-info/10 text-info', active: 'border-info ring-1 ring-info bg-info/5', num: 'text-info' },
 };
 
 const USER_QUICK_CARDS: Array<{ key: UserQuickKey; label: string; icon: typeof Users; color: UserQuickColor }> = [
@@ -172,6 +180,8 @@ const USER_QUICK_CARDS: Array<{ key: UserQuickKey; label: string; icon: typeof U
   { key: 'ADMIN', label: 'Administradores', icon: ShieldCheck, color: 'primary' },
   { key: 'MEDICAL_SURGEON', label: 'Médicos cirurgiões', icon: Stethoscope, color: 'stable' },
   { key: 'ASSOCIATED_DOCTOR', label: 'Médicos associados', icon: UserCog, color: 'muted' },
+  { key: 'SUPPORT', label: 'Suporte', icon: Headphones, color: 'warning' },
+  { key: 'TEAM_MANAGER', label: 'Gerentes de equipe', icon: UsersRound, color: 'info' },
   { key: 'ACTIVE', label: 'Usuários ativos', icon: CheckCircle2, color: 'stable' },
   { key: 'INACTIVE', label: 'Usuários inativos', icon: CircleSlash, color: 'alert' },
 ];
@@ -207,10 +217,11 @@ export function UserSummaryQuickFilters({ summary, active, onSelect }: {
 }) {
   const counts: Record<UserQuickKey, number> = {
     ALL: summary.total, ADMIN: summary.admins, MEDICAL_SURGEON: summary.surgeons,
-    ASSOCIATED_DOCTOR: summary.associates, ACTIVE: summary.active, INACTIVE: summary.inactive,
+    ASSOCIATED_DOCTOR: summary.associates, SUPPORT: summary.support, TEAM_MANAGER: summary.teamManager,
+    ACTIVE: summary.active, INACTIVE: summary.inactive,
   };
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 animate-entry">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 animate-entry">
       {USER_QUICK_CARDS.map((c) => (
         <UserQuickFilterCard
           key={c.key}
@@ -245,7 +256,7 @@ export function UserSearchBar({ search, onSearch, onOpenFilters, activeFilterCou
 }) {
   return (
     <div className="flex items-stretch gap-2 animate-entry">
-      <div className="relative flex-1">
+      <div className="relative flex-1 min-w-0">
         <Search className="size-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
         <input
           className="input pl-9"
@@ -377,7 +388,7 @@ export function UserAdvancedFilters({ value, onApply, onClose }: {
 
         <div className="p-5 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FilterSelect label="Perfil do usuário" value={draft.role} onChange={(v) => set('role', v as UserRoleFilter)}
-            options={[{ value: 'ALL', label: 'Todos' }, { value: 'ADMIN', label: 'Administrador' }, { value: 'MAIN_SURGEON', label: 'Cirurgião Principal' }, { value: 'ASSOCIATED_DOCTOR', label: 'Médico Associado' }, { value: 'SUPPORT', label: 'Suporte' }]} />
+            options={[{ value: 'ALL', label: 'Todos' }, { value: 'ADMIN', label: 'Administrador' }, { value: 'MEDICAL_SURGEON', label: 'Médico Cirurgião' }, { value: 'ASSOCIATED_DOCTOR', label: 'Médico Associado' }, { value: 'SUPPORT', label: 'Suporte' }, { value: 'TEAM_MANAGER', label: 'Gerente de Equipe' }]} />
           <FilterSelect label="Status" value={draft.status} onChange={(v) => set('status', v as UserStatusFilter)}
             options={[{ value: 'ALL', label: 'Todos' }, { value: 'ACTIVE', label: 'Ativos' }, { value: 'INACTIVE', label: 'Inativos' }]} />
           <FilterSelect label="Equipe" value={draft.team} onChange={(v) => set('team', v as UserTeamFilter)}

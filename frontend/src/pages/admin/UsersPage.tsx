@@ -102,6 +102,8 @@ export function UsersPage() {
       admins: u.filter((x) => x.role === 'ADMIN').length,
       surgeons: u.filter((x) => x.role === 'MEDICAL_SURGEON').length,
       associates: u.filter((x) => x.role === 'ASSOCIATED_DOCTOR').length,
+      support: u.filter((x) => x.role === 'SUPPORT').length,
+      teamManager: u.filter((x) => x.role === 'TEAM_MANAGER').length,
       active: u.filter((x) => x.status === 'ACTIVE').length,
       inactive: u.filter((x) => x.status === 'INACTIVE').length,
     };
@@ -212,28 +214,32 @@ export function UsersPage() {
           <AdminTable
             rows={filtered}
             keyFor={(u) => u.id}
+            desktopMin="lg"
+            mobileMax="md"
+            actionsClassName="w-32 px-2"
             columns={[
               {
                 header: 'Usuário',
+                className: 'w-[29%]',
+                mobileRowClassName: 'grid grid-cols-[minmax(5.5rem,max-content)_minmax(0,1fr)] items-start',
+                mobileValueClassName: 'flex justify-end',
                 render: (u) => (
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex max-w-full items-center gap-3 min-w-0">
                     <UserAvatar name={u.name} avatarPath={u.avatar_url} />
-                    <div className="min-w-0">
-                      <p className="font-semibold truncate flex items-center gap-1.5">
-                        <span className="truncate">{u.name}</span>
-                        {u.professional_tag && <ProfessionalTag tag={u.professional_tag} className="shrink-0" />}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                    <div className="min-w-0 max-w-full flex-1 flex flex-col gap-1">
+                      <p className="max-w-full truncate font-semibold leading-snug">{u.name}</p>
+                      {u.professional_tag && <ProfessionalTag tag={u.professional_tag} className="max-w-full self-start truncate" />}
+                      <p className="max-w-full truncate text-xs leading-snug text-muted-foreground">{u.email}</p>
                     </div>
                   </div>
                 ),
               },
-              { header: 'WhatsApp', render: (u) => <span className="text-muted-foreground whitespace-nowrap">{u.whatsapp ? formatPhone(u.whatsapp) : '—'}</span> },
-              { header: 'Papel', render: (u) => <RoleBadge role={u.role} /> },
-              { header: 'Status', render: (u) => <StatusPill status={u.status} /> },
-              { header: 'Equipes', render: (u) => <span className="font-semibold">{u.team_count}</span> },
-              { header: 'Último acesso', render: (u) => <span className="text-muted-foreground text-xs whitespace-nowrap">{u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleDateString('pt-BR') : '—'}</span> },
-              { header: 'Cadastro', hideOnMobile: true, render: (u) => <span className="text-muted-foreground font-mono text-xs whitespace-nowrap">{u.created_at.slice(0, 10)}</span> },
+              { header: 'WhatsApp', className: 'w-[14%] whitespace-nowrap', render: (u) => <span className="block text-muted-foreground whitespace-nowrap">{u.whatsapp ? formatPhone(u.whatsapp) : '—'}</span> },
+              { header: 'Papel', className: 'w-[15%]', render: (u) => <RoleBadge role={u.role} /> },
+              { header: 'Status', className: 'w-[9%]', render: (u) => <StatusPill status={u.status} /> },
+              { header: 'Equipes', className: 'w-[6%] text-center', render: (u) => <span className="inline-block min-w-6 text-center font-semibold">{u.team_count}</span> },
+              { header: 'Último acesso', className: 'w-[11%] whitespace-nowrap', render: (u) => <span className="block text-muted-foreground text-xs whitespace-nowrap">{u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleDateString('pt-BR') : '—'}</span> },
+              { header: 'Cadastro', className: 'w-[9%] whitespace-nowrap', hideOnMobile: true, render: (u) => <span className="block text-muted-foreground font-mono text-xs whitespace-nowrap">{u.created_at.slice(0, 10)}</span> },
             ]}
             actions={(u) => (
               <>
@@ -378,7 +384,7 @@ function UserFormModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
           <TextInput label="Especialidade" value={specialty} onChange={(e) => setSpecialty(e.target.value)} placeholder="Opcional" />
           <TextInput label="CRM" value={crm} onChange={(e) => setCrm(e.target.value)} placeholder="Opcional" />
         </div>
-        <Field label="Observações"><textarea className="input min-h-16 resize-y" placeholder="Opcional" value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
+        <Field label="Observações"><textarea className="input min-h-16 resize-none" placeholder="Opcional" value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
         <Field label="Status inicial">
           <ToggleSwitch checked={status === 'ACTIVE'} onChange={(v) => setStatus(v ? 'ACTIVE' : 'INACTIVE')} label={status === 'ACTIVE' ? 'Ativo' : 'Inativo'} />
         </Field>
@@ -479,7 +485,7 @@ function EditUserModal({ user, onClose, onSaved }: { user: UserOverview; onClose
           <TextInput label="Especialidade" value={specialty} onChange={(e) => setSpecialty(e.target.value)} placeholder="Opcional" />
           <TextInput label="CRM" value={crm} onChange={(e) => setCrm(e.target.value)} placeholder="Opcional" />
         </div>
-        <Field label="Observações"><textarea className="input min-h-16 resize-y" value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
+        <Field label="Observações"><textarea className="input min-h-16 resize-none" value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
         <Field label="Status">
           <ToggleSwitch checked={status === 'ACTIVE'} onChange={(v) => setStatus(v ? 'ACTIVE' : 'INACTIVE')} label={status === 'ACTIVE' ? 'Ativo' : 'Inativo'} />
         </Field>
@@ -507,7 +513,7 @@ function EditUserModal({ user, onClose, onSaved }: { user: UserOverview; onClose
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="secondary" onClick={sendReset} loading={pwdBusy}><Mail className="size-4" /> Enviar redefinição de senha</Button>
         </div>
-        <div className="grid sm:grid-cols-[1fr_auto] gap-2 sm:items-end">
+        <div className="grid sm:grid-cols-[1fr_auto] gap-2 sm:items-center">
           <PasswordInput label="Definir senha temporária (opcional)" value={tempPwd} onChange={setTempPwd} hint="Mínimo 6 caracteres." autoComplete="new-password" />
           <Button type="button" variant="ghost" onClick={setTemp} loading={pwdBusy} disabled={!tempPwd}>Definir senha</Button>
         </div>

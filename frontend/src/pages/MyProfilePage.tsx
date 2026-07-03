@@ -221,7 +221,7 @@ function PersonalDataCard({
             <TextInput label="CRM" placeholder="Ex. CRM/PR 12345" value={crm} onChange={(e) => setCrm(e.target.value)} />
           </div>
           <Field label="Observações profissionais">
-            <textarea className="input min-h-20 resize-y" placeholder="Opcional" value={notes} onChange={(e) => setNotes(e.target.value)} />
+            <textarea className="input min-h-20 resize-none" placeholder="Opcional" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </Field>
           <div className="flex justify-end">
             <Button type="submit" loading={saving}>Salvar alterações</Button>

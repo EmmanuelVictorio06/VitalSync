@@ -280,7 +280,7 @@ function SurgeryTypeFormModal({
           placeholder="Sem especialidade"
         />
         <Field label="Descrição curta (opcional)">
-          <textarea className="input min-h-20 resize-y" placeholder="Breve descrição do procedimento" value={form.description} onChange={(e) => set('description', e.target.value)} />
+          <textarea className="input min-h-20 resize-none" placeholder="Breve descrição do procedimento" value={form.description} onChange={(e) => set('description', e.target.value)} />
         </Field>
         {surgeryType && (
           <Field label="Status">

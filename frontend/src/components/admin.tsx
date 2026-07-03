@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { AlertCircle, Inbox, MoreHorizontal, Plus, Search } from 'lucide-react';
 import type { EntityStatus } from '../lib/admin-types';
 import { useBreakpoint } from '../hooks/useBreakpoint';
+import type { Breakpoint } from '../constants/breakpoints';
 import { Responsive } from './responsive/Responsive';
 import { Button, PageHeader, cn } from './ui';
 
@@ -173,6 +174,10 @@ export interface AdminColumn<T> {
   /** Não exibir no card mobile (ex.: colunas redundantes). */
   hideOnMobile?: boolean;
   className?: string;
+  /** Ajuste opcional da linha no card mobile. */
+  mobileRowClassName?: string;
+  /** Ajuste opcional do valor no card mobile. */
+  mobileValueClassName?: string;
 }
 
 export function AdminTable<T>({
@@ -180,12 +185,24 @@ export function AdminTable<T>({
   rows,
   keyFor,
   actions,
+  tableClassName,
+  actionsClassName,
+  desktopMin = 'md',
+  mobileMax = 'sm',
 }: {
   columns: Array<AdminColumn<T>>;
   rows: T[];
   keyFor: (row: T) => string;
   /** Ações da linha (botões de ícone). */
   actions?: (row: T) => ReactNode;
+  /** Ajuste opcional para tabelas densas que precisam de uma malha própria. */
+  tableClassName?: string;
+  /** Largura/alinhamento da coluna de ações no desktop. */
+  actionsClassName?: string;
+  /** Breakpoint mínimo para renderizar a tabela. */
+  desktopMin?: Breakpoint;
+  /** Breakpoint máximo para renderizar os cards. */
+  mobileMax?: Breakpoint;
 }) {
   return (
     <>
@@ -193,9 +210,9 @@ export function AdminTable<T>({
           em paralelo (sem rodar hooks/render dela fora do breakpoint).
           overflow-x-auto: se faltar largura, rola DENTRO do card (nunca na página);
           os menus de ação usam portal, então não são cortados pelo container. */}
-      <Responsive min="md">
+      <Responsive min={desktopMin}>
       <div className="bg-card border border-border rounded-xl shadow-sm overflow-x-auto">
-        <table className="w-full min-w-[640px] text-sm">
+        <table className={cn('w-full table-fixed text-sm', tableClassName)}>
           <thead>
             <tr className="border-b border-border bg-muted/40">
               {columns.map((c) => (
@@ -206,19 +223,19 @@ export function AdminTable<T>({
                   {c.header}
                 </th>
               ))}
-              {actions && <th className="px-4 py-3 w-1" />}
+              {actions && <th className={cn('px-4 py-3 text-right', actionsClassName)} />}
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {rows.map((row) => (
               <tr key={keyFor(row)} className="hover:bg-muted/30 transition-colors">
                 {columns.map((c) => (
-                  <td key={c.header} className={cn('px-4 py-3', c.className)}>
+                  <td key={c.header} className={cn('px-4 py-3 overflow-hidden', c.className)}>
                     {c.render(row)}
                   </td>
                 ))}
                 {actions && (
-                  <td className="px-4 py-3">
+                  <td className={cn('px-4 py-3 overflow-visible', actionsClassName)}>
                     <div className="flex gap-2 justify-end">{actions(row)}</div>
                   </td>
                 )}
@@ -230,18 +247,18 @@ export function AdminTable<T>({
       </Responsive>
 
       {/* Mobile: cada linha vira card. */}
-      <Responsive max="sm">
+      <Responsive max={mobileMax}>
       <div className="space-y-3">
         {rows.map((row) => (
           <div key={keyFor(row)} className="bg-card border border-border rounded-xl shadow-sm p-4 space-y-2">
             {columns
               .filter((c) => !c.hideOnMobile)
               .map((c) => (
-                <div key={c.header} className="flex items-center justify-between gap-3 text-sm">
+                <div key={c.header} className={cn(c.mobileRowClassName ?? 'flex items-center justify-between', 'gap-3 text-sm')}>
                   <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                     {c.header}
                   </span>
-                  <span className="text-right min-w-0">{c.render(row)}</span>
+                  <span className={cn('text-right min-w-0', c.mobileValueClassName)}>{c.render(row)}</span>
                 </div>
               ))}
             {actions && <div className="flex gap-2 justify-end pt-2 border-t border-border">{actions(row)}</div>}

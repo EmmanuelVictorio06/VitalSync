@@ -797,7 +797,7 @@ export function MarkAttendedModal({ alert, onConfirm, onCancel }: {
         </Field>
         <Field label="Observação do atendimento" required error={error ?? undefined}>
           <textarea
-            className="input min-h-24 resize-y"
+            className="input min-h-24 resize-none"
             placeholder="Descreva brevemente a conduta ou observação do atendimento."
             value={observation}
             onChange={(e) => setObservation(e.target.value)}
@@ -845,7 +845,7 @@ export function IgnoreAlertModal({ onConfirm, onCancel }: {
       <div className="mt-4">
         <Field label="Justificativa" required error={error ?? undefined}>
           <textarea
-            className="input min-h-24 resize-y"
+            className="input min-h-24 resize-none"
             placeholder="Ex.: valor reavaliado e dentro do esperado para o quadro do paciente."
             value={reason}
             onChange={(e) => setReason(e.target.value)}
