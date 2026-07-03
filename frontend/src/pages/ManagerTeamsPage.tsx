@@ -8,6 +8,7 @@ import { EmptyState, ErrorState, LoadingState } from '../components/admin';
 import { PageContainer, PageHeader } from '../components/ui';
 import { teamManagerService, type ManagerSurgeonLink } from '../services/teamManagerService';
 import { TeamDashboard } from '../components/TeamDashboard';
+import { ManageTeamDrawer } from '../components/ManageTeamDrawer';
 import type { TeamDetail } from '../services/teamViewService';
 import { teamViewService } from '../services/teamViewService';
 
@@ -15,6 +16,7 @@ export function ManagerTeamsPage() {
   const [teams, setTeams] = useState<TeamDetail[] | null>(null);
   const [links, setLinks] = useState<ManagerSurgeonLink[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [manageId, setManageId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setTeams(null);
@@ -38,6 +40,7 @@ export function ManagerTeamsPage() {
   }, [load]);
 
   const surgeonNames = links.map((l) => l.surgeon?.name).filter(Boolean).join(', ');
+  const manageTeam = manageId ? (teams ?? []).find((t) => t.summary.id === manageId) ?? null : null;
 
   return (
     <PageContainer size="wide">
@@ -60,7 +63,16 @@ export function ManagerTeamsPage() {
           hint="Você ainda não gerencia nenhuma equipe. Solicite ao Administrador vincular você a um Médico Cirurgião."
         />
       ) : (
-        <TeamDashboard teams={teams} roleLabel="Você é o Gerente desta Equipe" />
+        <TeamDashboard teams={teams} roleLabel="Você é o Gerente desta Equipe" onManageTeam={setManageId} />
+      )}
+
+      {manageTeam && (
+        <ManageTeamDrawer
+          team={manageTeam}
+          canArchive={false}
+          onClose={() => setManageId(null)}
+          onChanged={load}
+        />
       )}
     </PageContainer>
   );
