@@ -37,7 +37,13 @@ function onlyDigits(phone: string): string {
 }
 
 /** Envia o template aprovado via Meta Cloud API. Retorna o id da mensagem. */
-async function sendViaMeta(token: string, phoneNumberId: string, to: string, doctorName: string): Promise<string> {
+async function sendViaMeta(
+  token: string,
+  phoneNumberId: string,
+  to: string,
+  doctorName: string,
+  patientId: string,
+): Promise<string> {
   const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${phoneNumberId}/messages`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -48,8 +54,17 @@ async function sendViaMeta(token: string, phoneNumberId: string, to: string, doc
       template: {
         name: TEMPLATE_NAME,
         language: { code: TEMPLATE_LANG },
-        // {{1}} = nome do médico. Nenhum dado clínico é enviado.
-        components: [{ type: 'body', parameters: [{ type: 'text', text: doctorName || 'Doutor(a)' }] }],
+        components: [
+          // {{1}} do corpo = nome do médico. Nenhum dado clínico é enviado.
+          { type: 'body', parameters: [{ type: 'text', text: doctorName || 'Doutor(a)' }] },
+          // {{1}} do botão "Ver no VitalSync" = sufixo da URL (tela do paciente).
+          {
+            type: 'button',
+            sub_type: 'url',
+            index: '0',
+            parameters: [{ type: 'text', text: `patients/${patientId}` }],
+          },
+        ],
       },
     }),
   });
@@ -83,6 +98,13 @@ serve(async (req) => {
     const pending = (logs ?? []) as PendingLog[];
     if (pending.length === 0) return json({ ok: true, sent: 0, skipped: 0 });
 
+    const { data: alert } = await supabase
+      .from('clinical_alerts')
+      .select('patient_id')
+      .eq('id', alertId)
+      .single();
+    const patientId: string = alert?.patient_id ?? '';
+
     const token = Deno.env.get('WHATSAPP_API_TOKEN');
     const phoneNumberId = Deno.env.get('WHATSAPP_PHONE_NUMBER_ID');
     const hasProvider = Boolean(token && phoneNumberId);
@@ -109,7 +131,13 @@ serve(async (req) => {
         continue;
       }
       try {
-        const providerId = await sendViaMeta(token!, phoneNumberId!, log.recipient_phone, log.recipient_name ?? '');
+        const providerId = await sendViaMeta(
+          token!,
+          phoneNumberId!,
+          log.recipient_phone,
+          log.recipient_name ?? '',
+          patientId,
+        );
         await supabase
           .from('notification_logs')
           .update({ status: 'SENT', provider_message_id: providerId, sent_at: now, error_message: null })
