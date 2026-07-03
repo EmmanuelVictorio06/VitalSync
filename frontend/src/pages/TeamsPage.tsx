@@ -8,7 +8,6 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Eye,
   Pencil,
   Plus,
   Power,
@@ -69,7 +68,7 @@ export function TeamsPage() {
 
   // Modais
   const [creating, setCreating] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [toToggle, setToToggle] = useState<TeamDetail | null>(null);
   const [toDelete, setToDelete] = useState<TeamDetail | null>(null);
   const [busy, setBusy] = useState(false);
@@ -98,9 +97,9 @@ export function TeamsPage() {
     if (permissionService.canManageTeams(user)) void load();
   }, [load, user]);
 
-  // Deep-link a partir de "Gerenciar Usuários": /admin/teams/:teamId abre os detalhes.
+  // Deep-link a partir de "Gerenciar Usuários": /admin/teams/:teamId abre a edição da equipe.
   useEffect(() => {
-    if (deepLinkTeamId && teams?.some((t) => t.summary.id === deepLinkTeamId)) setOpenId(deepLinkTeamId);
+    if (deepLinkTeamId && teams?.some((t) => t.summary.id === deepLinkTeamId)) setEditingId(deepLinkTeamId);
   }, [deepLinkTeamId, teams]);
 
   const filtered = useMemo(() => applyTeamFilters(teams ?? [], filters), [teams, filters]);
@@ -117,7 +116,7 @@ export function TeamsPage() {
     [associates],
   );
 
-  const openTeam = openId ? (teams ?? []).find((t) => t.summary.id === openId) ?? null : null;
+  const editingTeam = editingId ? (teams ?? []).find((t) => t.summary.id === editingId) ?? null : null;
 
   // Cirurgiões que já respondem por uma equipe ATIVA — com o teto de 1 equipe
   // por cirurgião (migration 0033), eles saem do combobox de "Nova Equipe" e
@@ -235,7 +234,7 @@ export function TeamsPage() {
               <TeamCard
                 key={t.summary.id}
                 detail={t}
-                onView={() => setOpenId(t.summary.id)}
+                onEdit={() => setEditingId(t.summary.id)}
                 onToggle={() => setToToggle(t)}
                 onDelete={() => setToDelete(t)}
               />
@@ -270,16 +269,16 @@ export function TeamsPage() {
         />
       )}
 
-      {openTeam && (
-        <TeamDetailsModal
-          detail={openTeam}
+      {editingTeam && (
+        <TeamEditModal
+          detail={editingTeam}
           // O responsável atual continua listado; os demais só se não tiverem equipe ativa.
           surgeons={surgeons.filter(
-            (s) => s.id === openTeam.members.find((m) => m.isSurgeon)?.id || !surgeonsWithActiveTeam.has(s.id),
+            (s) => s.id === editingTeam.members.find((m) => m.isSurgeon)?.id || !surgeonsWithActiveTeam.has(s.id),
           )}
           associates={associates}
           existingNumbers={(teams ?? []).map((t) => t.summary.number)}
-          onClose={() => setOpenId(null)}
+          onClose={() => setEditingId(null)}
           onChanged={load}
         />
       )}
@@ -330,12 +329,12 @@ function associateComboOptions(associates: Profile[]) {
 /* ============================ Card da equipe ============================ */
 function TeamCard({
   detail,
-  onView,
+  onEdit,
   onToggle,
   onDelete,
 }: {
   detail: TeamDetail;
-  onView: () => void;
+  onEdit: () => void;
   onToggle: () => void;
   onDelete: () => void;
 }) {
@@ -378,19 +377,22 @@ function TeamCard({
         </span>
       </div>
 
-      <footer className="flex items-center gap-2 border-t border-border pt-3 mt-auto">
-        <Button variant="secondary" size="sm" onClick={onView} title="Ver detalhes da equipe">
-          <Eye className="size-3.5" /> Ver detalhes
+      <footer className="flex flex-col sm:flex-row sm:items-center gap-2 border-t border-border pt-3 mt-auto">
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={onEdit}
+          title="Editar equipe"
+          className="w-full sm:w-auto min-h-10 px-4"
+        >
+          <Pencil className="size-4" /> Editar equipe
         </Button>
-        <Button variant="ghost" size="sm" onClick={onView} title="Editar equipe">
-          <Pencil className="size-3.5" /> Editar
-        </Button>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex w-full sm:w-auto sm:ml-auto items-center justify-end gap-2">
           <button
             onClick={onToggle}
             title={active ? 'Inativar equipe' : 'Ativar equipe'}
             aria-label={active ? 'Inativar equipe' : 'Ativar equipe'}
-            className="size-8 rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center"
+            className="size-10 sm:size-8 rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center"
           >
             <Power className="size-4" />
           </button>
@@ -398,7 +400,7 @@ function TeamCard({
             onClick={onDelete}
             title="Excluir equipe"
             aria-label="Excluir equipe"
-            className="size-8 rounded-md border border-alert/30 text-alert hover:bg-alert/5 flex items-center justify-center"
+            className="size-10 sm:size-8 rounded-md border border-alert/30 text-alert hover:bg-alert/5 flex items-center justify-center"
           >
             <Trash2 className="size-4" />
           </button>
@@ -634,8 +636,8 @@ function AssocEntryFields({
   );
 }
 
-/* ===================== Modal: detalhes + edição ===================== */
-function TeamDetailsModal({
+/* ===================== Modal: edição da equipe ===================== */
+function TeamEditModal({
   detail,
   surgeons,
   associates,
@@ -812,7 +814,7 @@ function TeamDetailsModal({
   }
 
   return (
-    <ModalShell title={`Detalhes da Equipe nº ${pad(summary.number)}`} onClose={onClose} wide>
+    <ModalShell title={`Editar Equipe nº ${pad(summary.number)}`} onClose={onClose} wide>
       <div className="space-y-6">
         {/* Status + número + ações de equipe */}
         <section className="flex flex-wrap items-end gap-3 justify-between">

@@ -48,7 +48,7 @@ export function EditAttendanceObservationModal({
         <div className="mt-4">
           <Field label="Observação do atendimento" required error={error ?? undefined}>
             <textarea
-              className="input min-h-28 resize-y w-full"
+              className="input min-h-28 resize-none w-full"
               placeholder="Descreva a conduta ou observação do atendimento."
               value={observation}
               onChange={(e) => setObservation(e.target.value)}

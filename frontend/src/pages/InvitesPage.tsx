@@ -2,29 +2,29 @@
  * "Convidar Profissional" — ADMIN e SUPORTE geram um link de auto-cadastro
  * para médico/cirurgião e enviam por WhatsApp. A criação da conta acontece
  * quando o profissional abre o link e define a própria senha (Edge Function).
+ *
+ * O convite só define o PAPEL do profissional (e contatos opcionais). A
+ * associação com equipe fica para a gestão de equipes, onde o cirurgião
+ * principal é definido na criação da equipe e os médicos associados são
+ * vinculados depois.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Copy, MessageCircle, Send, UserPlus } from 'lucide-react';
 import { whatsappLink } from '@vitalsync/shared';
 import { useToast } from '../components/Toast';
 import { Button, PageContainer, PageHeader, PhoneInput, SelectField, TextInput } from '../components/ui';
-import { teamService } from '../services/teamService';
 import { professionalInviteService, type InviteRole } from '../services/professionalInviteService';
-import type { MedicalTeam } from '../services/types';
+
+type RoleState = InviteRole | '';
 
 export function InvitesPage() {
   const toast = useToast();
-  const [role, setRole] = useState<InviteRole>('ASSOCIATED_DOCTOR');
-  const [teamId, setTeamId] = useState('');
+  const [role, setRole] = useState<RoleState>('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [teams, setTeams] = useState<MedicalTeam[]>([]);
+  const [roleError, setRoleError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ link: string } | null>(null);
-
-  useEffect(() => {
-    teamService.list().then(setTeams).catch(() => toast.error('Erro ao carregar as equipes.'));
-  }, []);
 
   const message = useMemo(
     () =>
@@ -35,11 +35,15 @@ export function InvitesPage() {
   );
 
   async function generate() {
+    if (!role) {
+      setRoleError('Selecione o papel do profissional.');
+      return;
+    }
+    setRoleError(undefined);
     setBusy(true);
     try {
       const { link } = await professionalInviteService.generate({
         role,
-        teamId: teamId || null,
         phone: phone || undefined,
         email: email || undefined,
       });
@@ -56,7 +60,7 @@ export function InvitesPage() {
     <PageContainer>
       <PageHeader
         title="Convidar Profissional"
-        subtitle="Gere um link de cadastro para um médico ou cirurgião. Ele define a própria senha ao acessar."
+        subtitle="Gere um link de cadastro para um médico ou cirurgião. A associação com equipe pode ser feita depois na gestão de equipes."
       />
 
       <form
@@ -71,32 +75,27 @@ export function InvitesPage() {
             <SelectField
               label="Papel"
               value={role}
-              onChange={(e) => setRole(e.target.value as InviteRole)}
+              onChange={(e) => {
+                setRole(e.target.value as RoleState);
+                setRoleError(undefined);
+              }}
               options={[
                 { value: 'ASSOCIATED_DOCTOR', label: 'Médico Associado' },
                 { value: 'MAIN_SURGEON', label: 'Cirurgião Principal' },
               ]}
+              error={roleError}
               required
             />
-            <SelectField
-              label="Equipe (opcional)"
-              hint="Se informada, o profissional já entra vinculado a esta equipe."
-              value={teamId}
-              onChange={(e) => setTeamId(e.target.value)}
-              options={[
-                { value: '', label: 'Sem equipe' },
-                ...teams.map((t) => ({ value: t.id, label: `Equipe ${String(t.team_number).padStart(2, '0')}` })),
-              ]}
-            />
             <PhoneInput label="Telefone (WhatsApp) — opcional" value={phone} onChange={setPhone} />
-            <TextInput
-              label="E-mail (opcional)"
-              type="email"
-              placeholder="profissional@exemplo.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
           </div>
+
+          <TextInput
+            label="E-mail (opcional)"
+            type="email"
+            placeholder="profissional@exemplo.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
 
           <div className="flex justify-end">
             <Button type="submit" loading={busy}>

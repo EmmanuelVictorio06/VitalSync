@@ -70,13 +70,13 @@ export function AccessDenied() {
 /* ---------------- Linha de contato (e-mail / WhatsApp) ---------------- */
 export function ContactLine({ email, whatsapp }: { email?: string | null; whatsapp?: string | null }) {
   return (
-    <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
+    <div className="flex min-w-0 flex-col gap-0.5 text-xs text-muted-foreground">
       {email && (
-        <span className="inline-flex items-center gap-1.5 truncate">
+        <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 truncate">
           <Mail className="size-3 shrink-0" /> {email}
         </span>
       )}
-      <span className="inline-flex items-center gap-1.5">
+      <span className="inline-flex min-w-0 max-w-full items-center gap-1.5">
         <Phone className="size-3 shrink-0" /> {whatsapp ? formatPhoneBR(whatsapp) : '—'}
       </span>
     </div>
@@ -549,4 +549,3 @@ export function applyTeamFilters(teams: TeamDetail[], f: TeamFiltersState): Team
     return true;
   });
 }
-
