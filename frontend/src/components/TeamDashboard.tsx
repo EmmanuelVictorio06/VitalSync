@@ -124,7 +124,7 @@ function TeamBlock({ detail, roleLabel, currentUserId, onManageTeam }: { detail:
         <section className="min-w-0 lg:col-span-2 bg-card border border-border rounded-xl shadow-sm p-5 space-y-4 animate-entry [animation-delay:150ms]">
           <div className="flex items-center justify-between gap-3">
             <h3 className="font-bold tracking-tight inline-flex items-center gap-2">
-              <Users className="size-4 text-primary" /> Médicos da Equipe
+              <Users className="size-4 text-primary" /> Integrantes da Equipe
             </h3>
             <span className="text-xs font-semibold text-muted-foreground">{associates.length} associado(s)</span>
           </div>
@@ -178,7 +178,15 @@ function TeamBlock({ detail, roleLabel, currentUserId, onManageTeam }: { detail:
         </section>
       </div>
 
-      {rosterOpen && <TeamRosterDrawer summaryNumber={summary.number} members={members} currentUserId={currentUserId} onClose={() => setRosterOpen(false)} />}
+      {rosterOpen && (
+        <TeamRosterDrawer
+          summaryNumber={summary.number}
+          members={members}
+          managers={detail.managers}
+          currentUserId={currentUserId}
+          onClose={() => setRosterOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -223,6 +231,7 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: str
 
 function DoctorRow({ m, isMe = false }: { m: TeamMemberView; isMe?: boolean }) {
   const wa = whatsappUrl(m.whatsapp);
+  const roleLabel = m.isManager ? 'Gerente' : m.isSurgeon ? 'Responsável' : 'Associado';
   return (
     <li className="flex items-center justify-between gap-3 bg-muted/40 rounded-lg px-3 py-2">
       <div className="min-w-0">
@@ -230,9 +239,9 @@ function DoctorRow({ m, isMe = false }: { m: TeamMemberView; isMe?: boolean }) {
           {m.name}
           <span className={cn(
             'text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5',
-            m.isSurgeon ? 'text-primary bg-primary/10' : 'text-muted-foreground bg-muted',
+            m.isManager || m.isSurgeon ? 'text-primary bg-primary/10' : 'text-muted-foreground bg-muted',
           )}>
-            {m.isSurgeon ? 'Responsável' : 'Associado'}
+            {roleLabel}
           </span>
           {isMe && (
             <span className="text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 text-primary bg-primary/15">Você</span>
@@ -290,7 +299,21 @@ function PriorityPatientCard({ p, onOpen }: { p: TeamPatientView; onOpen: () => 
   );
 }
 
-function TeamRosterDrawer({ summaryNumber, members, currentUserId, onClose }: { summaryNumber: number; members: TeamMemberView[]; currentUserId?: string; onClose: () => void }) {
+function TeamRosterDrawer({
+  summaryNumber,
+  members,
+  managers,
+  currentUserId,
+  onClose,
+}: {
+  summaryNumber: number;
+  members: TeamMemberView[];
+  managers: TeamMemberView[];
+  currentUserId?: string;
+  onClose: () => void;
+}) {
+  const all = [...members, ...managers];
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -306,7 +329,7 @@ function TeamRosterDrawer({ summaryNumber, members, currentUserId, onClose }: { 
       className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-end sm:items-stretch sm:justify-end"
       role="dialog"
       aria-modal="true"
-      aria-label={`Médicos da Equipe nº ${String(summaryNumber).padStart(2, '0')}`}
+      aria-label={`Integrantes da Equipe nº ${String(summaryNumber).padStart(2, '0')}`}
       onClick={onClose}
     >
       <div
@@ -315,15 +338,15 @@ function TeamRosterDrawer({ summaryNumber, members, currentUserId, onClose }: { 
       >
         <header className="flex items-center gap-3 px-5 py-4 border-b border-border">
           <div className="flex-1 min-w-0">
-            <h2 className="font-extrabold tracking-tight">Médicos da Equipe</h2>
-            <p className="text-xs text-muted-foreground">Equipe nº {String(summaryNumber).padStart(2, '0')} · {members.length} profissional(is)</p>
+            <h2 className="font-extrabold tracking-tight">Integrantes da Equipe</h2>
+            <p className="text-xs text-muted-foreground">Equipe nº {String(summaryNumber).padStart(2, '0')} · {all.length} profissional(is)</p>
           </div>
           <button onClick={onClose} className="size-8 rounded-lg hover:bg-muted flex items-center justify-center" aria-label="Fechar">
             <X className="size-4" />
           </button>
         </header>
         <ul className="p-5 space-y-2 overflow-y-auto">
-          {members.map((m) => <DoctorRow key={m.id} m={m} isMe={m.id === currentUserId} />)}
+          {all.map((m) => <DoctorRow key={m.id} m={m} isMe={m.id === currentUserId} />)}
         </ul>
       </div>
     </div>

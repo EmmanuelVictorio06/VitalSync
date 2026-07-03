@@ -4,6 +4,7 @@
  */
 import { supabase } from '../lib/supabase';
 import { homologationService } from './homologationService';
+import { teamManagerService } from './teamManagerService';
 import type { ClinicalStatus, EntityStatus, RoleInTeam } from './types';
 
 export interface TeamStats {
@@ -25,7 +26,7 @@ export interface TeamSummary {
 }
 
 export interface TeamMemberView {
-  membershipId: string | null; // null = é o cirurgião responsável
+  membershipId: string | null; // null = é o cirurgião responsável ou o gerente
   id: string;
   name: string;
   email: string;
@@ -33,6 +34,8 @@ export interface TeamMemberView {
   /** Tag única do profissional (ex.: "Joao#4821"). Pode ser nula. */
   tag: string | null;
   isSurgeon: boolean;
+  /** Gerente de Equipe vinculado ao cirurgião responsável (não conta como associado). */
+  isManager?: boolean;
 }
 
 export interface TeamPatientAlert {
@@ -90,6 +93,13 @@ export interface TeamDetail {
   summary: TeamSummary;
   members: TeamMemberView[];
   patients: TeamPatientView[];
+  /**
+   * Gerente(s) de Equipe vinculado(s) ao cirurgião responsável — separado de
+   * `members` de propósito: não deve entrar na contagem de "médicos
+   * associados" (TeamDashboard/ManageTeamDrawer filtram `!m.isSurgeon`).
+   * Best-effort: [] quando o usuário logado não tem permissão de ler (RLS).
+   */
+  managers: TeamMemberView[];
 }
 
 function statsFrom(
@@ -252,7 +262,30 @@ export const teamViewService = {
       ),
     };
 
-    return { summary, members, patients };
+    // Gerente(s) vinculado(s) ao cirurgião responsável — separado de `members`
+    // (não conta como associado). Best-effort: quem não tem permissão de ler
+    // (RLS 0037 só libera o próprio cirurgião ou admin) recebe [] sem erro.
+    const managers: TeamMemberView[] = t.main_surgeon_id
+      ? await teamManagerService
+          .getManagersOfSurgeon(t.main_surgeon_id)
+          .then((links) =>
+            links
+              .filter((l) => l.manager)
+              .map((l) => ({
+                membershipId: null,
+                id: l.manager!.id,
+                name: l.manager!.name,
+                email: l.manager!.email,
+                whatsapp: l.manager!.whatsapp,
+                tag: l.manager!.professional_tag,
+                isSurgeon: false,
+                isManager: true,
+              })),
+          )
+          .catch(() => [])
+      : [];
+
+    return { summary, members, patients, managers };
   },
 
   /** Equipe do cirurgião logado (onde ele é o responsável). */

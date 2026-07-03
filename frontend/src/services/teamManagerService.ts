@@ -18,7 +18,7 @@ export interface SurgeonManagerLink {
   surgeon_id: string;
   is_active: boolean;
   created_at: string;
-  manager?: Pick<Profile, 'id' | 'name' | 'email' | 'professional_tag'> | null;
+  manager?: Pick<Profile, 'id' | 'name' | 'email' | 'whatsapp' | 'professional_tag'> | null;
 }
 
 export const teamManagerService = {
@@ -45,11 +45,15 @@ export const teamManagerService = {
     return (data as unknown as ManagerSurgeonLink[]) ?? [];
   },
 
-  /** (Admin) Gerentes ativamente vinculados a um cirurgião (tela Gerenciar Equipes). */
+  /**
+   * Gerentes ativamente vinculados a um cirurgião. Usado pela tela Gerenciar
+   * Equipes (Admin) e por teamViewService.getTeamDetail() (drawer "Integrantes
+   * da Equipe" — RLS 0037 libera o próprio cirurgião ler seus gerentes).
+   */
   async getManagersOfSurgeon(surgeonId: string): Promise<SurgeonManagerLink[]> {
     const { data, error } = await supabase
       .from('team_manager_surgeons')
-      .select('*, manager:profiles!team_manager_surgeons_team_manager_id_fkey(id,name,email,professional_tag)')
+      .select('*, manager:profiles!team_manager_surgeons_team_manager_id_fkey(id,name,email,whatsapp,professional_tag)')
       .eq('surgeon_id', surgeonId)
       .eq('is_active', true)
       .order('created_at');
