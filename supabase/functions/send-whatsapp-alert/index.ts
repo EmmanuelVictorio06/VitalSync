@@ -36,6 +36,17 @@ function onlyDigits(phone: string): string {
   return phone.replace(/\D/g, '');
 }
 
+/**
+ * Normaliza para o formato internacional do WhatsApp (Brasil). Se o número
+ * vier sem DDI (10-11 dígitos: DDD + número), prefixa 55. Números com 12-13
+ * dígitos já têm o código do país e são mantidos. Usa o COMPRIMENTO (e não
+ * "começa com 55") para não confundir DDDs 51-55 do Sul com o DDI.
+ */
+function toBrWhatsApp(phone: string): string {
+  const d = onlyDigits(phone);
+  return d.length <= 11 ? `55${d}` : d;
+}
+
 /** Envia o template aprovado via Meta Cloud API. Retorna o id da mensagem. */
 async function sendViaMeta(
   token: string,
@@ -49,7 +60,7 @@ async function sendViaMeta(
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       messaging_product: 'whatsapp',
-      to: onlyDigits(to),
+      to: toBrWhatsApp(to),
       type: 'template',
       template: {
         name: TEMPLATE_NAME,
