@@ -30,6 +30,7 @@ import {
   type AlertFiltersState,
 } from '../components/alerts';
 import { useAlertCount } from '../components/AlertCount';
+import { Role } from '@vitalsync/shared';
 import { alertService, type AlertRow } from '../services/alertService';
 import { permissionService } from '../services/permissionService';
 
@@ -53,6 +54,7 @@ export function AlertsPage() {
   const isAdmin = permissionService.isAdmin(user);
   const canAttend = permissionService.canAttendAlerts(user);
   const canResend = permissionService.canResendAlertNotification(user);
+  const isReadOnlyManager = user?.role === Role.MANAGER;
 
   const load = useCallback(async () => {
     setError(false);
@@ -135,6 +137,12 @@ export function AlertsPage() {
         title="Alertas"
         subtitle="Acompanhe alterações clínicas geradas pelos registros de sinais vitais dos pacientes em monitoramento."
       />
+
+      {isReadOnlyManager && (
+        <div className="rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+          Visualização somente-leitura — como Gerente de Equipe, você acompanha os alertas, mas o atendimento clínico é feito pelo médico responsável.
+        </div>
+      )}
 
       {alerts && !error && (
         <AlertQuickFilters

@@ -51,9 +51,12 @@ function whatsappUrl(digits: string | null): string | null {
 
 function TeamBlock({ detail, roleLabel, currentUserId, onManageTeam }: { detail: TeamDetail; roleLabel: string; currentUserId?: string; onManageTeam?: (teamId: string) => void }) {
   const navigate = useNavigate();
-  const { summary, members, patients } = detail;
+  const { summary, members, patients, managers } = detail;
   const teamParam = String(summary.number);
-  const associates = useMemo(() => members.filter((m) => !m.isSurgeon), [members]);
+  const associates = useMemo(() => members.filter((m) => !m.isSurgeon && !m.isManager), [members]);
+  // Card "Integrantes da Equipe": Responsável → Associados → Gerente (o gerente
+  // vem de `managers`, separado de `members` de propósito — não conta como associado).
+  const roster = useMemo(() => [...members, ...managers], [members, managers]);
 
   const [rosterOpen, setRosterOpen] = useState(false);
 
@@ -129,16 +132,16 @@ function TeamBlock({ detail, roleLabel, currentUserId, onManageTeam }: { detail:
             <span className="text-xs font-semibold text-muted-foreground">{associates.length} associado(s)</span>
           </div>
 
-          {members.length === 0 ? (
+          {roster.length === 0 ? (
             <EmptyHint title="Nenhum médico associado" text="Adicione médicos à equipe pelo gerenciamento de equipes." />
           ) : (
             <>
               <ul className="space-y-2">
-                {members.slice(0, PREVIEW_DOCTORS).map((m) => <DoctorRow key={m.id} m={m} isMe={m.id === currentUserId} />)}
+                {roster.slice(0, PREVIEW_DOCTORS).map((m) => <DoctorRow key={m.id} m={m} isMe={m.id === currentUserId} />)}
               </ul>
-              {members.length > PREVIEW_DOCTORS && (
+              {roster.length > PREVIEW_DOCTORS && (
                 <button onClick={() => setRosterOpen(true)} className="w-full inline-flex items-center justify-center gap-1 px-3 py-2 border border-border rounded-md text-xs font-semibold hover:bg-muted transition-colors">
-                  Ver todos os médicos ({members.length}) <ChevronRight className="size-3.5" />
+                  Ver todos os médicos ({roster.length}) <ChevronRight className="size-3.5" />
                 </button>
               )}
             </>
