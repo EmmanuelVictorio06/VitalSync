@@ -9,6 +9,7 @@ import {
   type SelectHTMLAttributes,
   type InputHTMLAttributes,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Search } from 'lucide-react';
 import { ClinicalStatus, formatPhoneBR, onlyDigits } from '@vitalsync/shared';
 
@@ -223,6 +224,210 @@ export function SelectField({ label, hint, error, options, placeholder = 'Seleci
           </option>
         ))}
       </select>
+    </Field>
+  );
+}
+
+/* ---------------- Custom Select (listbox estilizado, não nativo) ----------------
+   Diferente do SelectField (acima, <select> nativo), este renderiza um botão +
+   listbox próprio, reutilizando o mesmo padrão visual do ProfessionalCombobox.
+   Motivo: no mobile, o menu aberto do <select> nativo é controlado pelo SO
+   (iOS/Android) e não pode ser estilizado — fica cinza escuro/fora do design.
+   Aqui o menu segue o design system (fundo branco, borda suave, hover azul,
+   cantos arredondados). Acessível por teclado e confortável ao toque.
+
+   A API é compatível com a do SelectField: `onChange` recebe um evento com
+   `target.value`, então a chamada `(e) => setX(e.target.value)` não muda. */
+export interface CustomSelectOption {
+  value: string;
+  label: string;
+}
+
+export function CustomSelect({
+  label,
+  hint,
+  error,
+  options,
+  placeholder = 'Selecione…',
+  required,
+  value,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  hint?: string;
+  error?: string;
+  options: CustomSelectOption[];
+  placeholder?: string;
+  required?: boolean;
+  value: string;
+  onChange: (e: { target: { value: string } }) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [highlight, setHighlight] = useState(0);
+  const [dropUp, setDropUp] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const listId = useId();
+
+  const selected = useMemo(() => options.find((o) => o.value === value) ?? null, [options, value]);
+
+  // Fecha ao clicar fora.
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e: MouseEvent) => {
+      // O listbox é portado para o body, então wrapRef não o contém. Comparamos
+      // o alvo tanto com o wrapper (botão) quanto com o próprio listbox (via
+      // data-attribute) para não fechar ao clicar dentro dele.
+      const t = e.target as Node | null;
+      if (!t) return;
+      if (wrapRef.current?.contains(t)) return;
+      if (t instanceof Element && t.closest?.('[data-cs-listbox]')) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [open]);
+
+  // Posiciona o listbox (portado para o body) em relação ao botão e decide
+  // abrir para cima quando não há espaço abaixo. Recalcula no scroll/resize para
+  // acompanhar o botão (ex.: modal rolável). Portal evita clipping por containers
+  // com overflow-auto/hidden (caso do modal "Filtros avançados") e z-index alto
+  // garante que fique acima do rodapé do modal.
+  useEffect(() => {
+    if (!open) return;
+    const btn = btnRef.current;
+    if (!btn) return;
+
+    const MAX_H = 240; // max-h-60 (15rem) do <ul>
+    const GAP = 4; // mt-1 / mb-1
+
+    const place = () => {
+      const r = btn.getBoundingClientRect();
+      const below = window.innerHeight - r.bottom - GAP;
+      const above = r.top - GAP;
+      const up = below < MAX_H && above > below;
+      setDropUp(up);
+      setMenuStyle({
+        position: 'fixed',
+        left: r.left,
+        width: r.width,
+        ...(up ? { bottom: window.innerHeight - r.top - GAP } : { top: r.bottom + GAP }),
+      });
+    };
+
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open]);
+
+  // Reseta o destaque ao abrir e devolve o foco ao botão ao fechar.
+  useEffect(() => {
+    if (open) {
+      setHighlight(0);
+    } else {
+      btnRef.current?.focus();
+    }
+  }, [open]);
+
+  function choose(v: string) {
+    onChange({ target: { value: v } });
+    setOpen(false);
+  }
+
+  function onKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!open) {
+        setOpen(true);
+        return;
+      }
+      setHighlight((h) => Math.min(h + 1, options.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlight((h) => Math.max(h - 1, 0));
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (!open) {
+        setOpen(true);
+        return;
+      }
+      const o = options[highlight];
+      if (o) choose(o.value);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setOpen(false);
+    }
+  }
+
+  return (
+    <Field label={label} hint={hint} error={error} required={required}>
+      <div className="relative" ref={wrapRef}>
+        <button
+          ref={btnRef}
+          type="button"
+          disabled={disabled}
+          onClick={() => setOpen((v) => !v)}
+          onKeyDown={onKeyDown}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-controls={listId}
+          className={cn(
+            'input flex items-center justify-between gap-2 text-left',
+            error && 'invalid',
+            disabled && 'opacity-55 cursor-not-allowed',
+          )}
+        >
+          <span className={cn('truncate', !selected && 'text-muted-foreground')}>{selected ? selected.label : placeholder}</span>
+          <ChevronDown className={cn('size-4 text-muted-foreground shrink-0 transition-transform', open && 'rotate-180')} />
+        </button>
+
+        {open &&
+          createPortal(
+            <div
+              data-cs-listbox
+              className={cn(
+                'z-[1000] rounded-lg border border-border bg-card shadow-lg overflow-hidden',
+                dropUp ? 'animate-dropup' : 'animate-entry',
+              )}
+              style={menuStyle}
+            >
+              <ul id={listId} role="listbox" className="max-h-60 overflow-y-auto py-1">
+                {options.length === 0 ? (
+                  <li className="px-3 py-3 text-sm text-muted-foreground text-center">Sem opções</li>
+                ) : (
+                  options.map((o, i) => {
+                    const active = o.value === value;
+                    return (
+                      <li key={o.value} role="option" aria-selected={active}>
+                        <button
+                          type="button"
+                          onClick={() => choose(o.value)}
+                          onMouseEnter={() => setHighlight(i)}
+                          className={cn(
+                            'w-full text-left px-3 py-2.5 flex items-center gap-2 transition-colors',
+                            i === highlight ? 'bg-primary/10' : 'hover:bg-muted/60',
+                            active && 'text-primary font-semibold',
+                          )}
+                        >
+                          <span className="text-sm truncate flex-1">{o.label}</span>
+                          {active && <Check className="size-4 text-primary shrink-0" />}
+                        </button>
+                      </li>
+                    );
+                  })
+                )}
+              </ul>
+            </div>,
+            document.body,
+          )}
+      </div>
     </Field>
   );
 }

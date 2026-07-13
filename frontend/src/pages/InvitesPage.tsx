@@ -12,7 +12,7 @@ import { useMemo, useState } from 'react';
 import { Copy, MessageCircle, Send, UserPlus } from 'lucide-react';
 import { whatsappLink } from '@vitalsync/shared';
 import { useToast } from '../components/Toast';
-import { Button, PageContainer, PageHeader, PhoneInput, SelectField, TextInput } from '../components/ui';
+import { Button, CustomSelect, PageContainer, PageHeader, PhoneInput, TextInput } from '../components/ui';
 import { professionalInviteService, type InviteRole } from '../services/professionalInviteService';
 
 type RoleState = InviteRole | '';
@@ -72,7 +72,7 @@ export function InvitesPage() {
       >
         <section className="bg-card rounded-xl border border-border shadow-sm p-6 space-y-4">
           <div className="grid md:grid-cols-2 gap-4">
-            <SelectField
+            <CustomSelect
               label="Papel"
               value={role}
               onChange={(e) => {
@@ -81,7 +81,7 @@ export function InvitesPage() {
               }}
               options={[
                 { value: 'ASSOCIATED_DOCTOR', label: 'Médico Associado' },
-                { value: 'MAIN_SURGEON', label: 'Cirurgião Principal' },
+                { value: 'MAIN_SURGEON', label: 'Médico Cirurgião' },
               ]}
               error={roleError}
               required
