@@ -63,7 +63,7 @@ export const dashboardService = {
       weeklyQ,
       supabase.from('medical_teams').select('id', { count: 'exact', head: true }).eq('status', 'ACTIVE'),
       // Contagem global de médicos via view pública — não depende da RLS de contato (M-09).
-      supabase.from('profiles_public').select('id', { count: 'exact', head: true }).in('role', ['MAIN_SURGEON', 'ASSOCIATED_DOCTOR']).eq('status', 'ACTIVE'),
+      supabase.from('profiles_public').select('id', { count: 'exact', head: true }).in('role', ['MEDICAL_SURGEON', 'ASSOCIATED_DOCTOR']).eq('status', 'ACTIVE'),
       supabase.from('hospitals').select('id', { count: 'exact', head: true }).eq('status', 'ACTIVE'),
       supabase.from('surgery_types').select('id', { count: 'exact', head: true }).eq('status', 'ACTIVE'),
     ]);
