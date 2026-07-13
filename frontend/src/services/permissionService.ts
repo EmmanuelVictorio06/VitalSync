@@ -65,15 +65,19 @@ export const permissionService = {
 
   /* ------------------------------- Alertas -------------------------------- */
 
-  /** Ver a aba Alertas: Admin, Cirurgião Principal e Médico Associado. */
+  /**
+   * Ver a aba Alertas: Admin, Cirurgião Principal, Médico Associado e Gerente
+   * de Equipe (este último em modo somente-leitura — ver canAttendAlerts).
+   */
   canViewAlerts(user: AuthUser | null | undefined): boolean {
-    return !!user && ([Role.ADM, Role.SURGEON, Role.ASSOCIATE] as Role[]).includes(user.role);
+    return !!user && ([Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.MANAGER] as Role[]).includes(user.role);
   },
 
   /**
    * Realizar atendimento clínico (em análise / atendido / ignorado): apenas
    * profissionais clínicos. O Admin NÃO substitui a responsabilidade clínica
-   * da equipe (vê tudo, mas não conclui o atendimento).
+   * da equipe (vê tudo, mas não conclui o atendimento) e o Gerente de Equipe
+   * também não — ele só acompanha (somente-leitura).
    */
   canAttendAlerts(user: AuthUser | null | undefined): boolean {
     return user?.role === Role.SURGEON || user?.role === Role.ASSOCIATE;
