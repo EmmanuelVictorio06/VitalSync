@@ -55,7 +55,13 @@ export function LoginPage() {
     setBusy(true);
     try {
       await login(email.trim(), password);
-      toast.success('Bem-vindo(a) ao VitalSync!');
+      // Boas-vindas: no mobile usa toast discreto (abaixo do cabeçalho, some
+      // rápido e ao toque); no desktop mantém o toast padrão (inalterado).
+      if (window.matchMedia('(max-width: 639px)').matches) {
+        toast.welcome('Bem-vindo(a) ao VitalSync!');
+      } else {
+        toast.success('Bem-vindo(a) ao VitalSync!');
+      }
       navigate('/dashboard');
     } catch (err) {
       // Mensagem clara, sem termos técnicos (heurística de Nielsen).

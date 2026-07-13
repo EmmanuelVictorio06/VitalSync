@@ -19,7 +19,7 @@ import {
 import { onlyDigits } from '@vitalsync/shared';
 import { storageService } from '../services/storageService';
 import type { EntityStatus, UserOverview, UserRole } from '../services/types';
-import { Button, cn } from './ui';
+import { Button, CustomSelect, cn } from './ui';
 import { initials } from './profile';
 
 /* ---------------- Metadados dos papéis ---------------- */
@@ -332,16 +332,27 @@ export function UserActiveFilterChips({ filters, onRemove, onClear }: {
 
 /* ----------------- Filtros avançados (bottom sheet / modal) ----------------- */
 
-function FilterSelect({ label, value, onChange, options }: {
-  label: string; value: string; onChange: (v: string) => void; options: Array<{ value: string; label: string }>;
+// Wrapper sobre o CustomSelect (listbox estilizado) preservando a API usada
+// pelos filtros: `onChange(v)` recebe o valor direto (sem evento). Mantém o
+// mesmo padrão visual dos demais dropdowns do site.
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: Array<{ value: string; label: string }>;
 }) {
   return (
-    <label className="block">
-      <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">{label}</span>
-      <select className="input py-2 text-sm" value={value} onChange={(e) => onChange(e.target.value)}>
-        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-    </label>
+    <CustomSelect
+      label={label}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      options={options}
+    />
   );
 }
 

@@ -4,7 +4,7 @@ import { calculateAge, whatsappLink } from '@vitalsync/shared';
 import { Role, useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
 import { ToggleSwitch } from '../components/admin';
-import { Button, Field, PageContainer, PageHeader, PhoneInput, SelectField, TextInput } from '../components/ui';
+import { Button, CustomSelect, Field, PageContainer, PageHeader, PhoneInput, TextInput } from '../components/ui';
 import { featureFlags } from '../config/featureFlags';
 import { patientVitalsLink } from '../lib/publicUrl';
 import { formatCpf, validateCpf } from '../lib/cpfUtils';
@@ -165,15 +165,15 @@ export function PatientRegisterPage() {
 
         <Block index={2} title="Detalhes do Procedimento">
           <div className="grid md:grid-cols-2 gap-4">
-            <SelectField label="Tipo de cirurgia" value={form.surgeryTypeId} onChange={(e) => set('surgeryTypeId', e.target.value)} options={surgeryTypes.map((s) => ({ value: s.id, label: s.name }))} required />
-            <SelectField label="Hospital" value={form.hospitalId} onChange={(e) => set('hospitalId', e.target.value)} options={hospitals.map((h) => ({ value: h.id, label: h.name }))} required />
+            <CustomSelect label="Tipo de cirurgia" value={form.surgeryTypeId} onChange={(e) => set('surgeryTypeId', e.target.value)} options={surgeryTypes.map((s) => ({ value: s.id, label: s.name }))} required />
+            <CustomSelect label="Hospital" value={form.hospitalId} onChange={(e) => set('hospitalId', e.target.value)} options={hospitals.map((h) => ({ value: h.id, label: h.name }))} required />
             <TextInput label="Data da cirurgia" type="date" value={form.surgeryDate} onChange={(e) => set('surgeryDate', e.target.value)} required />
             <TextInput label="Data da alta hospitalar" type="date" hint="Inicia a contagem dos 10 dias de monitoramento." value={form.dischargeDate} onChange={(e) => set('dischargeDate', e.target.value)} required />
           </div>
         </Block>
 
         <Block index={3} title="Equipe Médica">
-          <SelectField
+          <CustomSelect
             label="Equipe responsável"
             hint={
               isManager
