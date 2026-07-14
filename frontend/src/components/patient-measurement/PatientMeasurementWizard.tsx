@@ -83,15 +83,16 @@ export function PatientMeasurementWizard({ token, cpf, patient, period, onSucces
   async function submit() {
     setSubmitting(true);
     try {
-      // Fotos sobem ao Storage (bucket privado) e guardam só o caminho.
+      // Fotos sobem via Edge Function (revalida token + CPF; resolve a pasta
+      // do paciente no servidor) e guardam só o caminho.
       // A foto do dreno só é enviada quando o paciente informou possuir dreno.
       const effectiveDrainPhoto = form.hasDrain ? form.drainPhoto : null;
       let woundPhotoPath: string | undefined;
       if (form.woundPhoto)
-        woundPhotoPath = await storageService.uploadPatientPhoto(form.woundPhoto, patient.id, 'wound');
+        woundPhotoPath = await storageService.uploadPatientPhotoViaToken(form.woundPhoto, token, cpf, 'wound');
       let drainPhotoPath: string | undefined;
       if (effectiveDrainPhoto)
-        drainPhotoPath = await storageService.uploadPatientPhoto(effectiveDrainPhoto, patient.id, 'drain');
+        drainPhotoPath = await storageService.uploadPatientPhotoViaToken(effectiveDrainPhoto, token, cpf, 'drain');
 
       await vitalSignsService.submitByToken({
         secure_token: token,

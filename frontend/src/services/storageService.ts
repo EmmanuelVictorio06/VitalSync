@@ -5,6 +5,7 @@
  * lê; em produção, restringir por equipe (ver políticas no SQL).
  */
 import { supabase } from '../lib/supabase';
+import { extractEdgeError } from '../lib/edgeError';
 
 const BUCKET = 'patient-photos';
 const AVATAR_BUCKET = 'profile-avatars';
@@ -17,17 +18,27 @@ export const storageService = {
    * Sobe a foto de acompanhamento e retorna o caminho salvo.
    *  - `wound` → vital_sign_records.wound_photo_path (cicatriz operatória)
    *  - `drain` → vital_sign_records.drain_photo_path (foto do dreno)
-   * Cada tipo vai em arquivo separado, dentro da pasta do paciente.
+   * Vai pela Edge Function `upload-patient-photo` (service_role), que revalida
+   * token + CPF e resolve a pasta do paciente no servidor — o bucket não aceita
+   * mais INSERT anon direto (migration 0042).
    */
-  async uploadPatientPhoto(file: File, patientId: string, kind: PatientPhotoKind = 'wound'): Promise<string> {
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-    const path = `${patientId}/${kind}-${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
-      cacheControl: '3600',
-      upsert: false,
-      contentType: file.type,
-    });
-    if (error) throw new Error(error.message);
+  async uploadPatientPhotoViaToken(
+    file: File,
+    token: string,
+    cpf: string,
+    kind: PatientPhotoKind = 'wound',
+  ): Promise<string> {
+    const fd = new FormData();
+    fd.append('token', token);
+    fd.append('cpf', cpf);
+    fd.append('kind', kind);
+    fd.append('file', file);
+    const { data, error } = await supabase.functions.invoke('upload-patient-photo', { body: fd });
+    if (error) {
+      throw new Error(await extractEdgeError(error, 'Não foi possível enviar a foto. Tente novamente.'));
+    }
+    const path = (data as { path?: string })?.path;
+    if (!path) throw new Error('Não foi possível enviar a foto. Tente novamente.');
     return path;
   },
 
