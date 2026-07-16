@@ -56,15 +56,14 @@ export function AlertsPage() {
   const canResend = permissionService.canResendAlertNotification(user);
   const isReadOnlyManager = user?.role === Role.MANAGER;
 
-  /** Trava de atendimento: alerta em análise por OUTRO profissional (e o usuário
-   *  não é Admin nem o Cirurgião Principal da equipe) → Atender/Ignorar bloqueados. */
+  /** Trava de atendimento: alerta em análise por OUTRO profissional → Atender/
+   *  Ignorar bloqueados para todos, exceto o dono do lock e o Admin. O Cirurgião
+   *  Principal NÃO atropela o lock: para assumir, primeiro usa "Liberar". */
   const isLockedByOther = useCallback(
     (a: AlertRow): boolean => {
       if (a.attendance_status !== 'IN_ANALYSIS' || !a.in_analysis_by) return false;
       if (isAdmin) return false;
-      if (user && a.in_analysis_by === user.id) return false;
-      if (user && a.team?.main_surgeon_id === user.id) return false;
-      return true;
+      return !user || a.in_analysis_by !== user.id;
     },
     [isAdmin, user],
   );
@@ -73,9 +72,11 @@ export function AlertsPage() {
   const canReleaseAlert = useCallback(
     (a: AlertRow): boolean => {
       if (a.attendance_status !== 'IN_ANALYSIS' || !a.in_analysis_by) return false;
-      return !isLockedByOther(a);
+      if (isAdmin) return true;
+      if (!user) return false;
+      return a.in_analysis_by === user.id || a.team?.main_surgeon_id === user.id;
     },
-    [isLockedByOther],
+    [isAdmin, user],
   );
 
   const load = useCallback(async () => {
