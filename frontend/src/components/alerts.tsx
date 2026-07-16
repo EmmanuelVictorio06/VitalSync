@@ -63,7 +63,7 @@ export function attendanceBadgeLabel(a: AlertRow): string | undefined {
 
 /** Tooltip exibido quando o alerta está travado por outro profissional. */
 export const LOCK_TOOLTIP =
-  'Somente o profissional que colocou em análise, o Administrador ou o Cirurgião Principal da equipe pode atender ou ignorar este alerta.';
+  'Somente o profissional que colocou este alerta em análise pode atendê-lo ou ignorá-lo. O Cirurgião Principal da equipe pode usar "Liberar" para devolvê-lo à fila.';
 
 const fmtDate = (v: string | null | undefined) => (v ? formatCivilDate(v) : '—');
 const fmtDateTime = (v: string | null | undefined) => (v ? new Date(v).toLocaleString('pt-BR') : '—');
