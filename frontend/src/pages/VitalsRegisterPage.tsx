@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { AlertCircle, Moon, ShieldCheck, Sun } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Moon, ShieldCheck, Sun } from 'lucide-react';
 import { Period, calculateAge } from '@vitalsync/shared';
 import { formatCpf } from '../lib/cpfUtils';
-import { publicAccessService } from '../services/publicAccessService';
+import { publicAccessService, type PatientAccessValidation } from '../services/publicAccessService';
 import { type PatientLinkInfo } from '../services/vitalSignsService';
 import {
   GRADIENT_BG,
@@ -23,6 +23,10 @@ export function VitalsRegisterPage() {
   const [step, setStep] = useState<Step>('choose');
   const [period, setPeriod] = useState<Period>(Period.MORNING);
   const [photoSent, setPhotoSent] = useState(false);
+  // Regra "uma medição por período por dia": períodos de hoje já registrados
+  // (fuso America/Sao_Paulo) e o toggle de admin que libera reenvio.
+  const [filledPeriods, setFilledPeriods] = useState<Period[]>([]);
+  const [allowResend, setAllowResend] = useState(false);
 
   // Token ausente na URL: link malformado.
   if (!token) {
@@ -43,9 +47,11 @@ export function VitalsRegisterPage() {
     return (
       <CpfGate
         token={token}
-        onValidated={(info, confirmedCpf) => {
+        onValidated={(validation, confirmedCpf) => {
           setCpf(confirmedCpf);
-          setLink(info);
+          setFilledPeriods(validation.periodsFilledToday);
+          setAllowResend(validation.allowResendSamePeriod);
+          setLink(validation.patient);
         }}
       />
     );
@@ -76,6 +82,26 @@ export function VitalsRegisterPage() {
     );
   }
 
+  // Regra "uma medição por período por dia" (só quando o admin não liberou o
+  // reenvio): períodos de hoje já feitos ficam bloqueados na escolha.
+  const morningDone = !allowResend && filledPeriods.includes(Period.MORNING);
+  const nightDone = !allowResend && filledPeriods.includes(Period.NIGHT);
+
+  // Ambas as medições de hoje já feitas: tela de conclusão, sem formulário.
+  if (morningDone && nightDone) {
+    return (
+      <CenteredCard>
+        <div className="size-16 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto mb-4">
+          <CheckCircle2 className="size-8" />
+        </div>
+        <h2 className="text-xl font-extrabold tracking-tight">Tudo certo por hoje!</h2>
+        <p className="text-sm text-muted-foreground mt-2 text-balance">
+          As medições da manhã e da noite já foram registradas. Volte amanhã ao acordar para a próxima medição.
+        </p>
+      </CenteredCard>
+    );
+  }
+
   if (step === 'form') {
     return (
       <PatientMeasurementWizard
@@ -85,6 +111,8 @@ export function VitalsRegisterPage() {
         period={period}
         onSuccess={(photoAttached) => {
           setPhotoSent(photoAttached);
+          // Marca o período como feito para a UI refletir a regra sem revalidar.
+          setFilledPeriods((prev) => (prev.includes(period) ? prev : [...prev, period]));
           setStep('success');
         }}
       />
@@ -92,7 +120,14 @@ export function VitalsRegisterPage() {
   }
 
   // Escolha do período (entrada do fluxo).
-  return <PeriodChoice name={patient.name} onChoose={(p) => { setPeriod(p); setStep('form'); }} />;
+  return (
+    <PeriodChoice
+      name={patient.name}
+      morningDone={morningDone}
+      nightDone={nightDone}
+      onChoose={(p) => { setPeriod(p); setStep('form'); }}
+    />
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -111,7 +146,19 @@ function CenteredCard({ children }: { children: React.ReactNode }) {
 /* ------------------------------------------------------------------ */
 /*  Escolha do período                                                 */
 /* ------------------------------------------------------------------ */
-function PeriodChoice({ name, onChoose }: { name: string; onChoose: (p: Period) => void }) {
+function PeriodChoice({
+  name,
+  morningDone,
+  nightDone,
+  onChoose,
+}: {
+  name: string;
+  /** Medição da manhã de hoje já registrada (e reenvio não liberado pelo admin). */
+  morningDone: boolean;
+  /** Medição da noite de hoje já registrada (e reenvio não liberado pelo admin). */
+  nightDone: boolean;
+  onChoose: (p: Period) => void;
+}) {
   const firstName = name.trim().split(/\s+/)[0] || name;
   return (
     <CenteredCard>
@@ -122,17 +169,32 @@ function PeriodChoice({ name, onChoose }: { name: string; onChoose: (p: Period) 
       <div className="mt-6 space-y-3 text-left">
         <button
           onClick={() => onChoose(Period.MORNING)}
-          className="w-full flex items-center gap-3 py-4 px-5 bg-primary text-primary-foreground rounded-xl font-bold text-base hover:bg-primary/90 shadow-lg shadow-primary/20 transition-colors"
+          disabled={morningDone}
+          className="w-full flex items-center gap-3 py-4 px-5 bg-primary text-primary-foreground rounded-xl font-bold text-base hover:bg-primary/90 shadow-lg shadow-primary/20 transition-colors disabled:opacity-55 disabled:cursor-not-allowed disabled:hover:bg-primary disabled:shadow-none"
         >
-          <Sun className="size-5" /> {periodLabel(Period.MORNING)} (ao acordar)
+          <Sun className="size-5" />
+          {morningDone ? `${periodLabel(Period.MORNING)} — Já realizada hoje` : `${periodLabel(Period.MORNING)} (ao acordar)`}
         </button>
         <button
           onClick={() => onChoose(Period.NIGHT)}
-          className="w-full flex items-center gap-3 py-4 px-5 border-2 border-primary/30 text-primary bg-card rounded-xl font-bold text-base hover:bg-accent transition-colors"
+          disabled={nightDone}
+          className="w-full flex items-center gap-3 py-4 px-5 border-2 border-primary/30 text-primary bg-card rounded-xl font-bold text-base hover:bg-accent transition-colors disabled:opacity-55 disabled:cursor-not-allowed disabled:hover:bg-card"
         >
-          <Moon className="size-5" /> {periodLabel(Period.NIGHT)} (antes de dormir)
+          <Moon className="size-5" />
+          {nightDone ? `${periodLabel(Period.NIGHT)} — Já realizada hoje` : `${periodLabel(Period.NIGHT)} (antes de dormir)`}
         </button>
       </div>
+
+      {morningDone && !nightDone && (
+        <p className="text-sm text-muted-foreground mt-4 text-balance">
+          Você já registrou a medição da manhã. Agora é só a medição da noite, antes de dormir.
+        </p>
+      )}
+      {nightDone && !morningDone && (
+        <p className="text-sm text-muted-foreground mt-4 text-balance">
+          Você já registrou a medição da noite. A próxima é amanhã de manhã, ao acordar.
+        </p>
+      )}
     </CenteredCard>
   );
 }
@@ -144,7 +206,13 @@ function PeriodChoice({ name, onChoose }: { name: string; onChoose: (p: Period) 
  * Pede o CPF e valida no servidor antes de revelar qualquer dado do paciente.
  * Erro sempre genérico (não revela existência).
  */
-function CpfGate({ token, onValidated }: { token: string; onValidated: (info: PatientLinkInfo, cpf: string) => void }) {
+function CpfGate({
+  token,
+  onValidated,
+}: {
+  token: string;
+  onValidated: (validation: PatientAccessValidation, cpf: string) => void;
+}) {
   const [cpf, setCpf] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

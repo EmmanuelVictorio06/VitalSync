@@ -42,7 +42,7 @@ export function StatusPill({ status }: { status: EntityStatus }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider border',
+        'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider border',
         active ? 'bg-stable/10 text-stable border-stable/20' : 'bg-muted text-muted-foreground border-border',
       )}
     >
@@ -174,6 +174,12 @@ export interface AdminColumn<T> {
   /** Não exibir no card mobile (ex.: colunas redundantes). */
   hideOnMobile?: boolean;
   className?: string;
+  /**
+   * Coluna de badge: a célula não clipa o conteúdo (overflow-visible +
+   * whitespace-nowrap) — o badge aparece sempre inteiro e, se faltar largura,
+   * a tabela rola horizontalmente dentro do card (overflow-x-auto do wrapper).
+   */
+  noClip?: boolean;
   /** Ajuste opcional da linha no card mobile. */
   mobileRowClassName?: string;
   /** Ajuste opcional do valor no card mobile. */
@@ -230,7 +236,10 @@ export function AdminTable<T>({
             {rows.map((row) => (
               <tr key={keyFor(row)} className="hover:bg-muted/30 transition-colors">
                 {columns.map((c) => (
-                  <td key={c.header} className={cn('px-4 py-3 overflow-hidden', c.className)}>
+                  <td
+                    key={c.header}
+                    className={cn('px-4 py-3', c.noClip ? 'overflow-visible whitespace-nowrap' : 'overflow-hidden', c.className)}
+                  >
                     {c.render(row)}
                   </td>
                 ))}
@@ -254,11 +263,14 @@ export function AdminTable<T>({
             {columns
               .filter((c) => !c.hideOnMobile)
               .map((c) => (
-                <div key={c.header} className={cn(c.mobileRowClassName ?? 'flex items-center justify-between', 'gap-3 text-sm')}>
+                // flex-wrap: quando o valor (ex.: badge com whitespace-nowrap) não
+                // cabe ao lado do rótulo, ele desce INTEIRO para a linha de baixo
+                // em vez de encolher/cortar.
+                <div key={c.header} className={cn(c.mobileRowClassName ?? 'flex flex-wrap items-center justify-between', 'gap-x-3 gap-y-1 text-sm')}>
                   <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                     {c.header}
                   </span>
-                  <span className={cn('text-right min-w-0', c.mobileValueClassName)}>{c.render(row)}</span>
+                  <span className={cn('text-right min-w-0 max-w-full ml-auto', c.mobileValueClassName)}>{c.render(row)}</span>
                 </div>
               ))}
             {actions && <div className="flex gap-2 justify-end pt-2 border-t border-border">{actions(row)}</div>}

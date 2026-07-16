@@ -1,10 +1,9 @@
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { Heart, LogOut, Menu, Plus, Search, Stethoscope, User, X } from 'lucide-react';
+import { Heart, LogOut, Menu, Stethoscope, User, X } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useRoleMenus, type NavItem } from './RoleBasedSidebar';
 import { HomologationBadge } from './HomologationBadge';
-import { canRegisterPatients } from '../lib/permissions';
 import { storageService } from '../services/storageService';
 import { initials } from './profile';
 import { ProfessionalTag, cn } from './ui';
@@ -35,6 +34,7 @@ const PAGE_TITLES: Array<{ match: (path: string) => boolean; title: string }> = 
   { match: (p) => p.startsWith('/admin/exports'), title: 'Exportações' },
   { match: (p) => p.startsWith('/admin/settings'), title: 'Configurações' },
   { match: (p) => p.startsWith('/manager-teams'), title: 'Equipes Vinculadas' },
+  { match: (p) => p.startsWith('/invites'), title: 'Convidar Profissional' },
 ];
 
 function SidebarLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
@@ -147,22 +147,9 @@ function SidebarContent({
 export function Layout() {
   const { user, logout } = useAuth();
   const { pathname } = useLocation();
-  const navigate = useNavigate();
-  const [query, setQuery] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const title = PAGE_TITLES.find((t) => t.match(pathname))?.title ?? 'VitalSync';
   const { main, admin } = useRoleMenus();
-
-  // A busca e o "Novo Paciente" do topo são ações clínicas: só fazem sentido nas
-  // telas de pacientes. Nas telas de Alertas, Meus Atendimentos e administrativas
-  // (usuários, equipes, configs) o topo fica contextual — cada página já traz seu
-  // próprio conteúdo.
-  const showPatientActions = !(
-    pathname.startsWith('/admin') ||
-    pathname.startsWith('/teams') ||
-    pathname.startsWith('/alerts') ||
-    pathname.startsWith('/my-care')
-  );
 
   // Fecha o drawer ao trocar de rota e ao apertar Escape; trava o scroll do fundo.
   useEffect(() => setMenuOpen(false), [pathname]);
@@ -176,11 +163,6 @@ export function Layout() {
       document.body.style.overflow = '';
     };
   }, [menuOpen]);
-
-  function submitSearch(e: React.FormEvent) {
-    e.preventDefault();
-    navigate(`/monitoring${query ? `?search=${encodeURIComponent(query)}` : ''}`);
-  }
 
   // Atalhos da barra inferior (mobile): principais (Dashboard/Pacientes/Alertas).
   const mobileItems = main.filter((i) => ['/dashboard', '/monitoring', '/alerts'].includes(i.to));
@@ -223,31 +205,6 @@ export function Layout() {
           <h1 className="text-base md:text-lg font-semibold tracking-tight truncate flex-1 min-w-0">{title}</h1>
 
           <HomologationBadge />
-
-          {showPatientActions && (
-            <form
-              onSubmit={submitSearch}
-              className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-md bg-muted text-muted-foreground text-sm w-48 lg:w-64"
-            >
-              <Search className="size-4 shrink-0" />
-              <input
-                className="bg-transparent outline-none flex-1 min-w-0 placeholder:text-muted-foreground"
-                placeholder="Buscar paciente..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-            </form>
-          )}
-
-          {canRegisterPatients(user?.role) && showPatientActions && (
-            <Link
-              to="/patients/new"
-              className="inline-flex items-center gap-2 px-3 md:px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors shrink-0"
-            >
-              <Plus className="size-4" />
-              <span className="hidden sm:inline">Novo Paciente</span>
-            </Link>
-          )}
         </header>
 
         <main className="flex-1">

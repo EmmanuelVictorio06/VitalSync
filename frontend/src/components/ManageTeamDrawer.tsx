@@ -165,8 +165,16 @@ export function ManageTeamDrawer({
                 label="Médico"
                 value={pick}
                 onChange={setPick}
-                options={available.map((a) => ({ id: a.id, name: a.name, tag: a.professional_tag, email: a.email, roleLabel: 'Médico Associado' }))}
-                placeholder={available.length ? 'Buscar por nome, tag ou e-mail…' : 'Nenhum associado disponível'}
+                // Elegíveis incluem cirurgiões (podem ser associados de outra
+                // equipe) — o rótulo reflete o papel global de cada um.
+                options={available.map((a) => ({
+                  id: a.id,
+                  name: a.name,
+                  tag: a.professional_tag,
+                  email: a.email,
+                  roleLabel: a.role === 'MEDICAL_SURGEON' ? 'Médico Cirurgião' : 'Médico Associado',
+                }))}
+                placeholder={available.length ? 'Buscar por nome, tag ou e-mail…' : 'Nenhum médico disponível'}
               />
               <Button onClick={addAssociate} loading={busy} disabled={!pick} block>
                 <Plus className="size-4" /> Vincular médico

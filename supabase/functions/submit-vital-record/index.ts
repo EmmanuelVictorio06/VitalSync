@@ -61,7 +61,17 @@ serve(async (req) => {
       p_urinated_normally: m.urinated_normally ?? null,
       p_had_vomit: m.had_vomit ?? null,
     });
-    if (error || !data) return json({ error: SUBMIT_FAIL }, 400);
+    if (error) {
+      // Regra "uma medição por período por dia": a RPC recusa o segundo envio
+      // do mesmo período com mensagem amigável em PT-BR — repassa ao paciente
+      // (rede de segurança contra corrida/duplo-clique). Demais erros seguem
+      // genéricos para não vazar detalhe técnico.
+      if (typeof error.message === 'string' && error.message.includes('já foi registrada')) {
+        return json({ error: error.message }, 409);
+      }
+      return json({ error: SUBMIT_FAIL }, 400);
+    }
+    if (!data) return json({ error: SUBMIT_FAIL }, 400);
 
     return json({ clinical_status: data }, 200);
   } catch {

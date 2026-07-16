@@ -6,7 +6,15 @@
 // rate-limit ficam no helper compartilhado _shared/patientAccess.ts. Roda com
 // service_role (segredo nunca chega ao frontend).
 //
-// Body: { token, cpf }  →  { patient: PatientLinkInfo }  (200) | erro genérico
+// Body: { token, cpf }
+//   →  { patient: PatientLinkInfo, periodsFilledToday, allowResendSamePeriod } (200)
+//   |  erro genérico
+//
+// periodsFilledToday: períodos (MORNING/NIGHT) já registrados HOJE no fuso
+// America/Sao_Paulo — a tela do paciente usa para bloquear reenvio no mesmo
+// período (regra "uma medição por período por dia"), sem expor dados clínicos.
+// allowResendSamePeriod: toggle de admin (app_settings/security) que, ligado,
+// libera o reenvio (a UI então não bloqueia nada).
 // ============================================================================
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -35,7 +43,35 @@ serve(async (req) => {
     const row = Array.isArray(info) ? info[0] : info;
     if (rpcErr || !row) return json({ error: GENERIC_FAIL }, 401);
 
-    return json({ patient: row }, 200);
+    // "Hoje" no fuso do paciente (America/Sao_Paulo) — mesmo dia usado pela RPC
+    // submit_vital_record ao gravar record_date. en-CA formata como YYYY-MM-DD.
+    const hojeSp = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+
+    // Períodos já registrados hoje (só o enum MORNING/NIGHT, nada clínico).
+    const { data: registros } = await admin
+      .from('vital_sign_records')
+      .select('period')
+      .eq('patient_id', row.id)
+      .eq('record_date', hojeSp);
+    const periodsFilledToday = [
+      ...new Set(((registros ?? []) as Array<{ period: string }>).map((r) => r.period)),
+    ];
+
+    // Toggle de admin: permite reenviar/corrigir no mesmo período? (default false)
+    const { data: seguranca } = await admin
+      .from('app_settings')
+      .select('data')
+      .eq('section', 'security')
+      .maybeSingle();
+    const allowResendSamePeriod =
+      (seguranca?.data as { allowResendSamePeriod?: boolean } | null)?.allowResendSamePeriod === true;
+
+    return json({ patient: row, periodsFilledToday, allowResendSamePeriod }, 200);
   } catch {
     // Nunca vaza detalhe técnico na tela pública.
     return json({ error: 'Não foi possível validar agora. Tente novamente.' }, 500);

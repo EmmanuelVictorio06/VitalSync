@@ -1,6 +1,6 @@
 import { useCallback, useState, type FormEvent, type MouseEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { Activity, Lock, Mail, ShieldCheck, Stethoscope } from 'lucide-react';
+import { Activity, Eye, EyeOff, Lock, Mail, ShieldCheck, Stethoscope } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { homeRouteFor } from '../lib/permissions';
 import { BackToHomeButton } from '../components/BackToHomeButton';
@@ -18,6 +18,7 @@ export function LoginPage() {
   const toast = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [leaving, setLeaving] = useState(false);
 
@@ -165,14 +166,23 @@ export function LoginPage() {
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                 <input
                   id="login-password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="w-full bg-card border border-border rounded-lg pl-10 pr-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                  className="w-full bg-card border border-border rounded-lg pl-10 pr-11 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
                 />
+                {/* Alternância de visibilidade da senha — type="button" não submete o form */}
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 size-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors"
+                >
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
               </div>
             </div>
 

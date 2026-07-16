@@ -214,8 +214,11 @@ export function UsersPage() {
           <AdminTable
             rows={filtered}
             keyFor={(u) => u.id}
-            desktopMin="lg"
-            mobileMax="md"
+            desktopMin="md"
+            mobileMax="sm"
+            // Largura mínima p/ os badges de Papel/Status nunca cortarem: em md a
+            // tabela rola horizontalmente DENTRO do card (overflow-x-auto do shell).
+            tableClassName="min-w-[64rem]"
             actionsClassName="w-32 px-2"
             columns={[
               {
@@ -235,11 +238,14 @@ export function UsersPage() {
                 ),
               },
               { header: 'WhatsApp', className: 'w-[14%] whitespace-nowrap', render: (u) => <span className="block text-muted-foreground whitespace-nowrap">{u.whatsapp ? formatPhone(u.whatsapp) : '—'}</span> },
-              { header: 'Papel', className: 'w-[15%]', render: (u) => <RoleBadge role={u.role} /> },
-              { header: 'Status', className: 'w-[9%]', render: (u) => <StatusPill status={u.status} /> },
+              // Colunas de badge: largura fixa que cabe o rótulo mais longo +
+              // noClip (célula não corta). No card mobile, shrink-0 garante que o
+              // badge nunca encolhe — se faltar espaço, quebra inteiro de linha.
+              { header: 'Papel', className: 'w-44 whitespace-nowrap', noClip: true, mobileValueClassName: 'shrink-0', render: (u) => <RoleBadge role={u.role} /> },
+              { header: 'Status', className: 'w-28 whitespace-nowrap', noClip: true, mobileValueClassName: 'shrink-0', render: (u) => <StatusPill status={u.status} /> },
               { header: 'Equipes', className: 'w-[6%] text-center', render: (u) => <span className="inline-block min-w-6 text-center font-semibold">{u.team_count}</span> },
-              { header: 'Último acesso', className: 'w-[11%] whitespace-nowrap', render: (u) => <span className="block text-muted-foreground text-xs whitespace-nowrap">{u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleDateString('pt-BR') : '—'}</span> },
-              { header: 'Cadastro', className: 'w-[9%] whitespace-nowrap', hideOnMobile: true, render: (u) => <span className="block text-muted-foreground font-mono text-xs whitespace-nowrap">{u.created_at.slice(0, 10)}</span> },
+              { header: 'Último acesso', className: 'w-28 whitespace-nowrap', noClip: true, render: (u) => <span className="block text-muted-foreground text-xs whitespace-nowrap">{u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleDateString('pt-BR') : '—'}</span> },
+              { header: 'Cadastro', className: 'w-28 whitespace-nowrap', noClip: true, render: (u) => <span className="block text-muted-foreground font-mono text-xs whitespace-nowrap">{u.created_at.slice(0, 10)}</span> },
             ]}
             actions={(u) => (
               <>

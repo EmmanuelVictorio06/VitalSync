@@ -68,15 +68,24 @@ export function AccessDenied() {
 }
 
 /* ---------------- Linha de contato (e-mail / WhatsApp) ---------------- */
-export function ContactLine({ email, whatsapp }: { email?: string | null; whatsapp?: string | null }) {
+export function ContactLine({
+  email,
+  whatsapp,
+  className,
+}: {
+  email?: string | null;
+  whatsapp?: string | null;
+  /** Sobrescreve o layout (ex.: par lado a lado nos modais: grid grid-cols-1 sm:grid-cols-2). */
+  className?: string;
+}) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 text-xs text-muted-foreground">
+    <div className={cn('min-w-0 text-xs text-muted-foreground', className ?? 'flex flex-col gap-0.5')}>
       {email && (
-        <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 truncate">
-          <Mail className="size-3 shrink-0" /> {email}
+        <span className="inline-flex min-w-0 max-w-full items-center gap-1.5">
+          <Mail className="size-3 shrink-0" /> <span className="min-w-0 truncate">{email}</span>
         </span>
       )}
-      <span className="inline-flex min-w-0 max-w-full items-center gap-1.5">
+      <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 whitespace-nowrap">
         <Phone className="size-3 shrink-0" /> {whatsapp ? formatPhoneBR(whatsapp) : '—'}
       </span>
     </div>
@@ -163,7 +172,7 @@ export function ModeTabs<T extends string>({
 export function StatusTeamBadge({ active }: { active: boolean }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider border ${
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider border ${
         active ? 'bg-stable/10 text-stable border-stable/20' : 'bg-muted text-muted-foreground border-border'
       }`}
     >
