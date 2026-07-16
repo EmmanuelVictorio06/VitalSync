@@ -136,6 +136,17 @@ export function TeamsPage() {
     [surgeons, surgeonsWithActiveTeam],
   );
 
+  // Candidatos a médico associado da "Nova Equipe": cirurgiões E associados
+  // ativos (mesma regra de getEligibleAssociates — um cirurgião pode ser
+  // associado de outra equipe). O cirurgião escolhido é excluído no modal.
+  const doctorPool = useMemo(
+    () =>
+      [...surgeons, ...associates]
+        .filter((p) => p.status === 'ACTIVE')
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
+    [surgeons, associates],
+  );
+
   async function toggleStatus() {
     if (!toToggle) return;
     const active = toToggle.summary.status === 'ACTIVE';
@@ -258,7 +269,7 @@ export function TeamsPage() {
       {creating && (
         <TeamFormModal
           surgeons={availableSurgeons}
-          associates={associates}
+          doctors={doctorPool}
           existingNumbers={(teams ?? []).map((t) => t.summary.number)}
           onClose={() => setCreating(false)}
           onSaved={async () => {
@@ -276,7 +287,6 @@ export function TeamsPage() {
           surgeons={surgeons.filter(
             (s) => s.id === editingTeam.members.find((m) => m.isSurgeon)?.id || !surgeonsWithActiveTeam.has(s.id),
           )}
-          associates={associates}
           existingNumbers={(teams ?? []).map((t) => t.summary.number)}
           onClose={() => setEditingId(null)}
           onChanged={load}
@@ -321,9 +331,19 @@ function surgeonComboOptions(surgeons: Profile[]) {
   return surgeons.map((s) => ({ id: s.id, name: s.name, tag: s.professional_tag, email: s.email, roleLabel: 'Cirurgião Principal' }));
 }
 
-/** Opções do combobox de médico associado (nome + tag + e-mail/papel para busca). */
-function associateComboOptions(associates: Profile[]) {
-  return associates.map((a) => ({ id: a.id, name: a.name, tag: a.professional_tag, email: a.email, roleLabel: 'Médico Associado' }));
+/**
+ * Opções do combobox de candidatos a associado (nome + tag + e-mail/papel para
+ * busca). O pool inclui Médicos Cirurgiões — um cirurgião pode ser vinculado
+ * como associado de outra equipe (role_in_team continua ASSOCIATED_DOCTOR).
+ */
+function associateComboOptions(doctors: Profile[]) {
+  return doctors.map((a) => ({
+    id: a.id,
+    name: a.name,
+    tag: a.professional_tag,
+    email: a.email,
+    roleLabel: a.role === 'MEDICAL_SURGEON' ? 'Médico Cirurgião' : 'Médico Associado',
+  }));
 }
 
 /* ============================ Card da equipe ============================ */
@@ -423,13 +443,14 @@ function Metric({ label, value, tone = 'primary' }: { label: string; value: numb
 /* ======================= Modal: nova equipe ======================= */
 function TeamFormModal({
   surgeons,
-  associates,
+  doctors,
   existingNumbers,
   onClose,
   onSaved,
 }: {
   surgeons: Profile[];
-  associates: Profile[];
+  /** Candidatos a associado: cirurgiões + associados ativos. */
+  doctors: Profile[];
   existingNumbers: number[];
   onClose: () => void;
   onSaved: () => void;
@@ -441,6 +462,9 @@ function TeamFormModal({
   const [surgeonDraft, setSurgeonDraft] = useState<NewDoctorDraft>(EMPTY_DOCTOR);
   const [assocEntries, setAssocEntries] = useState<AssocEntry[]>([]);
   const [busy, setBusy] = useState(false);
+
+  // O cirurgião principal escolhido não pode ser associado da própria equipe.
+  const associateCandidates = doctors.filter((d) => !(surgeonMode === 'existing' && d.id === surgeonId));
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -546,25 +570,29 @@ function TeamFormModal({
 
         {/* Médicos associados */}
         <fieldset className="space-y-3">
-          <span className="text-sm font-bold">Médicos Associados</span>
+          {/* Linha de cabeçalho: rótulo à esquerda, ação à direita (mesmo padrão
+              do modal de edição) — evita o botão colado no rótulo inline. */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-sm font-bold">Médicos Associados</h3>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setAssocEntries((list) => [...list, newAssocEntry(associateCandidates.length > 0)])}
+            >
+              <Plus className="size-3.5" /> Adicionar médico associado
+            </Button>
+          </div>
           {assocEntries.map((a, i) => (
             <AssocEntryFields
               key={a.key}
               entry={a}
-              associates={associates}
+              associates={associateCandidates}
               onChange={(next) => setAssocEntries((list) => list.map((x) => (x.key === a.key ? next : x)))}
               onRemove={() => setAssocEntries((list) => list.filter((x) => x.key !== a.key))}
               index={i}
             />
           ))}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setAssocEntries((list) => [...list, newAssocEntry(associates.length > 0)])}
-          >
-            <Plus className="size-3.5" /> Adicionar médico associado
-          </Button>
         </fieldset>
 
         <div className="flex items-center justify-between gap-3 pt-2 border-t border-border">
@@ -640,14 +668,12 @@ function AssocEntryFields({
 function TeamEditModal({
   detail,
   surgeons,
-  associates,
   existingNumbers,
   onClose,
   onChanged,
 }: {
   detail: TeamDetail;
   surgeons: Profile[];
-  associates: Profile[];
   existingNumbers: number[];
   onClose: () => void;
   onChanged: () => Promise<void>;
@@ -667,8 +693,16 @@ function TeamEditModal({
   const [draft, setDraft] = useState<NewDoctorDraft>(EMPTY_DOCTOR);
   const [adding, setAdding] = useState(false);
 
+  // Candidatos a associado — MESMA regra das telas do Cirurgião e do Gerente
+  // (ManageTeamDrawer): getEligibleAssociates inclui Médicos Cirurgiões e
+  // Médicos Associados ativos, excluindo o cirurgião principal desta equipe.
+  const [eligible, setEligible] = useState<Profile[]>([]);
+  useEffect(() => {
+    profileService.getEligibleAssociates(summary.id).then(setEligible).catch(() => setEligible([]));
+  }, [summary.id]);
+
   const memberIds = new Set(members.map((m) => m.id));
-  const available = associates.filter((a) => !memberIds.has(a.id));
+  const available = eligible.filter((a) => !memberIds.has(a.id));
 
   // Gerentes de Equipe vinculados ao Cirurgião Principal desta equipe. Como o
   // vínculo é Gerente↔Cirurgião (não Gerente↔Equipe) e cada cirurgião tem no
@@ -839,14 +873,17 @@ function TeamEditModal({
           <h3 className="text-sm font-bold">Cirurgião Principal</h3>
           <div className="rounded-lg border border-border p-3 space-y-3">
             {surgeon && (
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-semibold truncate flex items-center gap-1.5">
-                    <span className="truncate">{surgeon.name}</span>
-                    {surgeon.tag && <ProfessionalTag tag={surgeon.tag} className="shrink-0" />}
-                  </p>
-                  <ContactLine email={surgeon.email} whatsapp={surgeon.whatsapp} />
-                </div>
+              <div className="min-w-0">
+                <p className="font-semibold flex flex-wrap items-center gap-1.5">
+                  <span className="min-w-0 break-words">{surgeon.name}</span>
+                  {surgeon.tag && <ProfessionalTag tag={surgeon.tag} className="shrink-0" />}
+                </p>
+                {/* Par e-mail/telefone: empilha no mobile, lado a lado a partir de sm */}
+                <ContactLine
+                  email={surgeon.email}
+                  whatsapp={surgeon.whatsapp}
+                  className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 mt-0.5"
+                />
               </div>
             )}
             <ProfessionalCombobox
@@ -877,20 +914,20 @@ function TeamEditModal({
               <li className="text-sm text-muted-foreground">Nenhum gerente vinculado a este cirurgião.</li>
             ) : (
               managerLinks.map((l) => (
-                <li key={l.id} className="flex items-start justify-between gap-3 rounded-lg border border-border p-3">
-                  <div className="min-w-0">
-                    <p className="font-semibold truncate flex items-center gap-1.5">
-                      <span className="truncate">{l.manager?.name ?? '—'}</span>
+                <li key={l.id} className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3 rounded-lg border border-border p-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold flex flex-wrap items-center gap-1.5">
+                      <span className="min-w-0 break-words">{l.manager?.name ?? '—'}</span>
                       {l.manager?.professional_tag && <ProfessionalTag tag={l.manager.professional_tag} className="shrink-0" />}
                     </p>
-                    <ContactLine email={l.manager?.email} />
+                    <ContactLine email={l.manager?.email} className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 mt-0.5" />
                   </div>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => unlinkManager(l.team_manager_id)}
                     loading={managerBusy}
-                    className="shrink-0 text-alert"
+                    className="shrink-0 text-alert self-end sm:self-auto"
                   >
                     <X className="size-3.5" /> Desvincular
                   </Button>
@@ -939,16 +976,16 @@ function TeamEditModal({
             {members
               .filter((m) => !m.isSurgeon)
               .map((m) => (
-                <li key={m.id} className="flex items-start justify-between gap-3 rounded-lg border border-border p-3">
-                  <div className="min-w-0">
-                    <p className="font-semibold truncate flex items-center gap-1.5">
-                      <span className="truncate">{m.name}</span>
+                <li key={m.id} className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3 rounded-lg border border-border p-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold flex flex-wrap items-center gap-1.5">
+                      <span className="min-w-0 break-words">{m.name}</span>
                       {m.tag && <ProfessionalTag tag={m.tag} className="shrink-0" />}
                     </p>
-                    <ContactLine email={m.email} whatsapp={m.whatsapp} />
+                    <ContactLine email={m.email} whatsapp={m.whatsapp} className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 mt-0.5" />
                   </div>
                   {m.membershipId && (
-                    <button onClick={() => removeMember(m.membershipId!)} className="size-8 rounded-md border border-alert/30 text-alert hover:bg-alert/5 flex items-center justify-center shrink-0" aria-label={`Remover ${m.name}`}>
+                    <button onClick={() => removeMember(m.membershipId!)} className="size-8 rounded-md border border-alert/30 text-alert hover:bg-alert/5 flex items-center justify-center shrink-0 self-end sm:self-auto" aria-label={`Remover ${m.name}`}>
                       <Trash2 className="size-4" />
                     </button>
                   )}
@@ -979,7 +1016,8 @@ function TeamEditModal({
                     value={pick}
                     onChange={setPick}
                     options={associateComboOptions(available)}
-                    placeholder={available.length ? 'Buscar por nome ou tag…' : 'Nenhum associado disponível'}
+                    placeholder={available.length ? 'Buscar por nome ou tag…' : 'Nenhum médico disponível'}
+                    hint="Cirurgiões também podem ser vinculados como associados de outra equipe."
                   />
                 </div>
                 <Button onClick={addAssociate} loading={adding} disabled={!pick}>
@@ -1011,18 +1049,18 @@ function TeamEditModal({
               {patients.map((p) => {
                 const day = monitoringDayFrom(p.dischargeDate);
                 return (
-                  <li key={p.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-                    <div className="min-w-0">
+                  <li key={p.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 rounded-lg border border-border p-3">
+                    <div className="min-w-0 flex-1">
                       <p className="font-semibold truncate">{p.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">
+                      <p className="text-xs text-muted-foreground break-words">
                         {p.surgeryType}
                         {p.dischargeDate && ` · alta ${p.dischargeDate.slice(0, 10)}`}
                         {day != null && ` · dia ${day} de monitoramento`}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
                       <StatusBadge status={p.status} />
-                      <Link to={`/patients/${p.id}`} className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1">
+                      <Link to={`/patients/${p.id}`} className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1 whitespace-nowrap">
                         <Users2 className="size-3.5" /> Acompanhar
                       </Link>
                     </div>
@@ -1049,11 +1087,12 @@ function ModalShell({
   onClose: () => void;
   wide?: boolean;
 }) {
+  // max-h + rolagem interna: o modal nunca estoura a viewport no mobile.
   return (
-    <div className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className={`bg-card border border-border rounded-xl shadow-lg p-6 w-full ${wide ? 'max-w-2xl' : 'max-w-md'} space-y-4 animate-entry my-8`} onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className={`bg-card border border-border rounded-xl shadow-lg p-4 sm:p-6 w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} max-h-[90vh] overflow-y-auto space-y-4 animate-entry`} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
-          <h2 className="text-lg font-extrabold tracking-tight">{title}</h2>
+          <h2 className="text-lg font-extrabold tracking-tight min-w-0 break-words">{title}</h2>
           <button onClick={onClose} className="size-8 rounded-md border border-border text-muted-foreground hover:bg-muted flex items-center justify-center shrink-0" aria-label="Fechar">
             <X className="size-4" />
           </button>
