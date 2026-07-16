@@ -36,6 +36,8 @@ export interface AlertRow extends ClinicalAlert {
   /** Nomes resolvidos (não vêm do join por FK para evitar fragilidade). */
   surgeon_name: string | null;
   attended_by_name: string | null;
+  /** Quem travou o alerta para atendimento ("EM ANÁLISE POR …"). */
+  in_analysis_by_name: string | null;
 }
 
 export interface AlertSummary {
@@ -88,11 +90,12 @@ export const alertService = {
     // Exclui alertas de pacientes inativos (soft-deleted).
     rows = rows.filter((r) => !r.patient || r.patient.status === 'ACTIVE');
 
-    // Resolve nomes de profissionais (cirurgião + quem atendeu) em 1 query.
+    // Resolve nomes de profissionais (cirurgião + quem atendeu + quem travou) em 1 query.
     const ids = new Set<string>();
     for (const r of rows) {
       if (r.team?.main_surgeon_id) ids.add(r.team.main_surgeon_id);
       if (r.attended_by) ids.add(r.attended_by);
+      if (r.in_analysis_by) ids.add(r.in_analysis_by);
     }
     const names = new Map<string, string>();
     if (ids.size > 0) {
@@ -103,6 +106,7 @@ export const alertService = {
     for (const r of rows) {
       r.surgeon_name = r.team?.main_surgeon_id ? names.get(r.team.main_surgeon_id) ?? null : null;
       r.attended_by_name = r.attended_by ? names.get(r.attended_by) ?? null : null;
+      r.in_analysis_by_name = r.in_analysis_by ? names.get(r.in_analysis_by) ?? null : null;
     }
     return rows;
   },
@@ -229,6 +233,12 @@ export const alertService = {
 
   async ignore(alertId: string, reason: string): Promise<void> {
     const { error } = await supabase.rpc('alert_ignore', { p_alert: alertId, p_reason: reason });
+    if (error) throw new Error(error.message);
+  },
+
+  /** Libera o alerta de volta à fila (desfaz o "em análise"). */
+  async releaseAnalysis(alertId: string): Promise<void> {
+    const { error } = await supabase.rpc('alert_release_analysis', { p_alert: alertId });
     if (error) throw new Error(error.message);
   },
 

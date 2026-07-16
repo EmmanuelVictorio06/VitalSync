@@ -23,6 +23,7 @@ import {
   SlidersHorizontal,
   Stethoscope,
   Thermometer,
+  Undo2,
   Users,
   Wind,
   X,
@@ -43,14 +44,26 @@ const ATT_META: Record<AttendanceStatus, { label: string; cls: string }> = {
   IGNORED: { label: 'Ignorado', cls: 'bg-muted text-muted-foreground border border-border' },
 };
 
-export function AttendanceStatusBadge({ status }: { status: AttendanceStatus }) {
+export function AttendanceStatusBadge({ status, label }: { status: AttendanceStatus; label?: string }) {
   const meta = ATT_META[status] ?? ATT_META.PENDING;
   return (
     <span className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider', meta.cls)}>
-      {meta.label}
+      {label ?? meta.label}
     </span>
   );
 }
+
+/** Rótulo do badge de atendimento: em análise mostra QUEM travou o alerta. */
+export function attendanceBadgeLabel(a: AlertRow): string | undefined {
+  if (a.attendance_status === 'IN_ANALYSIS' && a.in_analysis_by_name) {
+    return `Em análise por ${a.in_analysis_by_name}`;
+  }
+  return undefined;
+}
+
+/** Tooltip exibido quando o alerta está travado por outro profissional. */
+export const LOCK_TOOLTIP =
+  'Somente o profissional que colocou em análise, o Administrador ou o Cirurgião Principal da equipe pode atender ou ignorar este alerta.';
 
 const fmtDate = (v: string | null | undefined) => (v ? formatCivilDate(v) : '—');
 const fmtDateTime = (v: string | null | undefined) => (v ? new Date(v).toLocaleString('pt-BR') : '—');
@@ -389,12 +402,17 @@ export function sortAlerts(alerts: AlertRow[]): AlertRow[] {
 
 /* ============================ Alert card ============================ */
 
-export function AlertCard({ alert, canAttend, onDetails, onInAnalysis, onAttend }: {
+export function AlertCard({ alert, canAttend, lockedByOther, canRelease, onDetails, onInAnalysis, onAttend, onRelease }: {
   alert: AlertRow;
   canAttend: boolean;
+  /** Alerta travado por outro profissional (usuário não é dono do lock, Admin nem Cirurgião Principal). */
+  lockedByOther: boolean;
+  /** Pode liberar o alerta de volta à fila (dono do lock, Admin ou Cirurgião Principal). */
+  canRelease: boolean;
   onDetails: () => void;
   onInAnalysis: () => void;
   onAttend: () => void;
+  onRelease: () => void;
 }) {
   const resolved = alert.attendance_status === 'ATTENDED' || alert.attendance_status === 'IGNORED';
   return (
@@ -411,7 +429,7 @@ export function AlertCard({ alert, canAttend, onDetails, onInAnalysis, onAttend 
           <div className="flex items-center gap-2 flex-wrap">
             <p className={cn('truncate', alert.status === 'RED' ? 'font-extrabold' : 'font-bold')}>{alert.patient?.name ?? '—'}</p>
             <StatusBadge status={alert.status} />
-            <AttendanceStatusBadge status={alert.attendance_status} />
+            <AttendanceStatusBadge status={alert.attendance_status} label={attendanceBadgeLabel(alert)} />
           </div>
           <div className="mt-1.5 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-xs">
             <Meta label="Alteração" value={`${alert.type ?? '—'} · ${triggerValue(alert)}`} />
@@ -432,8 +450,21 @@ export function AlertCard({ alert, canAttend, onDetails, onInAnalysis, onAttend 
             {alert.attendance_status === 'PENDING' && (
               <Button size="sm" variant="secondary" onClick={onInAnalysis}><Activity className="size-3.5" /> Em análise</Button>
             )}
-            <Button size="sm" variant="success" onClick={onAttend}><CheckCircle2 className="size-3.5" /> Atender</Button>
+            <Button
+              size="sm"
+              variant="success"
+              onClick={onAttend}
+              disabled={lockedByOther}
+              title={lockedByOther ? LOCK_TOOLTIP : undefined}
+            >
+              <CheckCircle2 className="size-3.5" /> Atender
+            </Button>
           </>
+        )}
+        {canRelease && !resolved && (
+          <Button size="sm" variant="ghost" onClick={onRelease} title="Devolve o alerta para a fila de pendentes.">
+            <Undo2 className="size-3.5" /> Liberar
+          </Button>
         )}
       </div>
     </li>
@@ -455,13 +486,14 @@ const SIGNAL_ICON: Record<string, typeof Bell> = {
   Temperatura: Thermometer, Saturação: Wind, Dor: AlertCircle, Sangramento: Droplets,
 };
 
-export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, onIgnore }: {
+export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, onIgnore, onRelease }: {
   alert: AlertRow;
-  perms: { canAttend: boolean; canResend: boolean };
+  perms: { canAttend: boolean; canResend: boolean; lockedByOther: boolean; canRelease: boolean };
   onClose: () => void;
   onAction: () => void; // recarrega a lista após uma ação
   onAttend: () => void;
   onIgnore: () => void;
+  onRelease: () => void;
 }) {
   const [timeline, setTimeline] = useState<AttendanceConfirmation[] | null>(null);
   const [logs, setLogs] = useState<NotificationLog[] | null>(null);
@@ -581,15 +613,21 @@ export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, 
 
           {/* 3. Alerta */}
           <DSection title="Informações do alerta" icon={TypeIcon}>
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
               <StatusBadge status={alert.status} />
-              <AttendanceStatusBadge status={alert.attendance_status} />
+              <AttendanceStatusBadge status={alert.attendance_status} label={attendanceBadgeLabel(alert)} />
             </div>
             <DGrid items={[
               ['Tipo', alert.type ?? '—'],
               ['Valor que disparou', triggerValue(alert)],
               ['Regra clínica', clinicalRule(alert)],
               ['Criado em', fmtDateTime(alert.created_at)],
+              ...(alert.attendance_status === 'IN_ANALYSIS' && alert.in_analysis_by_name
+                ? [
+                    ['Em análise por', alert.in_analysis_by_name] as [string, string],
+                    ['Em análise desde', fmtDateTime(alert.in_analysis_at)] as [string, string],
+                  ]
+                : []),
             ]} />
             <p className="text-sm mt-2">{alert.description}</p>
             {alert.attendance_status === 'IGNORED' && alert.ignored_reason && (
@@ -632,10 +670,31 @@ export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, 
           {perms.canResend && (
             <Button size="sm" variant="ghost" onClick={resend} loading={busyResend}><Send className="size-3.5" /> Reenviar</Button>
           )}
+          {perms.canRelease && !resolved && (
+            <Button size="sm" variant="ghost" onClick={onRelease} title="Devolve o alerta para a fila de pendentes.">
+              <Undo2 className="size-3.5" /> Liberar
+            </Button>
+          )}
           {perms.canAttend && !resolved && (
             <>
-              <Button size="sm" variant="ghost" onClick={onIgnore}>Ignorar</Button>
-              <Button size="sm" variant="success" onClick={onAttend}><CheckCircle2 className="size-3.5" /> Atender</Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onIgnore}
+                disabled={perms.lockedByOther}
+                title={perms.lockedByOther ? LOCK_TOOLTIP : undefined}
+              >
+                Ignorar
+              </Button>
+              <Button
+                size="sm"
+                variant="success"
+                onClick={onAttend}
+                disabled={perms.lockedByOther}
+                title={perms.lockedByOther ? LOCK_TOOLTIP : undefined}
+              >
+                <CheckCircle2 className="size-3.5" /> Atender
+              </Button>
             </>
           )}
         </footer>
@@ -686,7 +745,8 @@ export function AlertTimeline({ alert, timeline, logs }: {
     for (const t of timeline ?? []) {
       const label = t.status === 'ATTENDED' ? 'Marcado como atendido'
         : t.status === 'IN_ANALYSIS' ? 'Marcado como em análise'
-          : t.status === 'IGNORED' ? 'Alerta ignorado' : 'Atualização';
+          : t.status === 'IGNORED' ? 'Alerta ignorado'
+            : t.status === 'RELEASED' ? 'Liberado de volta para a fila' : 'Atualização';
       out.push({ at: t.created_at, label: t.observation ? `${label}: ${t.observation}` : label });
     }
     return out.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());

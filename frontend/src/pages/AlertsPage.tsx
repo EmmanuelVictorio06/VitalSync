@@ -56,6 +56,28 @@ export function AlertsPage() {
   const canResend = permissionService.canResendAlertNotification(user);
   const isReadOnlyManager = user?.role === Role.MANAGER;
 
+  /** Trava de atendimento: alerta em análise por OUTRO profissional (e o usuário
+   *  não é Admin nem o Cirurgião Principal da equipe) → Atender/Ignorar bloqueados. */
+  const isLockedByOther = useCallback(
+    (a: AlertRow): boolean => {
+      if (a.attendance_status !== 'IN_ANALYSIS' || !a.in_analysis_by) return false;
+      if (isAdmin) return false;
+      if (user && a.in_analysis_by === user.id) return false;
+      if (user && a.team?.main_surgeon_id === user.id) return false;
+      return true;
+    },
+    [isAdmin, user],
+  );
+
+  /** "Liberar" (devolver à fila): dono do lock, Admin ou Cirurgião Principal da equipe. */
+  const canReleaseAlert = useCallback(
+    (a: AlertRow): boolean => {
+      if (a.attendance_status !== 'IN_ANALYSIS' || !a.in_analysis_by) return false;
+      return !isLockedByOther(a);
+    },
+    [isLockedByOther],
+  );
+
   const load = useCallback(async () => {
     setError(false);
     setAlerts(null);
@@ -114,6 +136,16 @@ export function AlertsPage() {
     toast.success('Atendimento registrado.');
     setAttendTarget(null);
     await load();
+  }
+
+  async function handleRelease(alert: AlertRow) {
+    try {
+      await alertService.releaseAnalysis(alert.id);
+      toast.info('Alerta liberado de volta para a fila.');
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao liberar o alerta.');
+    }
   }
 
   async function handleIgnoreConfirm(alert: AlertRow, reason: string) {
@@ -182,9 +214,12 @@ export function AlertsPage() {
               key={a.id}
               alert={a}
               canAttend={canAttend}
+              lockedByOther={isLockedByOther(a)}
+              canRelease={canReleaseAlert(a)}
               onDetails={() => setSelected(a)}
               onInAnalysis={() => handleInAnalysis(a)}
               onAttend={() => setAttendTarget(a)}
+              onRelease={() => handleRelease(a)}
             />
           ))}
         </ul>
@@ -194,11 +229,17 @@ export function AlertsPage() {
       {selected && (
         <AlertDetailsDrawer
           alert={selected}
-          perms={{ canAttend, canResend }}
+          perms={{
+            canAttend,
+            canResend,
+            lockedByOther: isLockedByOther(selected),
+            canRelease: canReleaseAlert(selected),
+          }}
           onClose={() => setSelected(null)}
           onAction={load}
           onAttend={() => setAttendTarget(selected)}
           onIgnore={() => setIgnoreTarget(selected)}
+          onRelease={() => handleRelease(selected)}
         />
       )}
 
