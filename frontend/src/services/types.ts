@@ -199,6 +199,9 @@ export interface ClinicalAlert {
   ignored_reason: string | null;
   attended_by: string | null;
   attended_at: string | null;
+  /** Médico que travou o alerta para atendimento (lock). Null = alerta livre. */
+  in_analysis_by: string | null;
+  in_analysis_at: string | null;
   created_at: string;
   updated_at: string | null;
 }

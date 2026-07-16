@@ -286,7 +286,9 @@ function AttendanceTimeline({ row, timeline }: { row: AttendanceRow; timeline: A
             ? 'Marcado como em análise'
             : t.status === 'IGNORED'
               ? 'Alerta finalizado com justificativa'
-              : 'Acompanhamento registrado';
+              : t.status === 'RELEASED'
+                ? 'Liberado de volta para a fila'
+                : 'Acompanhamento registrado';
       out.push({ at: t.created_at, label: t.observation ? `${label}: ${t.observation}` : label });
     }
     return out.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
