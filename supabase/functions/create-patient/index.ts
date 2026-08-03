@@ -101,6 +101,7 @@ serve(async (req) => {
       hospital_id: body.hospital_id ?? null,
       team_id: teamId,
       is_test: body.is_test ?? false,
+      medical_record_summary: body.medical_record_summary ?? null,
       cpf_hash,
       cpf_encrypted,
     };

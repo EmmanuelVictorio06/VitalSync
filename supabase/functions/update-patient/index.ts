@@ -94,6 +94,9 @@ serve(async (req) => {
       update.hospital_discharge_date = body.hospital_discharge_date || null;
     }
     if (body.hospital_id !== undefined) update.hospital_id = body.hospital_id || null;
+    if (body.medical_record_summary !== undefined) {
+      update.medical_record_summary = body.medical_record_summary || null;
+    }
 
     // Troca de equipe: só ADMIN.
     if (body.team_id !== undefined && body.team_id !== current.team_id) {
@@ -144,7 +147,7 @@ serve(async (req) => {
       .eq('id', patientId)
       .select(
         'id, name, birth_date, phone, surgery_type_id, surgery_date, hospital_discharge_date, ' +
-          'hospital_id, team_id, secure_token, status, current_status, is_test, created_at',
+          'hospital_id, team_id, secure_token, status, current_status, is_test, created_at, medical_record_summary',
       )
       .single();
 

@@ -4,7 +4,7 @@ import { calculateAge, whatsappLink } from '@vitalsync/shared';
 import { Role, useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
 import { ToggleSwitch } from '../components/admin';
-import { Button, CustomSelect, Field, PageContainer, PageHeader, PhoneInput, TextInput } from '../components/ui';
+import { Button, CustomSelect, Field, PageContainer, PageHeader, PhoneInput, TextareaField, TextInput } from '../components/ui';
 import { featureFlags } from '../config/featureFlags';
 import { patientVitalsLink } from '../lib/publicUrl';
 import { formatCpf, validateCpf } from '../lib/cpfUtils';
@@ -27,9 +27,10 @@ interface FormState {
   hospitalId: string;
   teamId: string;
   isTest: boolean;
+  medicalRecordSummary: string;
 }
 const empty: FormState = {
-  name: '', cpf: '', birthDate: '', phone: '', surgeryTypeId: '', surgeryDate: '', dischargeDate: '', hospitalId: '', teamId: '', isTest: false,
+  name: '', cpf: '', birthDate: '', phone: '', surgeryTypeId: '', surgeryDate: '', dischargeDate: '', hospitalId: '', teamId: '', isTest: false, medicalRecordSummary: '',
 };
 
 export function PatientRegisterPage() {
@@ -109,6 +110,7 @@ export function PatientRegisterPage() {
         hospital_id: form.hospitalId,
         team_id: form.teamId,
         is_test: form.isTest,
+        medical_record_summary: form.medicalRecordSummary.trim() || undefined,
       });
       // Link público do paciente: rota sem login, validada por token seguro.
       // Usa o domínio de produção (VITE_PUBLIC_APP_URL) para nunca gerar link de
@@ -169,6 +171,15 @@ export function PatientRegisterPage() {
             <CustomSelect label="Hospital" value={form.hospitalId} onChange={(e) => set('hospitalId', e.target.value)} options={hospitals.map((h) => ({ value: h.id, label: h.name }))} required />
             <TextInput label="Data da cirurgia" type="date" value={form.surgeryDate} onChange={(e) => set('surgeryDate', e.target.value)} required />
             <TextInput label="Data da alta hospitalar" type="date" hint="Inicia a contagem dos 10 dias de monitoramento." value={form.dischargeDate} onChange={(e) => set('dischargeDate', e.target.value)} required />
+          </div>
+          <div className="mt-4">
+            <TextareaField
+              label="Resumo de prontuário"
+              hint="Breve histórico clínico relevante para o acompanhamento (opcional)."
+              rows={3}
+              value={form.medicalRecordSummary}
+              onChange={(e) => set('medicalRecordSummary', e.target.value)}
+            />
           </div>
         </Block>
 

@@ -19,6 +19,8 @@ export interface SecurePatientInput {
   hospital_id: string;
   team_id: string;
   is_test?: boolean;
+  /** Resumo de prontuário (texto livre, opcional). */
+  medical_record_summary?: string;
 }
 
 /**
@@ -37,6 +39,8 @@ export interface SecurePatientUpdate {
   hospital_discharge_date?: string;
   hospital_id?: string;
   team_id?: string;
+  /** Resumo de prontuário (texto livre, opcional). */
+  medical_record_summary?: string;
 }
 
 export const patientSecurityService = {

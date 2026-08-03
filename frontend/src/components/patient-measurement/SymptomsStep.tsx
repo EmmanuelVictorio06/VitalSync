@@ -3,9 +3,15 @@
  * vômito, sangramento). À noite, inclui também o número de passos do dia.
  */
 import { AlertCircle, Droplets, Footprints, Wind } from 'lucide-react';
-import { NumericInput, SymptomScaleSelector, YesNoSelector } from './fields';
+import { NumericInput, SegmentSelector, SymptomScaleSelector, YesNoSelector } from './fields';
 import type { StepProps } from './VitalSignsStep';
 import type { InputRanges } from './validation';
+
+const DYSPNEA_OPTIONS = [
+  { value: 0, label: 'Sem dispneia' },
+  { value: 1, label: 'Dispneia leve' },
+  { value: 2, label: 'Moderada ou intensa' },
+];
 
 export function SymptomsStep({
   form,
@@ -29,32 +35,42 @@ export function SymptomsStep({
         error={errors.pain}
       />
 
-      <SymptomScaleSelector
+      <SegmentSelector
         icon={Wind}
         label="Falta de ar / dispneia"
         description="Como está sua respiração agora?"
         value={form.dyspnea}
+        options={DYSPNEA_OPTIONS}
         onChange={(v) => setField('dyspnea', v)}
-        minLabel="0 — Respiração normal"
-        maxLabel="10 — Falta de ar extrema"
         error={errors.dyspnea}
       />
 
       <YesNoSelector
-        label="Diurese — urinou normalmente?"
-        value={form.urinatedNormally}
-        onChange={(v) => setField('urinatedNormally', v)}
-        error={errors.urinatedNormally}
+        label="Está conseguindo tomar líquidos normalmente?"
+        value={form.waterIntakeOk}
+        onChange={(v) => setField('waterIntakeOk', v)}
+        error={errors.waterIntakeOk}
       />
-      {form.urinatedNormally === true && (
-        <NumericInput
-          icon={Droplets}
-          label="Quantas vezes?"
-          placeholder="Ex. 5"
-          inputMode="numeric"
-          value={form.urinationCount}
-          onChange={(v) => setField('urinationCount', v)}
-        />
+
+      {isNight && (
+        <>
+          <YesNoSelector
+            label="Diurese — urinou normalmente?"
+            value={form.urinatedNormally}
+            onChange={(v) => setField('urinatedNormally', v)}
+            error={errors.urinatedNormally}
+          />
+          {form.urinatedNormally === true && (
+            <NumericInput
+              icon={Droplets}
+              label="Quantas vezes?"
+              placeholder="Ex. 5"
+              inputMode="numeric"
+              value={form.urinationCount}
+              onChange={(v) => setField('urinationCount', v)}
+            />
+          )}
+        </>
       )}
 
       <YesNoSelector

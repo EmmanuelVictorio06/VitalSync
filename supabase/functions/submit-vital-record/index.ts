@@ -60,6 +60,9 @@ serve(async (req) => {
       p_drain_photo_path: m.drain_photo_path ?? null,
       p_urinated_normally: m.urinated_normally ?? null,
       p_had_vomit: m.had_vomit ?? null,
+      p_water_intake_ok: m.water_intake_ok ?? null,
+      p_drain_output_ml: m.drain_output_ml ?? null,
+      p_noticed_wound_change: m.noticed_wound_change ?? null,
     });
     if (error) {
       // Regra "uma medição por período por dia": a RPC recusa o segundo envio

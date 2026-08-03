@@ -42,16 +42,25 @@ export interface MeasurementFormState {
   diastolic: string;
   heartRate: string;
   pain: number | null;
+  /** 0 = sem dispneia, 1 = leve, 2 = moderada/intensa. */
   dyspnea: number | null;
+  /** Ingestão hídrica: consegue tomar líquidos normalmente? (manhã e noite) */
+  waterIntakeOk: boolean | null;
+  /** Diurese — só perguntada à noite. */
   urinatedNormally: boolean | null;
   urinationCount: string;
   hadVomit: boolean | null;
   vomitCount: string;
   hadBleeding: boolean | null;
   steps: string;
+  /** Dreno — só perguntado à noite. */
   hasDrain: boolean | null;
+  /** Débito do dreno (ml) — só quando hasDrain = true, à noite. */
+  drainOutputMl: string;
   woundPhoto: File | null;
   drainPhoto: File | null;
+  /** Manhã: paciente notou algo diferente na cicatriz ao acordar? */
+  noticedWoundChange: boolean | null;
 }
 
 export type MeasurementErrors = Partial<Record<keyof MeasurementFormState, string>>;
@@ -64,6 +73,7 @@ export const EMPTY_FORM: MeasurementFormState = {
   heartRate: '',
   pain: null,
   dyspnea: null,
+  waterIntakeOk: null,
   urinatedNormally: null,
   urinationCount: '',
   hadVomit: null,
@@ -71,8 +81,10 @@ export const EMPTY_FORM: MeasurementFormState = {
   hadBleeding: null,
   steps: '',
   hasDrain: null,
+  drainOutputMl: '',
   woundPhoto: null,
   drainPhoto: null,
+  noticedWoundChange: null,
 };
 
 /** Converte texto com vírgula/decimal em número. */

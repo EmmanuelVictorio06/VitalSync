@@ -48,6 +48,7 @@ export const VitalKind = {
   BLEEDING: 'BLEEDING',
   PAIN: 'PAIN',
   DYSPNEA: 'DYSPNEA',
+  WATER_INTAKE: 'WATER_INTAKE',
 } as const;
 export type VitalKind = (typeof VitalKind)[keyof typeof VitalKind];
 
@@ -96,13 +97,14 @@ export interface VitalSignInput {
   diastolic: number; // mmHg
   heartRate: number; // bpm
   pain: number; // 0–10
-  dyspnea: number; // 0–10
-  urinatedNormally: boolean; // Diurese: urinou normalmente?
-  urinationCount?: number | null; // micções no dia (se informado)
+  dyspnea: number; // 0 = sem dispneia, 1 = leve, 2 = moderada/intensa
+  urinatedNormally: boolean; // Diurese: urinou normalmente? (só à noite)
+  urinationCount?: number | null; // micções no dia (se informado, só à noite)
   hadVomit: boolean;
   vomitCount?: number | null;
   hadBleeding: boolean;
   stepsCount?: number | null; // só à noite
+  waterIntakeOk?: boolean | null; // Ingestão hídrica: consegue tomar líquidos normalmente?
 }
 
 /** Resultado da avaliação de status por dimensão + status geral. */

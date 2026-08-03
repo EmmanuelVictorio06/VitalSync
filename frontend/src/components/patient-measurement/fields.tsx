@@ -131,6 +131,59 @@ export function SymptomScaleSelector({
   );
 }
 
+/* ---------------- SegmentSelector ---------------- */
+/** Seletor de opções mutuamente exclusivas (ex.: dispneia em 3 níveis), mesmo visual do YesNoSelector. */
+export function SegmentSelector({
+  icon: Icon,
+  label,
+  description,
+  value,
+  options,
+  onChange,
+  error,
+}: {
+  icon?: IconType;
+  label: string;
+  description?: string;
+  value: number | null;
+  options: Array<{ value: number; label: string }>;
+  onChange: (v: number) => void;
+  error?: string;
+}) {
+  return (
+    <div>
+      <span className="flex items-center gap-1.5 text-sm font-bold mb-2">
+        {Icon && <Icon className="size-3.5 text-primary" />}
+        {label}
+      </span>
+      {description && <p className="text-xs text-muted-foreground -mt-1 mb-2">{description}</p>}
+      <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
+        {options.map((opt) => {
+          const active = value === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onChange(opt.value)}
+              className={cn(
+                'min-h-12 py-3 px-2 rounded-xl font-bold text-xs sm:text-sm border-2 transition-colors',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
+                active
+                  ? 'border-primary bg-primary/5 text-primary'
+                  : 'border-border bg-card text-muted-foreground hover:border-primary/30',
+              )}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+      {error && <span className="block text-xs font-semibold text-alert mt-1.5">{error}</span>}
+    </div>
+  );
+}
+
 /* ---------------- YesNoSelector ---------------- */
 /** Pergunta Sim/Não com dois botões iguais; selecionado em azul. */
 export function YesNoSelector({

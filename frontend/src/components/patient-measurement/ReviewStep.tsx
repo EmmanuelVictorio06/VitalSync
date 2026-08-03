@@ -5,6 +5,12 @@
 import { Period } from '@vitalsync/shared';
 import { toNumber, type MeasurementFormState } from './types';
 
+const DYSPNEA_LABEL: Record<number, string> = {
+  0: 'Sem dispneia',
+  1: 'Leve',
+  2: 'Moderada/intensa',
+};
+
 export function ReviewStep({
   form,
   period,
@@ -12,7 +18,8 @@ export function ReviewStep({
   form: MeasurementFormState;
   period: Period;
 }) {
-  const photoCount = (form.woundPhoto ? 1 : 0) + (form.hasDrain && form.drainPhoto ? 1 : 0);
+  const isNight = period === Period.NIGHT;
+  const photoCount = (form.woundPhoto ? 1 : 0) + (isNight && form.hasDrain && form.drainPhoto ? 1 : 0);
   const fmtNum = (v: string) => (v.trim() ? String(toNumber(v)).replace('.', ',') : '—');
 
   return (
@@ -28,13 +35,26 @@ export function ReviewStep({
         />
         <Row label="Frequência cardíaca" value={form.heartRate.trim() ? `${form.heartRate} bpm` : '—'} />
         <Row label="Dor" value={form.pain != null ? `${form.pain}/10` : '—'} />
-        <Row label="Dispneia" value={form.dyspnea != null ? `${form.dyspnea}/10` : '—'} />
-        <Row label="Diurese" value={yesNo(form.urinatedNormally)} />
+        <Row label="Dispneia" value={form.dyspnea != null ? (DYSPNEA_LABEL[form.dyspnea] ?? '—') : '—'} />
+        <Row label="Ingestão de líquidos" value={yesNo(form.waterIntakeOk)} />
+        {isNight && <Row label="Diurese" value={yesNo(form.urinatedNormally)} />}
         <Row label="Vômito" value={yesNo(form.hadVomit)} />
         <Row label="Sangramento" value={yesNo(form.hadBleeding)} />
-        {period === Period.NIGHT && form.steps.trim() && <Row label="Passos hoje" value={form.steps} />}
-        <Row label="Possui dreno" value={yesNo(form.hasDrain)} />
-        <Row label="Fotos" value={photoCount === 0 ? 'Nenhuma' : `${photoCount} enviada${photoCount > 1 ? 's' : ''}`} />
+        {isNight && form.steps.trim() && <Row label="Passos hoje" value={form.steps} />}
+        {isNight ? (
+          <>
+            <Row label="Possui dreno" value={yesNo(form.hasDrain)} />
+            {form.hasDrain && form.drainOutputMl.trim() && (
+              <Row label="Débito do dreno" value={`${form.drainOutputMl} ml`} />
+            )}
+            <Row label="Fotos" value={photoCount === 0 ? 'Nenhuma' : `${photoCount} enviada${photoCount > 1 ? 's' : ''}`} />
+          </>
+        ) : (
+          <>
+            <Row label="Notou algo na cicatriz" value={yesNo(form.noticedWoundChange)} />
+            <Row label="Foto da cicatriz" value={form.woundPhoto ? 'Enviada' : 'Nenhuma'} />
+          </>
+        )}
       </dl>
     </div>
   );
