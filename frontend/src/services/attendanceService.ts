@@ -61,6 +61,9 @@ export interface AttendanceRow extends AttendanceConfirmation {
     description: string;
     ignored_reason: string | null;
     created_at: string;
+    /** Para o tempo de resposta (protocolo 5.6.6/5.6.7): primeira ação = a mais antiga das duas. */
+    in_analysis_at: string | null;
+    attended_at: string | null;
   } | null;
   /** Medição relacionada (via alerta). */
   vital_record: VitalSignRecord | null;
@@ -101,6 +104,7 @@ const ATTENDANCE_SELECT = `
   ),
   alert:clinical_alerts(
     id, status, type, description, ignored_reason, created_at, vital_record_id,
+    in_analysis_at, attended_at,
     vital_record:vital_sign_records(*)
   )
 ` as const;
@@ -163,6 +167,8 @@ async function enrichAttendanceRows(raw: RawRow[]): Promise<AttendanceRow[]> {
           description: rawAlert.description,
           ignored_reason: rawAlert.ignored_reason,
           created_at: rawAlert.created_at,
+          in_analysis_at: rawAlert.in_analysis_at,
+          attended_at: rawAlert.attended_at,
         }
       : null;
     const prof = r.attended_by ? profiles.get(r.attended_by) : undefined;

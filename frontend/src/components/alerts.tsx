@@ -36,6 +36,7 @@ import { alertService } from '../services/alertService';
 import { attendanceService, type AttendanceRow } from '../services/attendanceService';
 import { storageService } from '../services/storageService';
 import { DSection, DGrid, MeasurementGrid, PatientInfoGrid } from './clinical/DetailBlocks';
+import { isSlaBreached, slaLabel } from '../lib/sla';
 import {
   clinicalRule as attClinicalRule,
   fmtDateTime as attFmtDateTime,
@@ -521,6 +522,7 @@ export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, 
   const r = alert.vital_record;
   const resolved = alert.attendance_status === 'ATTENDED' || alert.attendance_status === 'IGNORED';
   const TypeIcon = (alert.type && SIGNAL_ICON[alert.type]) || Stethoscope;
+  const slaInput = { createdAt: alert.created_at, inAnalysisAt: alert.in_analysis_at, attendedAt: alert.attended_at };
 
   useEffect(() => {
     let active = true;
@@ -602,6 +604,28 @@ export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, 
             {alert.attendance_status === 'IGNORED' && alert.ignored_reason && (
               <p className="text-xs text-muted-foreground mt-2 bg-muted rounded-lg p-2">
                 <span className="font-bold uppercase">Justificativa: </span>{alert.ignored_reason}
+              </p>
+            )}
+            <p className={cn(
+              'text-xs font-semibold mt-2 rounded-lg p-2',
+              isSlaBreached(slaInput, alert.status) ? 'bg-alert/10 text-alert' : 'bg-stable/10 text-stable',
+            )}>
+              {slaLabel(slaInput, alert.status)}
+            </p>
+            {alert.recheck_due_at && (
+              <p className={cn(
+                'text-xs font-semibold mt-2 rounded-lg p-2',
+                alert.recheck_completed_at
+                  ? 'bg-stable/10 text-stable'
+                  : new Date(alert.recheck_due_at) < new Date()
+                    ? 'bg-alert/10 text-alert'
+                    : 'bg-warning/10 text-warning',
+              )}>
+                {alert.recheck_completed_at
+                  ? `Reaferição em 2h cumprida em ${fmtDateTime(alert.recheck_completed_at)}.`
+                  : new Date(alert.recheck_due_at) < new Date()
+                    ? `Reaferição em 2h ATRASADA (prazo era ${fmtDateTime(alert.recheck_due_at)}).`
+                    : `Reaferição em 2h necessária até ${fmtDateTime(alert.recheck_due_at)}.`}
               </p>
             )}
           </DSection>

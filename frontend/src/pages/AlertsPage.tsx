@@ -30,6 +30,7 @@ import {
   type AlertFiltersState,
 } from '../components/alerts';
 import { useAlertCount } from '../components/AlertCount';
+import { MissingMeasurementsCard } from '../components/MissingMeasurementsCard';
 import { Role } from '@vitalsync/shared';
 import { alertService, type AlertRow } from '../services/alertService';
 import { permissionService } from '../services/permissionService';
@@ -176,6 +177,8 @@ export function AlertsPage() {
           Visualização somente-leitura — como Gerente de Equipe, você acompanha os alertas, mas o atendimento clínico é feito pelo médico responsável.
         </div>
       )}
+
+      <MissingMeasurementsCard />
 
       {alerts && !error && (
         <AlertQuickFilters

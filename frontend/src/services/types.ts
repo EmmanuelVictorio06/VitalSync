@@ -216,6 +216,10 @@ export interface ClinicalAlert {
   /** Médico que travou o alerta para atendimento (lock). Null = alerta livre. */
   in_analysis_by: string | null;
   in_analysis_at: string | null;
+  /** Prazo da reaferição em 2h (protocolo 5.7.2) — null quando não se aplica. */
+  recheck_due_at: string | null;
+  /** Quando a reaferição chegou — null se ainda pendente ou não se aplica. */
+  recheck_completed_at: string | null;
   created_at: string;
   updated_at: string | null;
 }

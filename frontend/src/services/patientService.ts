@@ -1,7 +1,17 @@
 /** Pacientes (RLS aplica o escopo por equipe). */
+import { isWithinMonitoringWindow } from '@vitalsync/shared';
 import { supabase } from '../lib/supabase';
 import { patientSecurityService, type SecurePatientUpdate } from './patientSecurityService';
 import type { ClinicalStatus, Patient } from './types';
+
+/** Paciente com uma coleta programada de hoje (manhã/noite) ainda sem registro, já com a janela fechada. */
+export interface MissingMeasurementPatient {
+  id: string;
+  name: string;
+  phone: string | null;
+  team_id: string;
+  period: 'MORNING' | 'NIGHT';
+}
 
 export interface PatientWithNames extends Patient {
   surgery_type: { name: string } | null;
@@ -109,5 +119,54 @@ export const patientService = {
   async remove(id: string): Promise<void> {
     const { error } = await supabase.rpc('soft_delete_patient', { p_id: id });
     if (error) throw new Error(error.message);
+  },
+
+  /**
+   * Detecta ausência de resposta (protocolo 5.6.3/5.6.4): pacientes ativos, na
+   * janela de 10 dias, sem a coleta do período de hoje já com a janela
+   * fechada (manhã 08–10h, noite 18–20h). Visibilidade para contato ativo —
+   * não dispara nada sozinho (RLS já limita ao escopo do usuário).
+   */
+  async getMissingTodayMeasurements(): Promise<MissingMeasurementPatient[]> {
+    const hourSP = Number(
+      new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: 'America/Sao_Paulo' }).format(
+        new Date(),
+      ),
+    );
+    const periodsToCheck: Array<'MORNING' | 'NIGHT'> = [];
+    if (hourSP >= 10) periodsToCheck.push('MORNING');
+    if (hourSP >= 20) periodsToCheck.push('NIGHT');
+    if (periodsToCheck.length === 0) return [];
+
+    const { data: patients, error } = await supabase
+      .from('patients')
+      .select('id, name, phone, team_id, hospital_discharge_date')
+      .eq('status', 'ACTIVE')
+      .is('deleted_at', null);
+    if (error) throw new Error(error.message);
+
+    const active = (patients ?? []).filter(
+      (p) => p.hospital_discharge_date && isWithinMonitoringWindow(new Date(p.hospital_discharge_date)),
+    );
+    if (active.length === 0) return [];
+
+    const todaySP = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+    const { data: records, error: recErr } = await supabase
+      .from('vital_sign_records')
+      .select('patient_id, period')
+      .eq('record_date', todaySP)
+      .in('patient_id', active.map((p) => p.id));
+    if (recErr) throw new Error(recErr.message);
+    const done = new Set((records ?? []).map((r) => `${r.patient_id}:${r.period}`));
+
+    const missing: MissingMeasurementPatient[] = [];
+    for (const p of active) {
+      for (const period of periodsToCheck) {
+        if (!done.has(`${p.id}:${period}`)) {
+          missing.push({ id: p.id, name: p.name, phone: p.phone, team_id: p.team_id, period });
+        }
+      }
+    }
+    return missing;
   },
 };
