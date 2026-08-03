@@ -16,6 +16,7 @@ export const DB_ROLE_TO_APP_ROLE: Record<UserRole, Role> = {
   ASSOCIATED_DOCTOR: Role.ASSOCIATE,
   SUPPORT: Role.SUPPORT,
   TEAM_MANAGER: Role.MANAGER,
+  NURSING_PROFESSIONAL: Role.NURSE,
 };
 
 /** Converte o papel do banco no papel do app (fallback: associado). */
@@ -30,6 +31,7 @@ export const APP_ROLE_LABEL_PT: Record<Role, string> = {
   [Role.ASSOCIATE]: 'Médico Associado',
   [Role.SUPPORT]: 'Suporte',
   [Role.MANAGER]: 'Gerente de Equipe',
+  [Role.NURSE]: 'Profissional de Enfermagem',
 };
 
 /** Rótulo PT-BR a partir do papel do BANCO (profiles.role). */

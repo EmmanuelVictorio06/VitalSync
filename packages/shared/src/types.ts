@@ -11,6 +11,7 @@ export const Role = {
   ASSOCIATE: 'ASSOCIATE', // Médico associado
   SUPPORT: 'SUPPORT', // Suporte operacional (não clínico)
   MANAGER: 'MANAGER', // Gerente de Equipe (gestão administrativa, sem acesso clínico)
+  NURSE: 'NURSE', // Profissional de Enfermagem — triagem primária do protocolo do estudo
 } as const;
 export type Role = (typeof Role)[keyof typeof Role];
 

@@ -30,7 +30,7 @@ export const permissionService = {
    * cirurgião e associado). O paciente não tem login — não chega aqui.
    */
   canAccessMyProfile(user: AuthUser | null | undefined): boolean {
-    return !!user && ([Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.SUPPORT, Role.MANAGER] as Role[]).includes(user.role);
+    return !!user && ([Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.SUPPORT, Role.MANAGER, Role.NURSE] as Role[]).includes(user.role);
   },
 
   /** Pode editar o próprio perfil (mesma regra do acesso). */
@@ -70,17 +70,18 @@ export const permissionService = {
    * de Equipe (este último em modo somente-leitura — ver canAttendAlerts).
    */
   canViewAlerts(user: AuthUser | null | undefined): boolean {
-    return !!user && ([Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.MANAGER] as Role[]).includes(user.role);
+    return !!user && ([Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.MANAGER, Role.NURSE] as Role[]).includes(user.role);
   },
 
   /**
    * Realizar atendimento clínico (em análise / atendido / ignorado): apenas
-   * profissionais clínicos. O Admin NÃO substitui a responsabilidade clínica
-   * da equipe (vê tudo, mas não conclui o atendimento) e o Gerente de Equipe
-   * também não — ele só acompanha (somente-leitura).
+   * profissionais clínicos — inclui o Profissional de Enfermagem, triador
+   * primário do protocolo do estudo. O Admin NÃO substitui a responsabilidade
+   * clínica da equipe (vê tudo, mas não conclui o atendimento) e o Gerente de
+   * Equipe também não — ele só acompanha (somente-leitura).
    */
   canAttendAlerts(user: AuthUser | null | undefined): boolean {
-    return user?.role === Role.SURGEON || user?.role === Role.ASSOCIATE;
+    return user?.role === Role.SURGEON || user?.role === Role.ASSOCIATE || user?.role === Role.NURSE;
   },
 
   /** Reenviar a notificação à equipe: Admin e Cirurgião Principal. */

@@ -29,6 +29,7 @@ export const ROLE_META: Record<UserRole, { label: string; badge: string; dot: st
   ASSOCIATED_DOCTOR: { label: 'Médico Associado', badge: 'bg-muted text-muted-foreground border-border', dot: 'bg-muted-foreground' },
   SUPPORT: { label: 'Suporte', badge: 'bg-warning/10 text-warning border-warning/20', dot: 'bg-warning' },
   TEAM_MANAGER: { label: 'Gerente de Equipe', badge: 'bg-info/10 text-info border-info/20', dot: 'bg-info' },
+  NURSING_PROFESSIONAL: { label: 'Profissional de Enfermagem', badge: 'bg-stable/10 text-stable border-stable/20', dot: 'bg-stable' },
 };
 
 /** Opções de papel para selects/segmentos. */
@@ -38,6 +39,7 @@ export const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
   { value: 'ASSOCIATED_DOCTOR', label: 'Médico Associado' },
   { value: 'SUPPORT', label: 'Suporte' },
   { value: 'TEAM_MANAGER', label: 'Gerente de Equipe' },
+  { value: 'NURSING_PROFESSIONAL', label: 'Profissional de Enfermagem' },
 ];
 
 /* ---------------- Badge de papel ---------------- */

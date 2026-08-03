@@ -276,6 +276,8 @@ function roleLabel(role: AttendanceRow['professional_role']): string {
       return 'Médico Cirurgião';
     case 'ASSOCIATED_DOCTOR':
       return 'Médico Associado';
+    case 'NURSING_PROFESSIONAL':
+      return 'Profissional de Enfermagem';
     default:
       return '—';
   }
