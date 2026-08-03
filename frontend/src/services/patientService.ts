@@ -24,6 +24,18 @@ export interface NewPatientInput {
   is_test?: boolean;
   /** Resumo de prontuário (texto livre, opcional). */
   medical_record_summary?: string;
+  /** Sexo do paciente (M/F) — variável demográfica do estudo. */
+  sex?: 'M' | 'F';
+  weight_kg?: number;
+  height_cm?: number;
+  /** Lista de comorbidades (texto livre por item). */
+  comorbidities?: string[];
+  /** Tempo de internação hospitalar em dias. */
+  length_of_stay_days?: number;
+  /** Contato alternativo exigido na inclusão do paciente. */
+  alternative_phone?: string;
+  /** Data de assinatura do TCLE. */
+  tcle_accepted_at?: string;
 }
 
 /** Filtro de procedência: reais, de teste ou ambos. */
@@ -33,6 +45,7 @@ export type PatientKind = 'all' | 'real' | 'test';
 const PATIENT_COLUMNS =
   'id, name, birth_date, phone, surgery_type_id, surgery_date, hospital_discharge_date, ' +
   'hospital_id, team_id, secure_token, status, current_status, is_test, medical_record_summary, ' +
+  'sex, weight_kg, height_cm, comorbidities, length_of_stay_days, alternative_phone, tcle_accepted_at, ' +
   'created_at, deleted_at, surgery_type:surgery_types(name), hospital:hospitals(name), ' +
   'medical_team:medical_teams(team_number)';
 

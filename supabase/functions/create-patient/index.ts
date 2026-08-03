@@ -102,6 +102,13 @@ serve(async (req) => {
       team_id: teamId,
       is_test: body.is_test ?? false,
       medical_record_summary: body.medical_record_summary ?? null,
+      sex: body.sex ?? null,
+      weight_kg: body.weight_kg ?? null,
+      height_cm: body.height_cm ?? null,
+      comorbidities: Array.isArray(body.comorbidities) ? body.comorbidities : [],
+      length_of_stay_days: body.length_of_stay_days ?? null,
+      alternative_phone: body.alternative_phone ?? null,
+      tcle_accepted_at: body.tcle_accepted_at ?? null,
       cpf_hash,
       cpf_encrypted,
     };

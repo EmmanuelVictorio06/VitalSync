@@ -29,7 +29,7 @@ import {
   Wind,
   X,
 } from 'lucide-react';
-import { Period, whatsappLink } from '@vitalsync/shared';
+import { Period, formatCivilDate, formatPhoneBR, whatsappLink } from '@vitalsync/shared';
 import type { AttendanceStatus, AttendanceConfirmation, NotificationLog } from '../services/types';
 import type { AlertRow, AlertSummary, TeamProfessional } from '../services/alertService';
 import { alertService } from '../services/alertService';
@@ -100,6 +100,16 @@ function clinicalRule(a: AlertRow): string {
 }
 
 const teamLabel = (n: number | null | undefined) => (n != null ? `Equipe ${String(n).padStart(2, '0')}` : '—');
+
+const sexLabel = (sex: 'M' | 'F' | null | undefined) => (sex === 'M' ? 'Masculino' : sex === 'F' ? 'Feminino' : '—');
+
+/** IMC = peso (kg) / altura (m)². Só calcula quando os dois valores existem. */
+function bmiLabel(weightKg: number | null | undefined, heightCm: number | null | undefined): string {
+  if (weightKg == null || heightCm == null || heightCm <= 0) return '—';
+  const heightM = heightCm / 100;
+  const bmi = weightKg / (heightM * heightM);
+  return `${bmi.toFixed(1)} kg/m²`;
+}
 
 /** Resumo seguro (sem dados sensíveis demais) para a área de transferência. */
 export function alertSummaryText(a: AlertRow): string {
@@ -604,6 +614,26 @@ export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, 
               surgeonName={alert.surgeon_name}
               monitoringDay={r?.monitoring_day}
             />
+            <div className="mt-3 pt-3 border-t border-border">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
+                Variáveis clínicas do estudo
+              </p>
+              <DGrid items={[
+                ['Sexo', sexLabel(alert.patient?.sex)],
+                ['Peso', alert.patient?.weight_kg != null ? `${alert.patient.weight_kg} kg` : '—'],
+                ['Altura', alert.patient?.height_cm != null ? `${alert.patient.height_cm} cm` : '—'],
+                ['IMC', bmiLabel(alert.patient?.weight_kg, alert.patient?.height_cm)],
+                ['Tempo de internação', alert.patient?.length_of_stay_days != null ? `${alert.patient.length_of_stay_days} dias` : '—'],
+                ['Contato alternativo', alert.patient?.alternative_phone ? formatPhoneBR(alert.patient.alternative_phone) : '—'],
+                ['TCLE assinado em', alert.patient?.tcle_accepted_at ? formatCivilDate(alert.patient.tcle_accepted_at) : '—'],
+              ]} />
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mt-3 mb-1">
+                Comorbidades
+              </p>
+              <p className="text-sm">
+                {alert.patient?.comorbidities?.length ? alert.patient.comorbidities.join(', ') : 'Nenhuma comorbidade registrada.'}
+              </p>
+            </div>
             <div className="mt-3 bg-muted rounded-lg p-3">
               <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
                 Resumo do prontuário

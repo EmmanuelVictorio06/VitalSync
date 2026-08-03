@@ -28,9 +28,22 @@ interface FormState {
   teamId: string;
   isTest: boolean;
   medicalRecordSummary: string;
+  sex: '' | 'M' | 'F';
+  weightKg: string;
+  heightCm: string;
+  comorbidities: string;
+  lengthOfStayDays: string;
+  alternativePhone: string;
+  tcleAcceptedAt: string;
 }
+/** Comorbidades: campo de texto (separado por vírgula) vira lista para o banco (jsonb). */
+function parseCommaList(v: string): string[] {
+  return v.split(',').map((s) => s.trim()).filter(Boolean);
+}
+
 const empty: FormState = {
   name: '', cpf: '', birthDate: '', phone: '', surgeryTypeId: '', surgeryDate: '', dischargeDate: '', hospitalId: '', teamId: '', isTest: false, medicalRecordSummary: '',
+  sex: '', weightKg: '', heightCm: '', comorbidities: '', lengthOfStayDays: '', alternativePhone: '', tcleAcceptedAt: '',
 };
 
 export function PatientRegisterPage() {
@@ -111,6 +124,13 @@ export function PatientRegisterPage() {
         team_id: form.teamId,
         is_test: form.isTest,
         medical_record_summary: form.medicalRecordSummary.trim() || undefined,
+        sex: form.sex || undefined,
+        weight_kg: form.weightKg ? Number(form.weightKg.replace(',', '.')) : undefined,
+        height_cm: form.heightCm ? Number(form.heightCm.replace(',', '.')) : undefined,
+        comorbidities: parseCommaList(form.comorbidities),
+        length_of_stay_days: form.lengthOfStayDays ? Number(form.lengthOfStayDays) : undefined,
+        alternative_phone: form.alternativePhone || undefined,
+        tcle_accepted_at: form.tcleAcceptedAt || undefined,
       });
       // Link público do paciente: rota sem login, validada por token seguro.
       // Usa o domínio de produção (VITE_PUBLIC_APP_URL) para nunca gerar link de
@@ -162,6 +182,12 @@ export function PatientRegisterPage() {
             <Field label="Idade" hint="Calculada automaticamente.">
               <input className="input bg-muted/60" value={age} readOnly placeholder="—" />
             </Field>
+            <PhoneInput
+              label="Contato alternativo"
+              hint="Exigido no protocolo do estudo, caso o principal não atenda (opcional)."
+              value={form.alternativePhone}
+              onChange={(v) => set('alternativePhone', v)}
+            />
           </div>
         </Block>
 
@@ -183,7 +209,31 @@ export function PatientRegisterPage() {
           </div>
         </Block>
 
-        <Block index={3} title="Equipe Médica">
+        <Block index={3} title="Variáveis Clínicas do Estudo">
+          <div className="grid md:grid-cols-2 gap-4">
+            <CustomSelect
+              label="Sexo"
+              value={form.sex}
+              onChange={(e) => set('sex', e.target.value as FormState['sex'])}
+              options={[{ value: 'M', label: 'Masculino' }, { value: 'F', label: 'Feminino' }]}
+            />
+            <TextInput label="Peso (kg)" inputMode="decimal" placeholder="Ex. 72,5" value={form.weightKg} onChange={(e) => set('weightKg', e.target.value)} />
+            <TextInput label="Altura (cm)" inputMode="numeric" placeholder="Ex. 170" value={form.heightCm} onChange={(e) => set('heightCm', e.target.value)} />
+            <TextInput label="Tempo de internação (dias)" inputMode="numeric" value={form.lengthOfStayDays} onChange={(e) => set('lengthOfStayDays', e.target.value)} />
+            <TextInput label="TCLE assinado em" type="date" hint="Data de assinatura do Termo de Consentimento." value={form.tcleAcceptedAt} onChange={(e) => set('tcleAcceptedAt', e.target.value)} />
+          </div>
+          <div className="mt-4">
+            <TextareaField
+              label="Comorbidades"
+              hint="Separe por vírgula (ex.: diabetes, hipertensão) — opcional."
+              rows={2}
+              value={form.comorbidities}
+              onChange={(e) => set('comorbidities', e.target.value)}
+            />
+          </div>
+        </Block>
+
+        <Block index={4} title="Equipe Médica">
           <CustomSelect
             label="Equipe responsável"
             hint={
