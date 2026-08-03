@@ -36,7 +36,7 @@ export interface SecurePatientInput {
 }
 
 /**
- * Campos editáveis de um paciente. `cpf` é OPCIONAL: vazio/omitido preserva o
+ * Campos editáveis de um paciente (inclui study_group, ver interface abaixo). `cpf` é OPCIONAL: vazio/omitido preserva o
  * CPF existente (o frontend nunca tem o CPF em claro de um paciente já criado,
  * pois só guardamos hash/cifra no servidor). Se preenchido, é re-hasheado.
  */
@@ -65,6 +65,8 @@ export interface SecurePatientUpdate {
   alternative_phone?: string;
   /** Data de assinatura do TCLE. */
   tcle_accepted_at?: string;
+  /** Coorte do estudo (5.10) — todo paciente cadastrado pelo app nasce INTERVENTION; editável para reclassificação administrativa. */
+  study_group?: 'INTERVENTION' | 'HISTORICAL_CONTROL';
 }
 
 export const patientSecurityService = {

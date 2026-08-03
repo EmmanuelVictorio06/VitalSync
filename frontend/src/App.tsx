@@ -21,6 +21,7 @@ import { VitalsRegisterPage } from './pages/VitalsRegisterPage';
 import { InviteRegisterPage } from './pages/InviteRegisterPage';
 import { InvitesPage } from './pages/InvitesPage';
 import { ExportsPage } from './pages/admin/ExportsPage';
+import { AdherencePage } from './pages/admin/AdherencePage';
 import { HospitalsPage } from './pages/admin/HospitalsPage';
 import { SettingsPage } from './pages/admin/SettingsPage';
 import { SurgeryTypesPage } from './pages/admin/SurgeryTypesPage';
@@ -201,6 +202,15 @@ export function App() {
           element={
             <PermissionGuard roles={[Role.ADM]}>
               <ExportsPage />
+            </PermissionGuard>
+          }
+        />
+        {/* Adesão e Completude (protocolo 5.11) — exclusivo do Administrador */}
+        <Route
+          path="/admin/adherence"
+          element={
+            <PermissionGuard roles={[Role.ADM]}>
+              <AdherencePage />
             </PermissionGuard>
           }
         />

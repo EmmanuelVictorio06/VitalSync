@@ -106,6 +106,12 @@ serve(async (req) => {
     if (body.length_of_stay_days !== undefined) update.length_of_stay_days = body.length_of_stay_days ?? null;
     if (body.alternative_phone !== undefined) update.alternative_phone = body.alternative_phone || null;
     if (body.tcle_accepted_at !== undefined) update.tcle_accepted_at = body.tcle_accepted_at || null;
+    if (body.study_group !== undefined) {
+      if (body.study_group !== 'INTERVENTION' && body.study_group !== 'HISTORICAL_CONTROL') {
+        return json({ error: 'Coorte do estudo inválida.' }, 400);
+      }
+      update.study_group = body.study_group;
+    }
 
     // Troca de equipe: só ADMIN.
     if (body.team_id !== undefined && body.team_id !== current.team_id) {

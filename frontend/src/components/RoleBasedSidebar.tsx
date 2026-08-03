@@ -15,6 +15,7 @@ import {
   ClipboardList,
   FileDown,
   LayoutDashboard,
+  LineChart,
   Scissors,
   Send,
   Settings,
@@ -52,7 +53,10 @@ export function useRoleMenus(): { main: NavItem[]; admin: NavItem[] } {
         { to: '/admin/hospitals', label: 'Hospitais', short: 'Hospitais', icon: Building2 },
         { to: '/admin/surgery-types', label: 'Tipos de Cirurgia', short: 'Cirurgias', icon: Scissors },
         ...(isAdmin
-          ? [{ to: '/admin/exports', label: 'Exportações', short: 'Exportar', icon: FileDown } satisfies NavItem]
+          ? [
+              { to: '/admin/exports', label: 'Exportações', short: 'Exportar', icon: FileDown } satisfies NavItem,
+              { to: '/admin/adherence', label: 'Adesão e Completude', short: 'Adesão', icon: LineChart } satisfies NavItem,
+            ]
           : []),
         { to: '/admin/settings', label: 'Configurações', short: 'Config.', icon: Settings },
       ]

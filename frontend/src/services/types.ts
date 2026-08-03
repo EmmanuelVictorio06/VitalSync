@@ -145,6 +145,8 @@ export interface Patient {
   alternative_phone?: string | null;
   /** Data de assinatura do TCLE (Termo de Consentimento Livre e Esclarecido). */
   tcle_accepted_at?: string | null;
+  /** Coorte do estudo (5.10): INTERVENTION (via app) ou HISTORICAL_CONTROL (retrospectivo). */
+  study_group?: 'INTERVENTION' | 'HISTORICAL_CONTROL';
   created_at: string;
   /** Exclusão lógica: nulo = ativo; preenchido = arquivado (some das telas). */
   deleted_at: string | null;

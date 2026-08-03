@@ -39,6 +39,24 @@ duas fontes já concordam, **exceto exatamente em 92**, onde o código mantém R
 para um sinal crítico). **Status:** ⚠️ Documentado, não alterado — aguardando confirmação de qual
 lado da ambiguidade do protocolo deve valer.
 
+## 3. Escala de satisfação do D+30 — assunção, não definida no protocolo
+
+O protocolo (5.8) pede um questionário de satisfação (segurança/facilidade de uso/comunicação/
+satisfação geral + campo aberto), mas o resumo disponível não especifica a escala exata.
+Implementado como **Likert 1–5** (1 = muito insatisfeito, 5 = muito satisfeito) em
+`patient_day30_assessments` (migration `0055`) — é o padrão mais comum para esse tipo de
+questionário, mas **não é uma definição literal do protocolo**. Confirmar com o time do estudo;
+se a escala for diferente, ajustar a constraint `day30_satisfaction_range_check` (migration nova)
+e `PatientDay30Section.tsx`.
+
+## 4. "Perda de seguimento" — definição operacional, não numérica no protocolo
+
+O protocolo (5.11) lista "perda de seguimento" como métrica do desfecho primário, mas não define
+um corte numérico exato no resumo disponível. Implementado em `adherenceService.ts` como: **janela
+de 10 dias encerrada COM adesão < 50%**. É uma assunção operacional razoável, não uma regra
+confirmada — ajustar `LOST_TO_FOLLOWUP_THRESHOLD_PCT` nesse arquivo se o time do estudo definir
+outro critério (ex.: dias consecutivos sem coleta, independente da adesão total).
+
 ---
 
 ## Alterações já aplicadas na Fase 1 de conformidade (não são mais pendências)

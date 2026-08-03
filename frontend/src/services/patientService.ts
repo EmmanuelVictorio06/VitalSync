@@ -56,7 +56,7 @@ const PATIENT_COLUMNS =
   'id, name, birth_date, phone, surgery_type_id, surgery_date, hospital_discharge_date, ' +
   'hospital_id, team_id, secure_token, status, current_status, is_test, medical_record_summary, ' +
   'sex, weight_kg, height_cm, comorbidities, length_of_stay_days, alternative_phone, tcle_accepted_at, ' +
-  'created_at, deleted_at, surgery_type:surgery_types(name), hospital:hospitals(name), ' +
+  'study_group, created_at, deleted_at, surgery_type:surgery_types(name), hospital:hospitals(name), ' +
   'medical_team:medical_teams(team_number)';
 
 export const patientService = {

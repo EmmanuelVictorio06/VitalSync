@@ -46,12 +46,14 @@ interface FormState {
   lengthOfStayDays: string;
   alternativePhone: string;
   tcleAcceptedAt: string;
+  studyGroup: 'INTERVENTION' | 'HISTORICAL_CONTROL';
 }
 
 const emptyForm: FormState = {
   name: '', cpf: '', phone: '', birthDate: '', surgeryTypeId: '', surgeryDate: '',
   dischargeDate: '', hospitalId: '', teamId: '', medicalRecordSummary: '',
   sex: '', weightKg: '', heightCm: '', comorbidities: '', lengthOfStayDays: '', alternativePhone: '', tcleAcceptedAt: '',
+  studyGroup: 'INTERVENTION',
 };
 
 /** Comorbidades: campo de texto (separado por vírgula) vira lista para o banco (jsonb). */
@@ -108,6 +110,7 @@ export function PatientEditModal({ patientId, onClose, onSaved }: PatientEditMod
             lengthOfStayDays: patient.length_of_stay_days != null ? String(patient.length_of_stay_days) : '',
             alternativePhone: patient.alternative_phone ?? '',
             tcleAcceptedAt: patient.tcle_accepted_at ?? '',
+            studyGroup: patient.study_group ?? 'INTERVENTION',
           });
         }
       })
@@ -165,6 +168,7 @@ export function PatientEditModal({ patientId, onClose, onSaved }: PatientEditMod
         length_of_stay_days: form.lengthOfStayDays ? Number(form.lengthOfStayDays) : undefined,
         alternative_phone: form.alternativePhone || undefined,
         tcle_accepted_at: form.tcleAcceptedAt || undefined,
+        study_group: form.studyGroup,
       });
       toast.success('Dados do paciente atualizados com sucesso.');
       onSaved();
@@ -324,6 +328,16 @@ export function PatientEditModal({ patientId, onClose, onSaved }: PatientEditMod
                   hint="Data de assinatura do Termo de Consentimento."
                   value={form.tcleAcceptedAt}
                   onChange={(e) => set('tcleAcceptedAt', e.target.value)}
+                />
+                <SelectField
+                  label="Coorte do estudo"
+                  hint="Pacientes cadastrados pelo app são sempre Intervenção; só reclassifique para análise administrativa."
+                  value={form.studyGroup}
+                  onChange={(e) => set('studyGroup', e.target.value as FormState['studyGroup'])}
+                  options={[
+                    { value: 'INTERVENTION', label: 'Intervenção (monitoramento remoto)' },
+                    { value: 'HISTORICAL_CONTROL', label: 'Controle histórico (retrospectivo)' },
+                  ]}
                 />
               </div>
               <TextareaField
