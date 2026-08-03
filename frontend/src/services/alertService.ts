@@ -30,6 +30,8 @@ export interface AlertRow extends ClinicalAlert {
     status: EntityStatus;
     surgery_type: { name: string } | null;
     hospital: { name: string } | null;
+    /** Resumo de prontuário (texto livre, opcional) — histórico, comorbidades, alergias, medicação de uso contínuo. */
+    medical_record_summary: string | null;
   } | null;
   team: { team_number: number; main_surgeon_id: string | null } | null;
   vital_record: VitalSignRecord | null;
@@ -62,6 +64,7 @@ const ALERT_SELECT = `
   *,
   patient:patients(
     id, name, birth_date, phone, surgery_date, hospital_discharge_date, team_id, status,
+    medical_record_summary,
     surgery_type:surgery_types(name),
     hospital:hospitals(name)
   ),
