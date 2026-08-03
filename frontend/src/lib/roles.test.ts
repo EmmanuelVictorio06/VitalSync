@@ -9,6 +9,7 @@ describe('dbRoleToAppRole', () => {
     expect(dbRoleToAppRole('ASSOCIATED_DOCTOR')).toBe(Role.ASSOCIATE));
   it('SUPPORT -> Role.SUPPORT', () => expect(dbRoleToAppRole('SUPPORT')).toBe(Role.SUPPORT));
   it('TEAM_MANAGER -> Role.MANAGER', () => expect(dbRoleToAppRole('TEAM_MANAGER')).toBe(Role.MANAGER));
+  it('NURSING_PROFESSIONAL -> Role.NURSE', () => expect(dbRoleToAppRole('NURSING_PROFESSIONAL')).toBe(Role.NURSE));
 });
 
 describe('APP_ROLE_LABEL_PT', () => {

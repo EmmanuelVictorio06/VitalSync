@@ -21,6 +21,7 @@ import type { AttendanceRow } from '../../services/attendanceService';
 import { attendanceService } from '../../services/attendanceService';
 import { storageService } from '../../services/storageService';
 import { DSection, DGrid, MeasurementGrid, PatientInfoGrid } from '../clinical/DetailBlocks';
+import { slaLabel } from '../../lib/sla';
 import { Button, cn, Loading } from '../ui';
 import { AttendanceClinicalBadge } from './AttendanceClinicalBadge';
 import { AttendanceOriginBadge } from './AttendanceOriginBadge';
@@ -149,6 +150,12 @@ export function AttendanceDetailsDrawer({
                   {row.alert.ignored_reason}
                 </p>
               )}
+              <p className="text-xs font-semibold mt-2 bg-muted rounded-lg p-2">
+                {slaLabel(
+                  { createdAt: row.alert.created_at, inAnalysisAt: row.alert.in_analysis_at, attendedAt: row.alert.attended_at },
+                  row.alert.status,
+                )}
+              </p>
             </DSection>
           )}
 
@@ -269,6 +276,8 @@ function roleLabel(role: AttendanceRow['professional_role']): string {
       return 'Médico Cirurgião';
     case 'ASSOCIATED_DOCTOR':
       return 'Médico Associado';
+    case 'NURSING_PROFESSIONAL':
+      return 'Profissional de Enfermagem';
     default:
       return '—';
   }

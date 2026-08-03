@@ -22,11 +22,11 @@ export const supportPermissionService = {
 
   /* --------------------------- Pode (allow) ---------------------------- */
 
-  /** Ver a lista de pacientes (Admin, clínicos e Suporte). */
-  canViewPatients: (user: U) => is(user, Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.SUPPORT),
+  /** Ver a lista de pacientes (Admin, clínicos, Enfermagem e Suporte). */
+  canViewPatients: (user: U) => is(user, Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.SUPPORT, Role.NURSE),
 
   /** Buscar pacientes — mesma audiência da listagem. */
-  canSearchPatients: (user: U) => is(user, Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.SUPPORT),
+  canSearchPatients: (user: U) => is(user, Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.SUPPORT, Role.NURSE),
 
   /** Editar telefone/contato do paciente (Admin e Suporte). */
   canEditPatientContact: (user: U) => is(user, Role.ADM, Role.SUPPORT),
@@ -53,9 +53,9 @@ export const supportPermissionService = {
   /** Excluir paciente: NUNCA o Suporte. */
   canDeletePatient: (user: U) => is(user, Role.ADM, Role.SURGEON),
 
-  /** Ver fotos sensíveis (cicatriz/dreno): clínicos e Admin; nunca o Suporte. */
-  canViewSensitivePhotos: (user: U) => is(user, Role.ADM, Role.SURGEON, Role.ASSOCIATE),
+  /** Ver fotos sensíveis (cicatriz/dreno): clínicos, Enfermagem e Admin; nunca o Suporte. */
+  canViewSensitivePhotos: (user: U) => is(user, Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.NURSE),
 
-  /** Alterar dados clínicos / atender alertas: somente clínicos. */
-  canEditClinicalData: (user: U) => is(user, Role.SURGEON, Role.ASSOCIATE),
+  /** Alterar dados clínicos / atender alertas: somente clínicos (inclui Enfermagem). */
+  canEditClinicalData: (user: U) => is(user, Role.SURGEON, Role.ASSOCIATE, Role.NURSE),
 };

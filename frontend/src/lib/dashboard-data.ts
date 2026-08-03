@@ -97,6 +97,13 @@ export const DASHBOARD_ROLE_CONFIG: Record<Role, DashboardRoleConfig> = {
     showAdminKpis: false,
     showSystemOverview: false,
   },
+  NURSE: {
+    subtitle: 'Visão geral dos pacientes das equipes em que você participa.',
+    sectionTitle: 'Resumo dos Meus Pacientes',
+    monitoringLabel: 'Acompanhados',
+    showAdminKpis: false,
+    showSystemOverview: false,
+  },
 };
 
 /** Painel real: busca dados agregados via backend. */

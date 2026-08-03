@@ -26,6 +26,7 @@ import {
 import { useAuth } from '../auth/AuthContext';
 import { PatientEditModal } from '../components/PatientEditModal';
 import { PatientFollowupSection } from '../components/PatientFollowupSection';
+import { PatientDay30Section } from '../components/PatientDay30Section';
 import { useToast } from '../components/Toast';
 import {
   BloodPressureChart,
@@ -334,6 +335,9 @@ export function PatientDashboardPage() {
 
       {/* Atendimento a cada 48h — independe de haver medições registradas */}
       {id && <PatientFollowupSection patientId={id} />}
+
+      {/* Avaliação em 30 dias (protocolo 5.8) — desfechos + satisfação */}
+      {id && <PatientDay30Section patientId={id} />}
 
       {editing && id && (
         <PatientEditModal

@@ -32,6 +32,14 @@ export interface AlertRow extends ClinicalAlert {
     hospital: { name: string } | null;
     /** Resumo de prontuário (texto livre, opcional) — histórico, comorbidades, alergias, medicação de uso contínuo. */
     medical_record_summary: string | null;
+    /** Variáveis clínicas/cirúrgicas do estudo (protocolo 5.9) — contexto de decisão na triagem. */
+    sex: 'M' | 'F' | null;
+    weight_kg: number | null;
+    height_cm: number | null;
+    comorbidities: string[];
+    length_of_stay_days: number | null;
+    alternative_phone: string | null;
+    tcle_accepted_at: string | null;
   } | null;
   team: { team_number: number; main_surgeon_id: string | null } | null;
   vital_record: VitalSignRecord | null;
@@ -64,7 +72,8 @@ const ALERT_SELECT = `
   *,
   patient:patients(
     id, name, birth_date, phone, surgery_date, hospital_discharge_date, team_id, status,
-    medical_record_summary,
+    medical_record_summary, sex, weight_kg, height_cm, comorbidities, length_of_stay_days,
+    alternative_phone, tcle_accepted_at,
     surgery_type:surgery_types(name),
     hospital:hospitals(name)
   ),

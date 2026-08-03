@@ -97,6 +97,21 @@ serve(async (req) => {
     if (body.medical_record_summary !== undefined) {
       update.medical_record_summary = body.medical_record_summary || null;
     }
+    if (body.sex !== undefined) update.sex = body.sex || null;
+    if (body.weight_kg !== undefined) update.weight_kg = body.weight_kg ?? null;
+    if (body.height_cm !== undefined) update.height_cm = body.height_cm ?? null;
+    if (body.comorbidities !== undefined) {
+      update.comorbidities = Array.isArray(body.comorbidities) ? body.comorbidities : [];
+    }
+    if (body.length_of_stay_days !== undefined) update.length_of_stay_days = body.length_of_stay_days ?? null;
+    if (body.alternative_phone !== undefined) update.alternative_phone = body.alternative_phone || null;
+    if (body.tcle_accepted_at !== undefined) update.tcle_accepted_at = body.tcle_accepted_at || null;
+    if (body.study_group !== undefined) {
+      if (body.study_group !== 'INTERVENTION' && body.study_group !== 'HISTORICAL_CONTROL') {
+        return json({ error: 'Coorte do estudo inválida.' }, 400);
+      }
+      update.study_group = body.study_group;
+    }
 
     // Troca de equipe: só ADMIN.
     if (body.team_id !== undefined && body.team_id !== current.team_id) {
@@ -147,7 +162,8 @@ serve(async (req) => {
       .eq('id', patientId)
       .select(
         'id, name, birth_date, phone, surgery_type_id, surgery_date, hospital_discharge_date, ' +
-          'hospital_id, team_id, secure_token, status, current_status, is_test, created_at, medical_record_summary',
+          'hospital_id, team_id, secure_token, status, current_status, is_test, created_at, medical_record_summary, ' +
+          'sex, weight_kg, height_cm, comorbidities, length_of_stay_days, alternative_phone, tcle_accepted_at',
       )
       .single();
 

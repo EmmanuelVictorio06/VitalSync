@@ -11,6 +11,7 @@ export const Role = {
   ASSOCIATE: 'ASSOCIATE', // Médico associado
   SUPPORT: 'SUPPORT', // Suporte operacional (não clínico)
   MANAGER: 'MANAGER', // Gerente de Equipe (gestão administrativa, sem acesso clínico)
+  NURSE: 'NURSE', // Profissional de Enfermagem — triagem primária do protocolo do estudo
 } as const;
 export type Role = (typeof Role)[keyof typeof Role];
 
@@ -49,6 +50,8 @@ export const VitalKind = {
   PAIN: 'PAIN',
   DYSPNEA: 'DYSPNEA',
   WATER_INTAKE: 'WATER_INTAKE',
+  /** Critério combinado do protocolo (ex.: queda de passos + FC/dor; diurese + outro sinal). */
+  COMBINED_CRITERIA: 'COMBINED_CRITERIA',
 } as const;
 export type VitalKind = (typeof VitalKind)[keyof typeof VitalKind];
 
@@ -113,4 +116,8 @@ export interface StatusEvaluation {
   byVital: Partial<Record<VitalKind, ClinicalStatus>>;
   /** Dimensões que dispararam amarelo/vermelho — usado na mensagem de alerta. */
   triggers: Array<{ kind: VitalKind; status: ClinicalStatus }>;
+  /** Nº de critérios em amarelo — protocolo distingue amarelo isolado de ≥2 critérios (conduta diferente). */
+  yellowCriteriaCount: number;
+  /** true quando o ÚNICO critério amarelo foi passos ou diurese (reavaliação em 2h, não telemedicina direta). */
+  isolatedByStepsOrDiuresis: boolean;
 }

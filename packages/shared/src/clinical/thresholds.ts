@@ -147,6 +147,14 @@ export const ALERT_THRESHOLDS = {
    *  Verde   > 94
    *  Amarelo 92,1 – 94
    *  Vermelho ≤ 92
+   *
+   * Protocolo do estudo (5.7.1) descreve verde ≥95 / amarelo 92–94 / vermelho
+   * ≤92 — o próprio PDF se sobrepõe no valor 92 (está nas duas faixas). Para
+   * valores inteiros (o que o oxímetro sempre informa) o resultado já é
+   * idêntico ao protocolo, EXCETO no valor exato 92: aqui fica RED (mais
+   * conservador), enquanto o PDF também o lista como amarelo. Mantido como
+   * está (não inventamos qual lado da ambiguidade do PDF vale) — ver
+   * docs/PONTOS_PENDENTES.md.
    */
   spo2: {
     label: 'Saturação (SpO2)',
@@ -166,6 +174,11 @@ export const ALERT_THRESHOLDS = {
    * sistólica-única provisória.
    *
    * Sistólica: RED ≤89 · YELLOW 90–99 · GREEN 100–129 · YELLOW 130–139 · RED ≥140
+   *
+   * ⚠️ DIVERGÊNCIA COM O PROTOCOLO DO ESTUDO (FLUXOoperacional.pdf, 5.7.1):
+   * o protocolo define vermelho só em PAS > 160 (sem faixa amarela alta
+   * explícita), enquanto esta regra (confirmada ago/2026) usa vermelho ≥140.
+   * NÃO alterado sem confirmação médica — ver docs/PONTOS_PENDENTES.md.
    */
   bloodPressureSystolic: {
     label: 'Pressão sistólica',
@@ -266,16 +279,19 @@ export const ALERT_THRESHOLDS = {
 } as const;
 
 /**
- * PASSOS — regra relativa (depende do dia anterior), não cabe em RangeRule:
- *  Amarelo: redução de 25% vs. dia anterior
- *  Vermelho: redução de 50% vs. dia anterior
+ * PASSOS — regra relativa a uma referência de ~48h atrás (não mais "dia
+ * anterior"), conforme protocolo do estudo (5.7.2/5.7.3):
+ *  Amarelo: redução ≥ 50% vs. referência de 48h
  *  Verde: caso contrário
+ *
+ * NÃO há mais vermelho isolado de passos — a queda ≥50% só vira VERMELHO
+ * quando COMBINADA com FC>110 ou aumento ≥3 pontos na dor (ver
+ * `evaluateVitalSigns`/critério combinado em status.ts).
  */
 export const STEPS_RULES = {
   label: 'Número de passos',
   axis: { min: 0, max: 5000 }, // sugestão; o gráfico ajusta ao máximo real
-  yellowReductionPct: 0.25,
-  redReductionPct: 0.5,
+  yellowReductionPct: 0.5,
   PENDING_MEDICAL_VALIDATION: false,
 } as const;
 
@@ -289,12 +305,16 @@ export const BINARY_RULES = {
 } as const;
 
 /**
- * INGESTÃO HÍDRICA — binário, mas amarelo (não vermelho) quando "não":
- *  Consegue tomar líquidos normalmente? Sim = Verde / Não = Amarelo.
+ * INGESTÃO HÍDRICA — binário:
+ *  Consegue tomar líquidos normalmente? Sim = Verde / Não = Vermelho.
+ *
+ * Alterado para VERMELHO conforme protocolo do estudo (5.7.3): "incapacidade
+ * de ingerir líquidos via oral" é critério vermelho. Antes era Amarelo — ver
+ * docs/PONTOS_PENDENTES.md (muda a regra vigente, não é mera formalização).
  */
 export const WATER_INTAKE_RULE = {
   okStatus: ClinicalStatus.GREEN,
-  notOkStatus: ClinicalStatus.YELLOW,
+  notOkStatus: ClinicalStatus.RED,
 } as const;
 
 /**

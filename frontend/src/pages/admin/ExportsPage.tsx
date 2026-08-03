@@ -5,7 +5,7 @@
  * o Admin pode incluir os arquivados.
  */
 import { useState } from 'react';
-import { Activity, Bell, FileDown, Users, UserCog } from 'lucide-react';
+import { Activity, Bell, FileDown, LineChart, Users, UserCog } from 'lucide-react';
 import { useToast } from '../../components/Toast';
 import { AdminPageHeader, ToggleSwitch } from '../../components/admin';
 import { Button, PageContainer } from '../../components/ui';
@@ -74,6 +74,13 @@ export function ExportsPage() {
           description="Usuários do painel, com papel, status e contato."
           loading={busy === 'users'}
           onExport={() => run('users', () => exportService.users(), 'usuário(s)')}
+        />
+        <ExportCard
+          icon={LineChart}
+          title="Adesão e completude"
+          description="Desfecho primário do estudo (protocolo 5.11): coletas esperadas x realizadas, completude e perda de seguimento."
+          loading={busy === 'adherence'}
+          onExport={() => run('adherence', () => exportService.adherence(), 'paciente(s)')}
         />
       </div>
     </PageContainer>

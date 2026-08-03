@@ -15,6 +15,7 @@ import {
   ClipboardList,
   FileDown,
   LayoutDashboard,
+  LineChart,
   Scissors,
   Send,
   Settings,
@@ -52,7 +53,10 @@ export function useRoleMenus(): { main: NavItem[]; admin: NavItem[] } {
         { to: '/admin/hospitals', label: 'Hospitais', short: 'Hospitais', icon: Building2 },
         { to: '/admin/surgery-types', label: 'Tipos de Cirurgia', short: 'Cirurgias', icon: Scissors },
         ...(isAdmin
-          ? [{ to: '/admin/exports', label: 'Exportações', short: 'Exportar', icon: FileDown } satisfies NavItem]
+          ? [
+              { to: '/admin/exports', label: 'Exportações', short: 'Exportar', icon: FileDown } satisfies NavItem,
+              { to: '/admin/adherence', label: 'Adesão e Completude', short: 'Adesão', icon: LineChart } satisfies NavItem,
+            ]
           : []),
         { to: '/admin/settings', label: 'Configurações', short: 'Config.', icon: Settings },
       ]
@@ -112,6 +116,22 @@ export function useRoleMenus(): { main: NavItem[]; admin: NavItem[] } {
       main: [
         { to: '/monitoring', label: 'Pacientes em Monitoramento', short: 'Pacientes', icon: Activity },
         { to: '/invites', label: 'Convidar Profissional', short: 'Convites', icon: Send },
+        { to: '/profile', label: 'Meu Perfil', short: 'Perfil', icon: User },
+      ],
+      admin: [],
+    };
+  }
+
+  // Profissional de Enfermagem: triagem primária do protocolo do estudo —
+  // mesmo escopo clínico de um médico associado, sem a tela "Minhas Equipes"
+  // (a vinculação à equipe é feita pela mesma tela de Integrantes da Equipe).
+  if (hasRole(Role.NURSE)) {
+    return {
+      main: [
+        { to: '/dashboard', label: 'Dashboard', short: 'Início', icon: LayoutDashboard },
+        { to: '/monitoring', label: 'Pacientes em Monitoramento', short: 'Pacientes', icon: Activity },
+        { to: '/alerts', label: 'Alertas', short: 'Alertas', icon: Bell, badge: unattended },
+        { to: '/my-care', label: 'Meus Atendimentos', short: 'Atendim.', icon: ClipboardList },
         { to: '/profile', label: 'Meu Perfil', short: 'Perfil', icon: User },
       ],
       admin: [],

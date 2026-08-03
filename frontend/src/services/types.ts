@@ -1,6 +1,6 @@
 /** Tipos das linhas das tabelas do Supabase (camada de serviços). */
 
-export type UserRole = 'ADMIN' | 'MEDICAL_SURGEON' | 'ASSOCIATED_DOCTOR' | 'SUPPORT' | 'TEAM_MANAGER';
+export type UserRole = 'ADMIN' | 'MEDICAL_SURGEON' | 'ASSOCIATED_DOCTOR' | 'SUPPORT' | 'TEAM_MANAGER' | 'NURSING_PROFESSIONAL';
 export type RoleInTeam = 'MAIN_SURGEON' | 'ASSOCIATED_DOCTOR';
 export type EntityStatus = 'ACTIVE' | 'INACTIVE';
 export type MeasurementPeriod = 'MORNING' | 'NIGHT';
@@ -133,6 +133,20 @@ export interface Patient {
   is_test: boolean;
   /** Resumo de prontuário (texto livre, opcional) — histórico clínico relevante ao acompanhamento. */
   medical_record_summary?: string | null;
+  /** Sexo do paciente (M/F) — variável demográfica do estudo. */
+  sex?: 'M' | 'F' | null;
+  weight_kg?: number | null;
+  height_cm?: number | null;
+  /** Lista de comorbidades (texto livre por item) — variável do estudo. */
+  comorbidities?: string[];
+  /** Tempo de internação hospitalar em dias — variável de desfecho do estudo. */
+  length_of_stay_days?: number | null;
+  /** Contato alternativo exigido na inclusão do paciente. */
+  alternative_phone?: string | null;
+  /** Data de assinatura do TCLE (Termo de Consentimento Livre e Esclarecido). */
+  tcle_accepted_at?: string | null;
+  /** Coorte do estudo (5.10): INTERVENTION (via app) ou HISTORICAL_CONTROL (retrospectivo). */
+  study_group?: 'INTERVENTION' | 'HISTORICAL_CONTROL';
   created_at: string;
   /** Exclusão lógica: nulo = ativo; preenchido = arquivado (some das telas). */
   deleted_at: string | null;
@@ -204,6 +218,10 @@ export interface ClinicalAlert {
   /** Médico que travou o alerta para atendimento (lock). Null = alerta livre. */
   in_analysis_by: string | null;
   in_analysis_at: string | null;
+  /** Prazo da reaferição em 2h (protocolo 5.7.2) — null quando não se aplica. */
+  recheck_due_at: string | null;
+  /** Quando a reaferição chegou — null se ainda pendente ou não se aplica. */
+  recheck_completed_at: string | null;
   created_at: string;
   updated_at: string | null;
 }

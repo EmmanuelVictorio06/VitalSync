@@ -39,12 +39,27 @@ interface FormState {
   hospitalId: string;
   teamId: string;
   medicalRecordSummary: string;
+  sex: '' | 'M' | 'F';
+  weightKg: string;
+  heightCm: string;
+  comorbidities: string;
+  lengthOfStayDays: string;
+  alternativePhone: string;
+  tcleAcceptedAt: string;
+  studyGroup: 'INTERVENTION' | 'HISTORICAL_CONTROL';
 }
 
 const emptyForm: FormState = {
   name: '', cpf: '', phone: '', birthDate: '', surgeryTypeId: '', surgeryDate: '',
   dischargeDate: '', hospitalId: '', teamId: '', medicalRecordSummary: '',
+  sex: '', weightKg: '', heightCm: '', comorbidities: '', lengthOfStayDays: '', alternativePhone: '', tcleAcceptedAt: '',
+  studyGroup: 'INTERVENTION',
 };
+
+/** Comorbidades: campo de texto (separado por vírgula) vira lista para o banco (jsonb). */
+function parseCommaList(v: string): string[] {
+  return v.split(',').map((s) => s.trim()).filter(Boolean);
+}
 
 export interface PatientEditModalProps {
   patientId: string;
@@ -88,6 +103,14 @@ export function PatientEditModal({ patientId, onClose, onSaved }: PatientEditMod
             hospitalId: patient.hospital_id ?? '',
             teamId: patient.team_id ?? '',
             medicalRecordSummary: patient.medical_record_summary ?? '',
+            sex: patient.sex ?? '',
+            weightKg: patient.weight_kg != null ? String(patient.weight_kg) : '',
+            heightCm: patient.height_cm != null ? String(patient.height_cm) : '',
+            comorbidities: (patient.comorbidities ?? []).join(', '),
+            lengthOfStayDays: patient.length_of_stay_days != null ? String(patient.length_of_stay_days) : '',
+            alternativePhone: patient.alternative_phone ?? '',
+            tcleAcceptedAt: patient.tcle_accepted_at ?? '',
+            studyGroup: patient.study_group ?? 'INTERVENTION',
           });
         }
       })
@@ -138,6 +161,14 @@ export function PatientEditModal({ patientId, onClose, onSaved }: PatientEditMod
         hospital_id: form.hospitalId,
         team_id: form.teamId,
         medical_record_summary: form.medicalRecordSummary.trim(),
+        sex: form.sex || undefined,
+        weight_kg: form.weightKg ? Number(form.weightKg.replace(',', '.')) : undefined,
+        height_cm: form.heightCm ? Number(form.heightCm.replace(',', '.')) : undefined,
+        comorbidities: parseCommaList(form.comorbidities),
+        length_of_stay_days: form.lengthOfStayDays ? Number(form.lengthOfStayDays) : undefined,
+        alternative_phone: form.alternativePhone || undefined,
+        tcle_accepted_at: form.tcleAcceptedAt || undefined,
+        study_group: form.studyGroup,
       });
       toast.success('Dados do paciente atualizados com sucesso.');
       onSaved();
@@ -214,6 +245,12 @@ export function PatientEditModal({ patientId, onClose, onSaved }: PatientEditMod
                   value={form.birthDate}
                   onChange={(e) => set('birthDate', e.target.value)}
                 />
+                <PhoneInput
+                  label="Contato alternativo"
+                  hint="Exigido no protocolo do estudo, caso o principal não atenda (opcional)."
+                  value={form.alternativePhone}
+                  onChange={(v) => set('alternativePhone', v)}
+                />
               </div>
             </fieldset>
 
@@ -267,6 +304,48 @@ export function PatientEditModal({ patientId, onClose, onSaved }: PatientEditMod
                 rows={3}
                 value={form.medicalRecordSummary}
                 onChange={(e) => set('medicalRecordSummary', e.target.value)}
+              />
+            </fieldset>
+
+            {/* Variáveis clínicas do estudo */}
+            <fieldset className="space-y-4">
+              <legend className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Variáveis Clínicas do Estudo
+              </legend>
+              <div className="grid md:grid-cols-2 gap-4">
+                <SelectField
+                  label="Sexo"
+                  value={form.sex}
+                  onChange={(e) => set('sex', e.target.value as FormState['sex'])}
+                  options={[{ value: '', label: 'Não informado' }, { value: 'M', label: 'Masculino' }, { value: 'F', label: 'Feminino' }]}
+                />
+                <TextInput label="Peso (kg)" inputMode="decimal" value={form.weightKg} onChange={(e) => set('weightKg', e.target.value)} />
+                <TextInput label="Altura (cm)" inputMode="numeric" value={form.heightCm} onChange={(e) => set('heightCm', e.target.value)} />
+                <TextInput label="Tempo de internação (dias)" inputMode="numeric" value={form.lengthOfStayDays} onChange={(e) => set('lengthOfStayDays', e.target.value)} />
+                <TextInput
+                  label="TCLE assinado em"
+                  type="date"
+                  hint="Data de assinatura do Termo de Consentimento."
+                  value={form.tcleAcceptedAt}
+                  onChange={(e) => set('tcleAcceptedAt', e.target.value)}
+                />
+                <SelectField
+                  label="Coorte do estudo"
+                  hint="Pacientes cadastrados pelo app são sempre Intervenção; só reclassifique para análise administrativa."
+                  value={form.studyGroup}
+                  onChange={(e) => set('studyGroup', e.target.value as FormState['studyGroup'])}
+                  options={[
+                    { value: 'INTERVENTION', label: 'Intervenção (monitoramento remoto)' },
+                    { value: 'HISTORICAL_CONTROL', label: 'Controle histórico (retrospectivo)' },
+                  ]}
+                />
+              </div>
+              <TextareaField
+                label="Comorbidades"
+                hint="Separe por vírgula (ex.: diabetes, hipertensão) — opcional."
+                rows={2}
+                value={form.comorbidities}
+                onChange={(e) => set('comorbidities', e.target.value)}
               />
             </fieldset>
 

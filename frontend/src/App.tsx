@@ -21,6 +21,7 @@ import { VitalsRegisterPage } from './pages/VitalsRegisterPage';
 import { InviteRegisterPage } from './pages/InviteRegisterPage';
 import { InvitesPage } from './pages/InvitesPage';
 import { ExportsPage } from './pages/admin/ExportsPage';
+import { AdherencePage } from './pages/admin/AdherencePage';
 import { HospitalsPage } from './pages/admin/HospitalsPage';
 import { SettingsPage } from './pages/admin/SettingsPage';
 import { SurgeryTypesPage } from './pages/admin/SurgeryTypesPage';
@@ -57,7 +58,7 @@ export function App() {
         <Route
           path="/dashboard"
           element={
-            <PermissionGuard roles={[Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.MANAGER]}>
+            <PermissionGuard roles={[Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.MANAGER, Role.NURSE]}>
               <DashboardPage />
             </PermissionGuard>
           }
@@ -76,16 +77,16 @@ export function App() {
         <Route
           path="/patients/:id"
           element={
-            <PermissionGuard roles={[Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.MANAGER]}>
+            <PermissionGuard roles={[Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.MANAGER, Role.NURSE]}>
               <PatientDashboardPage />
             </PermissionGuard>
           }
         />
-        {/* Alertas clínicos — não acessível ao Suporte */}
+        {/* Alertas clínicos — Profissional de Enfermagem é o triador primário do protocolo */}
         <Route
           path="/alerts"
           element={
-            <PermissionGuard roles={[Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.MANAGER]}>
+            <PermissionGuard roles={[Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.MANAGER, Role.NURSE]}>
               <AlertsPage />
             </PermissionGuard>
           }
@@ -164,7 +165,7 @@ export function App() {
         <Route
           path="/my-care"
           element={
-            <PermissionGuard roles={[Role.SURGEON, Role.ASSOCIATE]}>
+            <PermissionGuard roles={[Role.SURGEON, Role.ASSOCIATE, Role.NURSE]}>
               <MyAttendancesPage />
             </PermissionGuard>
           }
@@ -173,7 +174,7 @@ export function App() {
         <Route
           path="/profile"
           element={
-            <PermissionGuard roles={[Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.SUPPORT, Role.MANAGER]}>
+            <PermissionGuard roles={[Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.SUPPORT, Role.MANAGER, Role.NURSE]}>
               <MyProfilePage />
             </PermissionGuard>
           }
@@ -201,6 +202,15 @@ export function App() {
           element={
             <PermissionGuard roles={[Role.ADM]}>
               <ExportsPage />
+            </PermissionGuard>
+          }
+        />
+        {/* Adesão e Completude (protocolo 5.11) — exclusivo do Administrador */}
+        <Route
+          path="/admin/adherence"
+          element={
+            <PermissionGuard roles={[Role.ADM]}>
+              <AdherencePage />
             </PermissionGuard>
           }
         />

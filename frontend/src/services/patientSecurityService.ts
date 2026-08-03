@@ -21,10 +21,22 @@ export interface SecurePatientInput {
   is_test?: boolean;
   /** Resumo de prontuário (texto livre, opcional). */
   medical_record_summary?: string;
+  /** Sexo do paciente (M/F) — variável demográfica do estudo. */
+  sex?: 'M' | 'F';
+  weight_kg?: number;
+  height_cm?: number;
+  /** Lista de comorbidades (texto livre por item). */
+  comorbidities?: string[];
+  /** Tempo de internação hospitalar em dias. */
+  length_of_stay_days?: number;
+  /** Contato alternativo exigido na inclusão do paciente. */
+  alternative_phone?: string;
+  /** Data de assinatura do TCLE. */
+  tcle_accepted_at?: string;
 }
 
 /**
- * Campos editáveis de um paciente. `cpf` é OPCIONAL: vazio/omitido preserva o
+ * Campos editáveis de um paciente (inclui study_group, ver interface abaixo). `cpf` é OPCIONAL: vazio/omitido preserva o
  * CPF existente (o frontend nunca tem o CPF em claro de um paciente já criado,
  * pois só guardamos hash/cifra no servidor). Se preenchido, é re-hasheado.
  */
@@ -41,6 +53,20 @@ export interface SecurePatientUpdate {
   team_id?: string;
   /** Resumo de prontuário (texto livre, opcional). */
   medical_record_summary?: string;
+  /** Sexo do paciente (M/F) — variável demográfica do estudo. */
+  sex?: 'M' | 'F';
+  weight_kg?: number;
+  height_cm?: number;
+  /** Lista de comorbidades (texto livre por item). */
+  comorbidities?: string[];
+  /** Tempo de internação hospitalar em dias. */
+  length_of_stay_days?: number;
+  /** Contato alternativo exigido na inclusão do paciente. */
+  alternative_phone?: string;
+  /** Data de assinatura do TCLE. */
+  tcle_accepted_at?: string;
+  /** Coorte do estudo (5.10) — todo paciente cadastrado pelo app nasce INTERVENTION; editável para reclassificação administrativa. */
+  study_group?: 'INTERVENTION' | 'HISTORICAL_CONTROL';
 }
 
 export const patientSecurityService = {
