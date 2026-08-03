@@ -119,6 +119,74 @@ interface RawRow extends AttendanceConfirmation {
   alert: (AttendanceRow['alert'] & { vital_record: VitalSignRecord | null }) | null;
 }
 
+/**
+ * Resolve nomes/papéis dos profissionais (quem atendeu + cirurgião) e monta as
+ * `AttendanceRow` finais. Compartilhado entre `getMyAttendances` e
+ * `getRecentByPatient` — mesma query base (`ATTENDANCE_SELECT`), filtros diferentes.
+ */
+async function enrichAttendanceRows(raw: RawRow[]): Promise<AttendanceRow[]> {
+  const ids = new Set<string>();
+  for (const r of raw) {
+    if (r.attended_by) ids.add(r.attended_by);
+    if (r.patient?.team?.main_surgeon_id) ids.add(r.patient.team.main_surgeon_id);
+  }
+  const profiles = new Map<string, { name: string; role: UserRole }>();
+  if (ids.size > 0) {
+    // Nome/papel (não sensíveis) via view pública — M-09.
+    const { data: profs } = await supabase.from('profiles_public').select('id, name, role').in('id', [...ids]);
+    for (const p of profs ?? []) profiles.set(p.id, { name: p.name, role: p.role as UserRole });
+  }
+
+  return raw.map((r): AttendanceRow => {
+    const { patient: rawPatient, alert: rawAlert, ...rest } = r;
+    const team = rawPatient?.team ?? null;
+    const patient: AttendanceRow['patient'] = rawPatient
+      ? {
+          id: rawPatient.id,
+          name: rawPatient.name,
+          birth_date: rawPatient.birth_date,
+          phone: rawPatient.phone,
+          surgery_date: rawPatient.surgery_date,
+          hospital_discharge_date: rawPatient.hospital_discharge_date,
+          team_id: rawPatient.team_id,
+          current_status: rawPatient.current_status,
+          surgery_type: rawPatient.surgery_type,
+          hospital: rawPatient.hospital,
+        }
+      : null;
+    const vital_record = rawAlert?.vital_record ?? null;
+    const alert = rawAlert
+      ? {
+          id: rawAlert.id,
+          status: rawAlert.status,
+          type: rawAlert.type,
+          description: rawAlert.description,
+          ignored_reason: rawAlert.ignored_reason,
+          created_at: rawAlert.created_at,
+        }
+      : null;
+    const prof = r.attended_by ? profiles.get(r.attended_by) : undefined;
+    const surgeonId = team?.main_surgeon_id ?? null;
+    const clinical_status: ClinicalStatus = alert?.status ?? rawPatient?.current_status ?? 'GREEN';
+    const alert_level: AttendanceAlertLevel | null =
+      alert?.status === 'RED' || alert?.status === 'YELLOW' ? alert.status : null;
+    return {
+      ...rest,
+      patient,
+      team,
+      alert,
+      vital_record,
+      professional_name: prof?.name ?? null,
+      professional_role: prof?.role ?? null,
+      surgeon_name: surgeonId ? profiles.get(surgeonId)?.name ?? null : null,
+      origin: r.alert_id ? 'ALERT' : 'MANUAL_REVIEW',
+      related_vital_sign: alert?.type ?? null,
+      clinical_status,
+      alert_level,
+    };
+  });
+}
+
 export const attendanceService = {
   /**
    * Lista os atendimentos visíveis ao usuário (RLS) já enriquecidos.
@@ -131,69 +199,27 @@ export const attendanceService = {
       .in('status', ['ATTENDED', 'IGNORED'])
       .order('created_at', { ascending: false });
     if (error) throw new Error(error.message);
-    const raw = (data as unknown as RawRow[]) ?? [];
+    return enrichAttendanceRows((data as unknown as RawRow[]) ?? []);
+  },
 
-    // Resolve nomes/papéis dos profissionais (quem atendeu + cirurgião) em 1 query.
-    const ids = new Set<string>();
-    for (const r of raw) {
-      if (r.attended_by) ids.add(r.attended_by);
-      if (r.patient?.team?.main_surgeon_id) ids.add(r.patient.team.main_surgeon_id);
-    }
-    const profiles = new Map<string, { name: string; role: UserRole }>();
-    if (ids.size > 0) {
-      // Nome/papel (não sensíveis) via view pública — M-09.
-      const { data: profs } = await supabase.from('profiles_public').select('id, name, role').in('id', [...ids]);
-      for (const p of profs ?? []) profiles.set(p.id, { name: p.name, role: p.role as UserRole });
-    }
-
-    return raw.map((r): AttendanceRow => {
-      const { patient: rawPatient, alert: rawAlert, ...rest } = r;
-      const team = rawPatient?.team ?? null;
-      const patient: AttendanceRow['patient'] = rawPatient
-        ? {
-            id: rawPatient.id,
-            name: rawPatient.name,
-            birth_date: rawPatient.birth_date,
-            phone: rawPatient.phone,
-            surgery_date: rawPatient.surgery_date,
-            hospital_discharge_date: rawPatient.hospital_discharge_date,
-            team_id: rawPatient.team_id,
-            current_status: rawPatient.current_status,
-            surgery_type: rawPatient.surgery_type,
-            hospital: rawPatient.hospital,
-          }
-        : null;
-      const vital_record = rawAlert?.vital_record ?? null;
-      const alert = rawAlert
-        ? {
-            id: rawAlert.id,
-            status: rawAlert.status,
-            type: rawAlert.type,
-            description: rawAlert.description,
-            ignored_reason: rawAlert.ignored_reason,
-            created_at: rawAlert.created_at,
-          }
-        : null;
-      const prof = r.attended_by ? profiles.get(r.attended_by) : undefined;
-      const surgeonId = team?.main_surgeon_id ?? null;
-      const clinical_status: ClinicalStatus = alert?.status ?? rawPatient?.current_status ?? 'GREEN';
-      const alert_level: AttendanceAlertLevel | null =
-        alert?.status === 'RED' || alert?.status === 'YELLOW' ? alert.status : null;
-      return {
-        ...rest,
-        patient,
-        team,
-        alert,
-        vital_record,
-        professional_name: prof?.name ?? null,
-        professional_role: prof?.role ?? null,
-        surgeon_name: surgeonId ? profiles.get(surgeonId)?.name ?? null : null,
-        origin: r.alert_id ? 'ALERT' : 'MANUAL_REVIEW',
-        related_vital_sign: alert?.type ?? null,
-        clinical_status,
-        alert_level,
-      };
-    });
+  /**
+   * Atendimentos FINALIZADOS (Atendido/Ignorado) de UM paciente numa janela de
+   * horas (padrão 48h), do mais recente para o mais antigo. Dá contexto de
+   * decisão no "Detalhes do Alerta" — mesma query/enriquecimento de
+   * `getMyAttendances`, só filtrada por paciente e período. RLS de
+   * `attendance_confirmations` já limita ao escopo do usuário.
+   */
+  async getRecentByPatient(patientId: string, hours = 48): Promise<AttendanceRow[]> {
+    const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+    const { data, error } = await supabase
+      .from('attendance_confirmations')
+      .select(ATTENDANCE_SELECT)
+      .eq('patient_id', patientId)
+      .in('status', ['ATTENDED', 'IGNORED'])
+      .gte('created_at', since)
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    return enrichAttendanceRows((data as unknown as RawRow[]) ?? []);
   },
 
   /** Resumo agregado para os cards do topo (a partir do conjunto carregado). */

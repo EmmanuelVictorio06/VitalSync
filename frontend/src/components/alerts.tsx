@@ -17,6 +17,7 @@ import {
   Droplets,
   Eye,
   FileText,
+  History,
   MessageCircle,
   Search,
   Send,
@@ -28,11 +29,18 @@ import {
   Wind,
   X,
 } from 'lucide-react';
-import { Period, calculateAge, formatCivilDate, whatsappLink } from '@vitalsync/shared';
+import { Period, whatsappLink } from '@vitalsync/shared';
 import type { AttendanceStatus, AttendanceConfirmation, NotificationLog } from '../services/types';
 import type { AlertRow, AlertSummary, TeamProfessional } from '../services/alertService';
 import { alertService } from '../services/alertService';
+import { attendanceService, type AttendanceRow } from '../services/attendanceService';
 import { storageService } from '../services/storageService';
+import { DSection, DGrid, MeasurementGrid, PatientInfoGrid } from './clinical/DetailBlocks';
+import {
+  clinicalRule as attClinicalRule,
+  fmtDateTime as attFmtDateTime,
+  triggerValue as attTriggerValue,
+} from './attendances/utils';
 import { Button, Field, Loading, StatusBadge, cn } from './ui';
 
 /* ============================ Helpers ============================ */
@@ -65,7 +73,6 @@ export function attendanceBadgeLabel(a: AlertRow): string | undefined {
 export const LOCK_TOOLTIP =
   'Somente o profissional que colocou este alerta em análise pode atendê-lo ou ignorá-lo. O Cirurgião Principal da equipe pode usar "Liberar" para devolvê-lo à fila.';
 
-const fmtDate = (v: string | null | undefined) => (v ? formatCivilDate(v) : '—');
 const fmtDateTime = (v: string | null | undefined) => (v ? new Date(v).toLocaleString('pt-BR') : '—');
 
 /** Valor que disparou o alerta (a partir do registro de sinais). */
@@ -499,6 +506,7 @@ export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, 
   const [logs, setLogs] = useState<NotificationLog[] | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [drainPhotoUrl, setDrainPhotoUrl] = useState<string | null>(null);
+  const [recentAttendances, setRecentAttendances] = useState<AttendanceRow[] | null>(null);
   const [busyResend, setBusyResend] = useState(false);
   const r = alert.vital_record;
   const resolved = alert.attendance_status === 'ATTENDED' || alert.attendance_status === 'IGNORED';
@@ -515,8 +523,16 @@ export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, 
     if (r?.drain_photo_path) {
       storageService.getPatientPhotoUrl(r.drain_photo_path).then((u) => active && setDrainPhotoUrl(u)).catch(() => {});
     }
+    if (alert.patient?.id) {
+      attendanceService
+        .getRecentByPatient(alert.patient.id)
+        .then((rows) => active && setRecentAttendances(rows))
+        .catch(() => active && setRecentAttendances([]));
+    } else {
+      setRecentAttendances([]);
+    }
     return () => { active = false; };
-  }, [alert.id, r?.wound_photo_path, r?.drain_photo_path]);
+  }, [alert.id, alert.patient?.id, r?.wound_photo_path, r?.drain_photo_path]);
 
   async function copySummary() {
     await navigator.clipboard.writeText(alertSummaryText(alert));
@@ -554,65 +570,8 @@ export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, 
         </header>
 
         <div className="p-5 space-y-5">
-          {/* 1. Paciente */}
-          <DSection title="Informações do paciente" icon={Users}>
-            <DGrid items={[
-              ['Nome', alert.patient?.name ?? '—'],
-              ['Idade', alert.patient?.birth_date ? `${calculateAge(new Date(alert.patient.birth_date))} anos` : '—'],
-              ['Telefone', alert.patient?.phone ?? '—'],
-              ['Tipo de cirurgia', alert.patient?.surgery_type?.name ?? '—'],
-              ['Data da cirurgia', fmtDate(alert.patient?.surgery_date)],
-              ['Data da alta', fmtDate(alert.patient?.hospital_discharge_date)],
-              ['Dia de monitoramento', r?.monitoring_day ? `D+${r.monitoring_day}` : '—'],
-              ['Equipe', teamLabel(alert.team?.team_number)],
-              ['Cirurgião responsável', alert.surgeon_name ?? '—'],
-            ]} />
-          </DSection>
-
-          {/* 2. Medição */}
-          <DSection title="Informações da medição" icon={Activity}>
-            <DGrid items={[
-              ['Data', fmtDate(r?.record_date)],
-              ['Período', r?.period ? (r.period === Period.MORNING ? 'Manhã' : 'Noite') : '—'],
-              ['Temperatura', r?.temperature != null ? `${r.temperature} °C` : '—'],
-              ['Saturação', r?.oxygen_saturation != null ? `${r.oxygen_saturation}%` : '—'],
-              ['Pressão arterial', r?.systolic_pressure != null ? `${r.systolic_pressure}/${r.diastolic_pressure ?? '—'} mmHg` : '—'],
-              ['Frequência cardíaca', r?.heart_rate != null ? `${r.heart_rate} bpm` : '—'],
-              ['Dor', r?.pain_level != null ? `${r.pain_level}/10` : '—'],
-              ['Dispneia', r?.dyspnea_level != null ? `${r.dyspnea_level}/10` : '—'],
-              ['Diurese', r?.urination_count != null ? `${r.urination_count}×` : '—'],
-              ['Vômitos', r?.vomiting_count != null ? `${r.vomiting_count}×` : '—'],
-              ['Sangramento', r?.has_bleeding ? 'Sim' : 'Não'],
-              ['Passos', r?.steps != null ? String(r.steps) : '—'],
-            ]} />
-            {r && (
-              <p className="mt-3 text-xs">
-                <span className="font-bold">Possui dreno:</span>{' '}
-                <span className={r.has_drain ? 'text-primary font-semibold' : 'text-muted-foreground'}>
-                  {r.has_drain ? 'Sim' : 'Não'}
-                </span>
-              </p>
-            )}
-            {(photoUrl || drainPhotoUrl) && (
-              <div className="mt-3 grid grid-cols-2 gap-3">
-                {photoUrl && (
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Cicatriz operatória</p>
-                    <img src={photoUrl} alt="Foto da cicatriz operatória" className="rounded-lg border border-border max-h-56 w-full object-cover" />
-                  </div>
-                )}
-                {drainPhotoUrl && (
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Dreno</p>
-                    <img src={drainPhotoUrl} alt="Foto do dreno" className="rounded-lg border border-border max-h-56 w-full object-cover" />
-                  </div>
-                )}
-              </div>
-            )}
-          </DSection>
-
-          {/* 3. Alerta */}
-          <DSection title="Informações do alerta" icon={TypeIcon}>
+          {/* 1. Alerta em destaque — o que precisa de decisão agora */}
+          <DSection title="Alerta em destaque" icon={TypeIcon}>
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               <StatusBadge status={alert.status} />
               <AttendanceStatusBadge status={alert.attendance_status} label={attendanceBadgeLabel(alert)} />
@@ -637,12 +596,40 @@ export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, 
             )}
           </DSection>
 
-          {/* 4. Timeline */}
+          {/* 2. Prontuário do paciente */}
+          <DSection title="Prontuário do paciente" icon={Users}>
+            <PatientInfoGrid
+              patient={alert.patient}
+              teamNumber={alert.team?.team_number}
+              surgeonName={alert.surgeon_name}
+              monitoringDay={r?.monitoring_day}
+            />
+            <div className="mt-3 bg-muted rounded-lg p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                Resumo do prontuário
+              </p>
+              <p className="text-sm whitespace-pre-line">
+                {alert.patient?.medical_record_summary?.trim() || 'Nenhum resumo de prontuário registrado no cadastro.'}
+              </p>
+            </div>
+          </DSection>
+
+          {/* 3. Medição atual */}
+          <DSection title="Medição atual" icon={Activity}>
+            <MeasurementGrid record={r} photoUrl={photoUrl} drainPhotoUrl={drainPhotoUrl} />
+          </DSection>
+
+          {/* 4. Atendimentos das últimas 48h */}
+          <DSection title="Atendimentos (últimas 48h)" icon={History}>
+            <RecentAttendancesList rows={recentAttendances} />
+          </DSection>
+
+          {/* 5. Timeline */}
           <DSection title="Histórico de ações" icon={Clock}>
             <AlertTimeline alert={alert} timeline={timeline} logs={logs} />
           </DSection>
 
-          {/* 5. Logs WhatsApp */}
+          {/* 6. Logs WhatsApp */}
           <DSection title="Logs de WhatsApp" icon={MessageCircle}>
             <AlertNotificationLogs logs={logs} />
           </DSection>
@@ -703,30 +690,6 @@ export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, 
   );
 }
 
-function DSection({ title, icon: Icon, children }: { title: string; icon: typeof Bell; children: React.ReactNode }) {
-  return (
-    <section className="bg-card border border-border rounded-xl p-4 shadow-sm">
-      <h3 className="flex items-center gap-2 text-sm font-bold mb-3">
-        <Icon className="size-4 text-primary" /> {title}
-      </h3>
-      {children}
-    </section>
-  );
-}
-
-function DGrid({ items }: { items: Array<[string, string]> }) {
-  return (
-    <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-      {items.map(([k, v]) => (
-        <div key={k} className="min-w-0">
-          <dt className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">{k}</dt>
-          <dd className="font-semibold mt-0.5 truncate">{v}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
-
 /* ============================ Timeline ============================ */
 
 export function AlertTimeline({ alert, timeline, logs }: {
@@ -768,6 +731,37 @@ export function AlertTimeline({ alert, timeline, logs }: {
         </li>
       ))}
     </ol>
+  );
+}
+
+/* ============================ Atendimentos (48h) ============================ */
+
+/** Histórico de atendimentos finalizados do paciente nas últimas 48h (contexto de decisão). */
+function RecentAttendancesList({ rows }: { rows: AttendanceRow[] | null }) {
+  if (rows === null) return <Loading label="Carregando atendimentos…" />;
+  if (rows.length === 0) {
+    return <p className="text-xs text-muted-foreground">Sem atendimentos nas últimas 48 horas.</p>;
+  }
+  return (
+    <ul className="space-y-2.5">
+      {rows.map((row) => (
+        <li key={row.id} className="border border-border rounded-lg p-3 text-xs">
+          <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+            <span className="font-semibold">{row.professional_name ?? '—'}</span>
+            <div className="flex items-center gap-1.5">
+              {row.alert_level && <StatusBadge status={row.alert_level} />}
+              <span className="text-muted-foreground">{attFmtDateTime(row.created_at)}</span>
+            </div>
+          </div>
+          {row.related_vital_sign && (
+            <p className="text-muted-foreground">
+              {row.related_vital_sign} · {attTriggerValue(row)} · {attClinicalRule(row)}
+            </p>
+          )}
+          <p className="mt-1">{row.observation?.trim() || 'Sem observação registrada.'}</p>
+        </li>
+      ))}
+    </ul>
   );
 }
 

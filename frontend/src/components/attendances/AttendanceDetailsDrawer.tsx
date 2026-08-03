@@ -15,16 +15,17 @@ import {
   Wind,
   X,
 } from 'lucide-react';
-import { calculateAge, Period, whatsappLink } from '@vitalsync/shared';
+import { Period, whatsappLink } from '@vitalsync/shared';
 import type { AttendanceConfirmation } from '../../services/types';
 import type { AttendanceRow } from '../../services/attendanceService';
 import { attendanceService } from '../../services/attendanceService';
 import { storageService } from '../../services/storageService';
+import { DSection, DGrid, MeasurementGrid, PatientInfoGrid } from '../clinical/DetailBlocks';
 import { Button, cn, Loading } from '../ui';
 import { AttendanceClinicalBadge } from './AttendanceClinicalBadge';
 import { AttendanceOriginBadge } from './AttendanceOriginBadge';
 import { AttendanceStatusBadge } from './AttendanceStatusBadge';
-import { clinicalRule, fmtDate, fmtDateTime, teamLabel, triggerValue } from './utils';
+import { clinicalRule, fmtDateTime, teamLabel, triggerValue } from './utils';
 
 const SIGNAL_ICON: Record<string, typeof Stethoscope> = {
   Temperatura: Thermometer,
@@ -95,18 +96,11 @@ export function AttendanceDetailsDrawer({
         <div className="p-5 space-y-5">
           {/* 1. Paciente */}
           <DSection title="Dados do paciente" icon={Users}>
-            <DGrid
-              items={[
-                ['Nome', row.patient?.name ?? '—'],
-                ['Idade', row.patient?.birth_date ? `${calculateAge(new Date(row.patient.birth_date))} anos` : '—'],
-                ['Telefone', row.patient?.phone ?? '—'],
-                ['Equipe', teamLabel(row.team?.team_number)],
-                ['Tipo de cirurgia', row.patient?.surgery_type?.name ?? '—'],
-                ['Hospital', row.patient?.hospital?.name ?? '—'],
-                ['Data da cirurgia', fmtDate(row.patient?.surgery_date)],
-                ['Data da alta', fmtDate(row.patient?.hospital_discharge_date)],
-                ['Dia de monitoramento', r?.monitoring_day ? `D+${r.monitoring_day}` : '—'],
-              ]}
+            <PatientInfoGrid
+              patient={row.patient}
+              teamNumber={row.team?.team_number}
+              surgeonName={row.surgeon_name}
+              monitoringDay={r?.monitoring_day}
             />
           </DSection>
 
@@ -161,54 +155,7 @@ export function AttendanceDetailsDrawer({
           {/* 4. Medição completa */}
           {r && (
             <DSection title="Registro da medição" icon={Activity}>
-              <DGrid
-                items={[
-                  ['Data', fmtDate(r.record_date)],
-                  ['Período', r.period ? (r.period === Period.MORNING ? 'Manhã' : 'Noite') : '—'],
-                  ['Temperatura', r.temperature != null ? `${r.temperature} °C` : '—'],
-                  ['Saturação', r.oxygen_saturation != null ? `${r.oxygen_saturation}%` : '—'],
-                  ['Pressão arterial', r.systolic_pressure != null ? `${r.systolic_pressure}/${r.diastolic_pressure ?? '—'} mmHg` : '—'],
-                  ['Frequência cardíaca', r.heart_rate != null ? `${r.heart_rate} bpm` : '—'],
-                  ['Dor', r.pain_level != null ? `${r.pain_level}/10` : '—'],
-                  ['Dispneia', r.dyspnea_level != null ? `${r.dyspnea_level}/10` : '—'],
-                  ['Diurese', r.urination_count != null ? `${r.urination_count}×` : '—'],
-                  ['Vômitos', r.vomiting_count != null ? `${r.vomiting_count}×` : '—'],
-                  ['Sangramento', r.has_bleeding ? 'Sim' : 'Não'],
-                  ['Passos', r.steps != null ? String(r.steps) : '—'],
-                ]}
-              />
-              {(photoUrl || drainPhotoUrl) && (
-                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {photoUrl && (
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
-                        Cicatriz operatória
-                      </p>
-                      <button type="button" onClick={() => setZoom(photoUrl)} className="block w-full">
-                        <img
-                          src={photoUrl}
-                          alt="Foto da cicatriz operatória"
-                          className="rounded-lg border border-border max-h-56 w-full object-cover"
-                        />
-                      </button>
-                    </div>
-                  )}
-                  {drainPhotoUrl && (
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
-                        Dreno
-                      </p>
-                      <button type="button" onClick={() => setZoom(drainPhotoUrl)} className="block w-full">
-                        <img
-                          src={drainPhotoUrl}
-                          alt="Foto do dreno"
-                          className="rounded-lg border border-border max-h-56 w-full object-cover"
-                        />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
+              <MeasurementGrid record={r} photoUrl={photoUrl} drainPhotoUrl={drainPhotoUrl} onPhotoClick={setZoom} />
             </DSection>
           )}
 
@@ -327,26 +274,3 @@ function roleLabel(role: AttendanceRow['professional_role']): string {
   }
 }
 
-function DSection({ title, icon: Icon, children }: { title: string; icon: typeof Stethoscope; children: React.ReactNode }) {
-  return (
-    <section className="bg-card border border-border rounded-xl p-4 shadow-sm">
-      <h3 className="flex items-center gap-2 text-sm font-bold mb-3">
-        <Icon className="size-4 text-primary" /> {title}
-      </h3>
-      {children}
-    </section>
-  );
-}
-
-function DGrid({ items }: { items: Array<[string, string]> }) {
-  return (
-    <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-      {items.map(([k, v]) => (
-        <div key={k} className="min-w-0">
-          <dt className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">{k}</dt>
-          <dd className="font-semibold mt-0.5 break-words">{v}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
