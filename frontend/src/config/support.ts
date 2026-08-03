@@ -1,0 +1,19 @@
+/**
+ * Contato de suporte técnico exibido nas telas públicas do paciente (link do
+ * WhatsApp), para o caso de problema técnico ao registrar a medição — não é
+ * canal clínico.
+ *
+ * TODO: o e-mail/telefone reais ainda não foram informados pelo dono do
+ * produto. Os valores abaixo são placeholders (só aparecem se as env vars
+ * não forem definidas) — substitua via VITE_SUPPORT_CONTACT_EMAIL /
+ * VITE_SUPPORT_CONTACT_PHONE antes de liberar para pacientes reais.
+ */
+const email = String(import.meta.env.VITE_SUPPORT_CONTACT_EMAIL ?? '').trim();
+const phone = String(import.meta.env.VITE_SUPPORT_CONTACT_PHONE ?? '').trim();
+
+export const supportContact = {
+  email: email || 'suporte@vitalsync.example.com',
+  phone: phone || '(41) 00000-0000',
+  /** true quando os valores acima ainda são o placeholder (não configurados). */
+  isPlaceholder: !email && !phone,
+} as const;

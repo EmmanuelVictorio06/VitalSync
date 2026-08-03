@@ -4,4 +4,5 @@
  */
 export { PatientMeasurementWizard } from './PatientMeasurementWizard';
 export { MeasurementSuccess } from './MeasurementSuccess';
+export { SupportFooter } from './SupportFooter';
 export { GRADIENT_BG, periodLabel, type MeasurementPatient } from './types';

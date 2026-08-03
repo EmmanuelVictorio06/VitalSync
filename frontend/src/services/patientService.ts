@@ -22,6 +22,8 @@ export interface NewPatientInput {
   team_id: string;
   /** Paciente fictício da homologação médica. */
   is_test?: boolean;
+  /** Resumo de prontuário (texto livre, opcional). */
+  medical_record_summary?: string;
 }
 
 /** Filtro de procedência: reais, de teste ou ambos. */
@@ -30,8 +32,8 @@ export type PatientKind = 'all' | 'real' | 'test';
 // Colunas seguras para o painel — NUNCA traz cpf_hash/cpf_encrypted.
 const PATIENT_COLUMNS =
   'id, name, birth_date, phone, surgery_type_id, surgery_date, hospital_discharge_date, ' +
-  'hospital_id, team_id, secure_token, status, current_status, is_test, created_at, ' +
-  'deleted_at, surgery_type:surgery_types(name), hospital:hospitals(name), ' +
+  'hospital_id, team_id, secure_token, status, current_status, is_test, medical_record_summary, ' +
+  'created_at, deleted_at, surgery_type:surgery_types(name), hospital:hospitals(name), ' +
   'medical_team:medical_teams(team_number)';
 
 export const patientService = {

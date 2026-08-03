@@ -16,6 +16,7 @@ import {
   ALERT_THRESHOLDS,
   BINARY_RULES,
   STEPS_RULES,
+  WATER_INTAKE_RULE,
   type RangeRule,
   type VitalThreshold,
 } from './thresholds.js';
@@ -73,7 +74,11 @@ export function evaluateVitalSigns(
 
   byVital[VitalKind.TEMPERATURE] = evaluateRange(input.temperature, ALERT_THRESHOLDS.temperature);
   byVital[VitalKind.SPO2] = evaluateRange(input.spo2, ALERT_THRESHOLDS.spo2);
-  byVital[VitalKind.BLOOD_PRESSURE] = evaluateRange(input.systolic, ALERT_THRESHOLDS.bloodPressure);
+  // PA: sistólica e diastólica avaliadas separadamente; vale o pior status entre as duas.
+  byVital[VitalKind.BLOOD_PRESSURE] = worstStatus([
+    evaluateRange(input.systolic, ALERT_THRESHOLDS.bloodPressureSystolic),
+    evaluateRange(input.diastolic, ALERT_THRESHOLDS.bloodPressureDiastolic),
+  ]);
   byVital[VitalKind.HEART_RATE] = evaluateRange(input.heartRate, ALERT_THRESHOLDS.heartRate);
   byVital[VitalKind.PAIN] = evaluateRange(input.pain, ALERT_THRESHOLDS.pain);
   byVital[VitalKind.DYSPNEA] = evaluateRange(input.dyspnea, ALERT_THRESHOLDS.dyspnea);
@@ -82,17 +87,19 @@ export function evaluateVitalSigns(
   byVital[VitalKind.BLEEDING] = input.hadBleeding
     ? BINARY_RULES.bleeding.yesStatus
     : BINARY_RULES.bleeding.noStatus;
+  if (input.waterIntakeOk != null) {
+    byVital[VitalKind.WATER_INTAKE] = input.waterIntakeOk
+      ? WATER_INTAKE_RULE.okStatus
+      : WATER_INTAKE_RULE.notOkStatus;
+  }
 
   if (input.stepsCount != null) {
     byVital[VitalKind.STEPS] = evaluateSteps(input.stepsCount, context.previousDaySteps);
   }
 
-  // PRESSÃO ARTERIAL fica FORA do disparo/`overall` enquanto os limiares não são
-  // confirmados clinicamente (M-06). Continua em `byVital` apenas como informação
-  // (gráficos), espelhando exatamente o eval_clinical_status do banco.
-  // -- PENDENTE VALIDAÇÃO MÉDICA (M-06)
-  const driving = (Object.entries(byVital) as Array<[VitalKind, ClinicalStatus]>)
-    .filter(([kind]) => kind !== VitalKind.BLOOD_PRESSURE);
+  // Pressão arterial agora entra normalmente no disparo/`overall` — confirmado
+  // pela equipe médica (ago/2026), substitui a exclusão anterior (M-06).
+  const driving = Object.entries(byVital) as Array<[VitalKind, ClinicalStatus]>;
 
   const triggers = driving
     .filter(([, status]) => status !== ClinicalStatus.GREEN)

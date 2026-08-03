@@ -10,6 +10,7 @@ import {
   MeasurementSuccess,
   PatientMeasurementWizard,
   periodLabel,
+  SupportFooter,
   type MeasurementPatient,
 } from '../components/patient-measurement';
 
@@ -136,8 +137,11 @@ export function VitalsRegisterPage() {
 function CenteredCard({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen grid place-items-center p-4 sm:p-6" style={GRADIENT_BG}>
-      <div className="bg-card border border-border rounded-3xl shadow-xl shadow-primary/5 p-8 w-full max-w-[480px] text-center animate-entry">
-        {children}
+      <div className="w-full max-w-[480px]">
+        <div className="bg-card border border-border rounded-3xl shadow-xl shadow-primary/5 p-8 text-center animate-entry">
+          {children}
+        </div>
+        <SupportFooter />
       </div>
     </div>
   );

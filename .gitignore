@@ -39,3 +39,6 @@ coverage/
 # Supabase CLI (estado local de link/branches)
 supabase/.temp
 supabase/.branches
+
+.vercel
+.env*

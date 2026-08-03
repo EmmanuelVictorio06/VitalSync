@@ -159,6 +159,7 @@ export const patientDashboardService = {
         attendedByName,
         daysSinceDischarge: days,
         monitoringDay: discharge ? monitoringDay(discharge) : null,
+        medicalRecordSummary: patient.medical_record_summary ?? null,
       },
       records,
       teamMembers,

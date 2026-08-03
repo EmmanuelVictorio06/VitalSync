@@ -63,24 +63,22 @@ export const INPUT_RANGES = {
     PENDING_MEDICAL_VALIDATION: false,
   } satisfies InputRange,
 
-  /** Sistólica: documento marca "*******" — PENDENTE. Faixa provisória ampla. */
+  /** Sistólica: faixa de entrada ampla; limiares de alerta confirmados (ver ALERT_THRESHOLDS). */
   systolic: {
     min: 50,
     max: 260,
     example: 'Ex. 120',
     unit: 'mmHg',
-    PENDING_MEDICAL_VALIDATION: true,
-    pendingNote: 'Faixa de entrada da pressão sistólica aguardando confirmação médica.',
+    PENDING_MEDICAL_VALIDATION: false,
   } satisfies InputRange,
 
-  /** Diastólica: documento marca "*******" — PENDENTE. Faixa provisória ampla. */
+  /** Diastólica: faixa de entrada ampla; limiares de alerta confirmados (ver ALERT_THRESHOLDS). */
   diastolic: {
     min: 30,
     max: 160,
     example: 'Ex. 80',
     unit: 'mmHg',
-    PENDING_MEDICAL_VALIDATION: true,
-    pendingNote: 'Faixa de entrada da pressão diastólica aguardando confirmação médica.',
+    PENDING_MEDICAL_VALIDATION: false,
   } satisfies InputRange,
 
   /** Frequência cardíaca: documento marca "*******" — PENDENTE. Faixa provisória. */
@@ -162,22 +160,40 @@ export const ALERT_THRESHOLDS = {
   } satisfies VitalThreshold,
 
   /**
-   * PRESSÃO ARTERIAL — avaliada pela SISTÓLICA (mmHg):
-   *  Verde   < 110,9
-   *  Amarelo > 110,9 e < 119,9
-   *  Vermelho > 119,9
-   *  ⚠️ "*Letícia irá confirmar os valores." — PENDENTE.
+   * PRESSÃO ARTERIAL — sistólica e diastólica avaliadas SEPARADAMENTE (mmHg);
+   * o status da PA é o PIOR entre as duas (ver `worstStatus` em status.ts).
+   * Confirmado pela equipe médica (ago/2026) — substitui a antiga faixa
+   * sistólica-única provisória.
+   *
+   * Sistólica: RED ≤89 · YELLOW 90–99 · GREEN 100–129 · YELLOW 130–139 · RED ≥140
    */
-  bloodPressure: {
-    label: 'Pressão arterial (sistólica)',
+  bloodPressureSystolic: {
+    label: 'Pressão sistólica',
     axis: { min: 40, max: 200, step: 20 },
     rules: [
-      { status: ClinicalStatus.GREEN, max: 110.9 },
-      { status: ClinicalStatus.YELLOW, min: 110.91, max: 119.9 },
-      { status: ClinicalStatus.RED, min: 119.91 },
+      { status: ClinicalStatus.RED, max: 89 },
+      { status: ClinicalStatus.YELLOW, min: 90, max: 99 },
+      { status: ClinicalStatus.GREEN, min: 100, max: 129 },
+      { status: ClinicalStatus.YELLOW, min: 130, max: 139 },
+      { status: ClinicalStatus.RED, min: 140 },
     ],
-    PENDING_MEDICAL_VALIDATION: true,
-    pendingNote: 'Limiares de alerta da pressão arterial aguardando confirmação médica (Letícia).',
+    PENDING_MEDICAL_VALIDATION: false,
+  } satisfies VitalThreshold,
+
+  /**
+   * Diastólica: RED ≤49 · YELLOW 50–59 · GREEN 60–89 · YELLOW 90–99 · RED ≥100
+   */
+  bloodPressureDiastolic: {
+    label: 'Pressão diastólica',
+    axis: { min: 20, max: 140, step: 20 },
+    rules: [
+      { status: ClinicalStatus.RED, max: 49 },
+      { status: ClinicalStatus.YELLOW, min: 50, max: 59 },
+      { status: ClinicalStatus.GREEN, min: 60, max: 89 },
+      { status: ClinicalStatus.YELLOW, min: 90, max: 99 },
+      { status: ClinicalStatus.RED, min: 100 },
+    ],
+    PENDING_MEDICAL_VALIDATION: false,
   } satisfies VitalThreshold,
 
   /**
@@ -232,18 +248,18 @@ export const ALERT_THRESHOLDS = {
   } satisfies VitalThreshold,
 
   /**
-   * DISPNEIA (0–10):
-   *  Verde   0
-   *  Amarelo 1 – 5
-   *  Vermelho > 5 (6–10)
+   * DISPNEIA — 3 níveis (substitui a antiga escala 0–10; confirmado ago/2026):
+   *  0 = Sem dispneia    → Verde
+   *  1 = Dispneia leve   → Amarelo
+   *  2 = Dispneia moderada ou intensa → Vermelho
    */
   dyspnea: {
     label: 'Dispneia',
-    axis: { min: 0, max: 10, step: 1 },
+    axis: { min: 0, max: 2, step: 1 },
     rules: [
       { status: ClinicalStatus.GREEN, min: 0, max: 0 },
-      { status: ClinicalStatus.YELLOW, min: 1, max: 5 },
-      { status: ClinicalStatus.RED, min: 6 },
+      { status: ClinicalStatus.YELLOW, min: 1, max: 1 },
+      { status: ClinicalStatus.RED, min: 2 },
     ],
     PENDING_MEDICAL_VALIDATION: false,
   } satisfies VitalThreshold,
@@ -273,6 +289,15 @@ export const BINARY_RULES = {
 } as const;
 
 /**
+ * INGESTÃO HÍDRICA — binário, mas amarelo (não vermelho) quando "não":
+ *  Consegue tomar líquidos normalmente? Sim = Verde / Não = Amarelo.
+ */
+export const WATER_INTAKE_RULE = {
+  okStatus: ClinicalStatus.GREEN,
+  notOkStatus: ClinicalStatus.YELLOW,
+} as const;
+
+/**
  * Lista consolidada de pendências clínicas — consumida pela documentação e por
  * um endpoint/healthcheck para tornar visível o que falta confirmar.
  */
@@ -283,7 +308,8 @@ export function listPendingMedicalValidations(): string[] {
       pending.push(`Entrada [${key}]: ${range.pendingNote ?? 'pendente'}`);
     }
   }
-  for (const [key, t] of Object.entries(ALERT_THRESHOLDS)) {
+  for (const [key, tRaw] of Object.entries(ALERT_THRESHOLDS)) {
+    const t = tRaw as VitalThreshold;
     if (t.PENDING_MEDICAL_VALIDATION) {
       pending.push(`Alerta [${key}]: ${t.pendingNote ?? 'pendente'}`);
     }

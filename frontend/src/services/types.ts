@@ -131,6 +131,8 @@ export interface Patient {
   current_status: ClinicalStatus;
   /** Paciente fictício cadastrado durante a homologação médica. */
   is_test: boolean;
+  /** Resumo de prontuário (texto livre, opcional) — histórico clínico relevante ao acompanhamento. */
+  medical_record_summary?: string | null;
   created_at: string;
   /** Exclusão lógica: nulo = ativo; preenchido = arquivado (some das telas). */
   deleted_at: string | null;

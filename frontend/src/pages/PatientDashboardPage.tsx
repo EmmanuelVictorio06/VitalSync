@@ -20,10 +20,12 @@ import {
   evaluateRange,
   formatCivilDate,
   whatsappLink,
+  worstStatus,
   type VitalThreshold,
 } from '@vitalsync/shared';
 import { useAuth } from '../auth/AuthContext';
 import { PatientEditModal } from '../components/PatientEditModal';
+import { PatientFollowupSection } from '../components/PatientFollowupSection';
 import { useToast } from '../components/Toast';
 import {
   BloodPressureChart,
@@ -118,7 +120,11 @@ export function PatientDashboardPage() {
     if (recs.length === 0) return { day, systolic: null, diastolic: null };
     const sys = round(recs.reduce((s, r) => s + r.systolic, 0) / recs.length);
     const dia = round(recs.reduce((s, r) => s + r.diastolic, 0) / recs.length);
-    return { day, systolic: sys, diastolic: dia, status: evaluateRange(sys, ALERT_THRESHOLDS.bloodPressure) };
+    const status = worstStatus([
+      evaluateRange(sys, ALERT_THRESHOLDS.bloodPressureSystolic),
+      evaluateRange(dia, ALERT_THRESHOLDS.bloodPressureDiastolic),
+    ]);
+    return { day, systolic: sys, diastolic: dia, status };
   });
 
   // Passos: sempre do registro da noite (não fazem média com a manhã).
@@ -202,6 +208,14 @@ export function PatientDashboardPage() {
               <SummaryItem label="Dia de monitoramento" value={p.monitoringDay ? `D+${p.monitoringDay}` : 'Fora da janela'} mono />
               <SummaryItem label="Dias pós-alta" value={String(p.daysSinceDischarge)} mono />
             </dl>
+            {p.medicalRecordSummary && (
+              <div className="mt-4 rounded-lg bg-muted/40 border border-border px-3.5 py-2.5">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                  Resumo de prontuário
+                </span>
+                <p className="text-sm text-foreground whitespace-pre-wrap">{p.medicalRecordSummary}</p>
+              </div>
+            )}
           </div>
           <div className="flex flex-col gap-2 lg:items-end lg:min-w-64">
             {canEditPatient && (
@@ -276,7 +290,7 @@ export function PatientDashboardPage() {
           <section className="grid md:grid-cols-2 xl:grid-cols-3 gap-4 animate-entry [animation-delay:100ms]">
             <VitalLineChart title="Temperatura" unit="°C" icon={Thermometer} data={tempSeries} domain={[35, 42]} status={worstOf(tempSeries)} />
             <VitalLineChart title="Saturação O₂" unit="%" icon={Wind} data={spo2Series} domain={[91, 100]} status={worstOf(spo2Series)} />
-            <BloodPressureChart icon={Gauge} data={bpSeries} status={worstOfBp(bpSeries)} pending={ALERT_THRESHOLDS.bloodPressure.PENDING_MEDICAL_VALIDATION} />
+            <BloodPressureChart icon={Gauge} data={bpSeries} status={worstOfBp(bpSeries)} pending={ALERT_THRESHOLDS.bloodPressureSystolic.PENDING_MEDICAL_VALIDATION} />
             <VitalLineChart title="Frequência Cardíaca" unit="bpm" icon={HeartPulse} data={hrSeries} domain={[60, 130]} status={worstOf(hrSeries)} />
             <StepsBarChart icon={Footprints} data={stepsSeries} status={worstOf(stepsSeries)} />
           </section>
@@ -317,6 +331,9 @@ export function PatientDashboardPage() {
           <PatientMeasurementPhotoSection records={periodRecords} />
         </>
       )}
+
+      {/* Atendimento a cada 48h — independe de haver medições registradas */}
+      {id && <PatientFollowupSection patientId={id} />}
 
       {editing && id && (
         <PatientEditModal

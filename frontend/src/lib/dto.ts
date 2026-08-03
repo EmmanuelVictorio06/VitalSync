@@ -115,6 +115,8 @@ export interface PatientDashboard {
     attendedByName: string | null;
     daysSinceDischarge: number;
     monitoringDay: number | null;
+    /** Resumo de prontuário (texto livre, opcional). */
+    medicalRecordSummary: string | null;
   };
   records: VitalRecord[];
   teamMembers: SelectItem[];

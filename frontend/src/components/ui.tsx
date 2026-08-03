@@ -8,6 +8,7 @@ import {
   type ReactNode,
   type SelectHTMLAttributes,
   type InputHTMLAttributes,
+  type TextareaHTMLAttributes,
 } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Search } from 'lucide-react';
@@ -172,6 +173,20 @@ export function TextInput({ label, hint, error, required, className, ...rest }: 
   return (
     <Field label={label} hint={hint} error={error} required={required}>
       <input className={cn('input', error && 'invalid', className)} {...rest} />
+    </Field>
+  );
+}
+
+/* ---------------- Textarea ---------------- */
+interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
+  label: string;
+  hint?: string;
+  error?: string;
+}
+export function TextareaField({ label, hint, error, required, className, ...rest }: TextareaProps) {
+  return (
+    <Field label={label} hint={hint} error={error} required={required}>
+      <textarea className={cn('input', error && 'invalid', className)} {...rest} />
     </Field>
   );
 }

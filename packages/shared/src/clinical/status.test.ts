@@ -88,24 +88,32 @@ describe('evaluateRange — dor (0-10)', () => {
   });
 });
 
-describe('evaluateRange — dispneia (0-10)', () => {
-  it('0 é GREEN', () => expect(evaluateRange(0, ALERT_THRESHOLDS.dyspnea)).toBe(ClinicalStatus.GREEN));
-  it('1-5 é YELLOW', () => {
-    expect(evaluateRange(1, ALERT_THRESHOLDS.dyspnea)).toBe(ClinicalStatus.YELLOW);
-    expect(evaluateRange(3, ALERT_THRESHOLDS.dyspnea)).toBe(ClinicalStatus.YELLOW);
-    expect(evaluateRange(5, ALERT_THRESHOLDS.dyspnea)).toBe(ClinicalStatus.YELLOW);
-  });
-  it('6-10 é RED', () => {
-    expect(evaluateRange(6, ALERT_THRESHOLDS.dyspnea)).toBe(ClinicalStatus.RED);
-    expect(evaluateRange(7, ALERT_THRESHOLDS.dyspnea)).toBe(ClinicalStatus.RED);
-  });
+describe('evaluateRange — dispneia (3 níveis)', () => {
+  it('0 (sem dispneia) é GREEN', () => expect(evaluateRange(0, ALERT_THRESHOLDS.dyspnea)).toBe(ClinicalStatus.GREEN));
+  it('1 (leve) é YELLOW', () => expect(evaluateRange(1, ALERT_THRESHOLDS.dyspnea)).toBe(ClinicalStatus.YELLOW));
+  it('2 (moderada/intensa) é RED', () => expect(evaluateRange(2, ALERT_THRESHOLDS.dyspnea)).toBe(ClinicalStatus.RED));
 });
 
-describe('evaluateRange — pressão arterial sistólica (limiares PENDENTES — M-06)', () => {
-  it('< 110,9 é GREEN', () => expect(evaluateRange(110, ALERT_THRESHOLDS.bloodPressure)).toBe(ClinicalStatus.GREEN));
-  it('110,91-119,9 é YELLOW', () =>
-    expect(evaluateRange(115, ALERT_THRESHOLDS.bloodPressure)).toBe(ClinicalStatus.YELLOW));
-  it('> 119,9 é RED', () => expect(evaluateRange(130, ALERT_THRESHOLDS.bloodPressure)).toBe(ClinicalStatus.RED));
+describe('evaluateRange — pressão arterial sistólica (confirmado ago/2026)', () => {
+  it('≤89 é RED', () => expect(evaluateRange(89, ALERT_THRESHOLDS.bloodPressureSystolic)).toBe(ClinicalStatus.RED));
+  it('90-99 é YELLOW', () =>
+    expect(evaluateRange(95, ALERT_THRESHOLDS.bloodPressureSystolic)).toBe(ClinicalStatus.YELLOW));
+  it('100-129 é GREEN', () =>
+    expect(evaluateRange(120, ALERT_THRESHOLDS.bloodPressureSystolic)).toBe(ClinicalStatus.GREEN));
+  it('130-139 é YELLOW', () =>
+    expect(evaluateRange(135, ALERT_THRESHOLDS.bloodPressureSystolic)).toBe(ClinicalStatus.YELLOW));
+  it('≥140 é RED', () => expect(evaluateRange(145, ALERT_THRESHOLDS.bloodPressureSystolic)).toBe(ClinicalStatus.RED));
+});
+
+describe('evaluateRange — pressão arterial diastólica (confirmado ago/2026)', () => {
+  it('≤49 é RED', () => expect(evaluateRange(48, ALERT_THRESHOLDS.bloodPressureDiastolic)).toBe(ClinicalStatus.RED));
+  it('50-59 é YELLOW', () =>
+    expect(evaluateRange(55, ALERT_THRESHOLDS.bloodPressureDiastolic)).toBe(ClinicalStatus.YELLOW));
+  it('60-89 é GREEN', () =>
+    expect(evaluateRange(80, ALERT_THRESHOLDS.bloodPressureDiastolic)).toBe(ClinicalStatus.GREEN));
+  it('90-99 é YELLOW', () =>
+    expect(evaluateRange(92, ALERT_THRESHOLDS.bloodPressureDiastolic)).toBe(ClinicalStatus.YELLOW));
+  it('≥100 é RED', () => expect(evaluateRange(100, ALERT_THRESHOLDS.bloodPressureDiastolic)).toBe(ClinicalStatus.RED));
 });
 
 describe('evaluateDiuresis', () => {
@@ -150,13 +158,53 @@ describe('worstStatus', () => {
   it('lista vazia é GREEN', () => expect(worstStatus([])).toBe(ClinicalStatus.GREEN));
 });
 
-describe('evaluateVitalSigns — pressão arterial NUNCA decide o overall (M-06 pendente)', () => {
-  it('PA em faixa RED do threshold provisório não eleva o overall se o resto for GREEN', () => {
-    const result = evaluateVitalSigns({ ...baseInput, systolic: 130 });
+describe('evaluateVitalSigns — pressão arterial (sistólica+diastólica, pior status) decide o overall', () => {
+  it('120×80 é GREEN', () => {
+    const result = evaluateVitalSigns({ ...baseInput, systolic: 120, diastolic: 80 });
+    expect(result.byVital[VitalKind.BLOOD_PRESSURE]).toBe(ClinicalStatus.GREEN);
     expect(result.overall).toBe(ClinicalStatus.GREEN);
-    // BLOOD_PRESSURE aparece em byVital (para gráfico) mas não em `triggers`.
+  });
+  it('135×92 é YELLOW', () => {
+    const result = evaluateVitalSigns({ ...baseInput, systolic: 135, diastolic: 92 });
+    expect(result.byVital[VitalKind.BLOOD_PRESSURE]).toBe(ClinicalStatus.YELLOW);
+    expect(result.overall).toBe(ClinicalStatus.YELLOW);
+  });
+  it('145×85 é RED (sistólica crítica, mesmo com diastólica em faixa verde)', () => {
+    const result = evaluateVitalSigns({ ...baseInput, systolic: 145, diastolic: 85 });
     expect(result.byVital[VitalKind.BLOOD_PRESSURE]).toBe(ClinicalStatus.RED);
-    expect(result.triggers.some((t) => t.kind === VitalKind.BLOOD_PRESSURE)).toBe(false);
+    expect(result.overall).toBe(ClinicalStatus.RED);
+  });
+  it('95×55 é YELLOW', () => {
+    const result = evaluateVitalSigns({ ...baseInput, systolic: 95, diastolic: 55 });
+    expect(result.byVital[VitalKind.BLOOD_PRESSURE]).toBe(ClinicalStatus.YELLOW);
+    expect(result.overall).toBe(ClinicalStatus.YELLOW);
+  });
+  it('88×48 é RED', () => {
+    const result = evaluateVitalSigns({ ...baseInput, systolic: 88, diastolic: 48 });
+    expect(result.byVital[VitalKind.BLOOD_PRESSURE]).toBe(ClinicalStatus.RED);
+    expect(result.overall).toBe(ClinicalStatus.RED);
+  });
+  it('PA em RED entra em `triggers`', () => {
+    const result = evaluateVitalSigns({ ...baseInput, systolic: 145, diastolic: 85 });
+    expect(result.triggers.some((t) => t.kind === VitalKind.BLOOD_PRESSURE)).toBe(true);
+  });
+});
+
+describe('evaluateVitalSigns — ingestão hídrica', () => {
+  it('waterIntakeOk = false gera YELLOW e entra em triggers', () => {
+    const result = evaluateVitalSigns({ ...baseInput, waterIntakeOk: false });
+    expect(result.byVital[VitalKind.WATER_INTAKE]).toBe(ClinicalStatus.YELLOW);
+    expect(result.overall).toBe(ClinicalStatus.YELLOW);
+    expect(result.triggers.some((t) => t.kind === VitalKind.WATER_INTAKE)).toBe(true);
+  });
+  it('waterIntakeOk = true é GREEN', () => {
+    const result = evaluateVitalSigns({ ...baseInput, waterIntakeOk: true });
+    expect(result.byVital[VitalKind.WATER_INTAKE]).toBe(ClinicalStatus.GREEN);
+  });
+  it('waterIntakeOk ausente/null não aparece em byVital nem eleva o overall', () => {
+    const result = evaluateVitalSigns(baseInput);
+    expect(result.byVital[VitalKind.WATER_INTAKE]).toBeUndefined();
+    expect(result.overall).toBe(ClinicalStatus.GREEN);
   });
 });
 

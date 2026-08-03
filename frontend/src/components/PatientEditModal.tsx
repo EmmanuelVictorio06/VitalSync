@@ -20,7 +20,7 @@ import { Loader2 } from 'lucide-react';
 import { onlyDigits } from '@vitalsync/shared';
 import { useToast } from './Toast';
 import { PatientCpfField } from './PatientCpfField';
-import { Button, PhoneInput, SelectField, TextInput } from './ui';
+import { Button, PhoneInput, SelectField, TextareaField, TextInput } from './ui';
 import { validateCpf } from '../lib/cpfUtils';
 import { hospitalService } from '../services/hospitalService';
 import { patientService } from '../services/patientService';
@@ -38,11 +38,12 @@ interface FormState {
   dischargeDate: string;
   hospitalId: string;
   teamId: string;
+  medicalRecordSummary: string;
 }
 
 const emptyForm: FormState = {
   name: '', cpf: '', phone: '', birthDate: '', surgeryTypeId: '', surgeryDate: '',
-  dischargeDate: '', hospitalId: '', teamId: '',
+  dischargeDate: '', hospitalId: '', teamId: '', medicalRecordSummary: '',
 };
 
 export interface PatientEditModalProps {
@@ -86,6 +87,7 @@ export function PatientEditModal({ patientId, onClose, onSaved }: PatientEditMod
             dischargeDate: patient.hospital_discharge_date ?? '',
             hospitalId: patient.hospital_id ?? '',
             teamId: patient.team_id ?? '',
+            medicalRecordSummary: patient.medical_record_summary ?? '',
           });
         }
       })
@@ -135,6 +137,7 @@ export function PatientEditModal({ patientId, onClose, onSaved }: PatientEditMod
         hospital_discharge_date: form.dischargeDate || undefined,
         hospital_id: form.hospitalId,
         team_id: form.teamId,
+        medical_record_summary: form.medicalRecordSummary.trim(),
       });
       toast.success('Dados do paciente atualizados com sucesso.');
       onSaved();
@@ -258,6 +261,13 @@ export function PatientEditModal({ patientId, onClose, onSaved }: PatientEditMod
                   }))}
                 />
               </div>
+              <TextareaField
+                label="Resumo de prontuário"
+                hint="Breve histórico clínico relevante para o acompanhamento (opcional)."
+                rows={3}
+                value={form.medicalRecordSummary}
+                onChange={(e) => set('medicalRecordSummary', e.target.value)}
+              />
             </fieldset>
 
             <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-3 border-t border-border">

@@ -21,6 +21,7 @@ import { vitalSignsService } from '../../services/vitalSignsService';
 import { PatientMeasurementHeader } from './PatientMeasurementHeader';
 import { PatientSummaryCard } from './PatientSummaryCard';
 import { PatientMeasurementStepIndicator } from './PatientMeasurementStepIndicator';
+import { SupportFooter } from './SupportFooter';
 import { VitalSignsStep } from './VitalSignsStep';
 import { SymptomsStep } from './SymptomsStep';
 import { PhotosStep } from './PhotosStep';
@@ -63,8 +64,8 @@ export function PatientMeasurementWizard({ token, cpf, patient, period, onSucces
 
   function validateCurrent(): MeasurementErrors {
     if (step === 1) return validateVitals(form, INPUT_RANGES);
-    if (step === 2) return validateSymptoms(form);
-    if (step === 3) return validatePhotos(form);
+    if (step === 2) return validateSymptoms(form, isNight);
+    if (step === 3) return validatePhotos(form, isNight);
     return {};
   }
 
@@ -85,8 +86,9 @@ export function PatientMeasurementWizard({ token, cpf, patient, period, onSucces
     try {
       // Fotos sobem via Edge Function (revalida token + CPF; resolve a pasta
       // do paciente no servidor) e guardam só o caminho.
-      // A foto do dreno só é enviada quando o paciente informou possuir dreno.
-      const effectiveDrainPhoto = form.hasDrain ? form.drainPhoto : null;
+      // A foto do dreno só é enviada quando o paciente informou possuir dreno
+      // (só à noite). Na manhã, a foto da cicatriz é sempre opcional.
+      const effectiveDrainPhoto = isNight && form.hasDrain ? form.drainPhoto : null;
       let woundPhotoPath: string | undefined;
       if (form.woundPhoto)
         woundPhotoPath = await storageService.uploadPatientPhotoViaToken(form.woundPhoto, token, cpf, 'wound');
@@ -105,16 +107,22 @@ export function PatientMeasurementWizard({ token, cpf, patient, period, onSucces
         heart_rate: toNumber(form.heartRate),
         pain_level: form.pain ?? undefined,
         dyspnea_level: form.dyspnea ?? undefined,
-        // O booleano resolve a ambiguidade (M-01); a contagem segue opcional.
-        urinated_normally: form.urinatedNormally ?? undefined,
-        urination_count: form.urinatedNormally && form.urinationCount ? Number(form.urinationCount) : undefined,
+        water_intake_ok: form.waterIntakeOk ?? undefined,
+        // Diurese só é perguntada à noite; o booleano resolve a ambiguidade (M-01).
+        urinated_normally: isNight ? form.urinatedNormally ?? undefined : undefined,
+        urination_count:
+          isNight && form.urinatedNormally && form.urinationCount ? Number(form.urinationCount) : undefined,
         had_vomit: form.hadVomit ?? undefined,
         vomiting_count: form.hadVomit && form.vomitCount ? Number(form.vomitCount) : undefined,
         has_bleeding: form.hadBleeding ?? false,
         steps: isNight && form.steps ? Number(form.steps) : undefined,
         wound_photo_path: woundPhotoPath,
-        has_drain: form.hasDrain ?? false,
+        // Dreno/débito só existem na medição noturna.
+        has_drain: isNight ? form.hasDrain ?? false : false,
         drain_photo_path: drainPhotoPath,
+        drain_output_ml: isNight && form.hasDrain && form.drainOutputMl ? Number(form.drainOutputMl) : undefined,
+        // Manhã: sinaliza que o paciente notou algo diferente na cicatriz ao acordar.
+        noticed_wound_change: !isNight ? form.noticedWoundChange ?? undefined : undefined,
       });
       onSuccess(Boolean(woundPhotoPath || drainPhotoPath));
     } catch (err) {
@@ -134,38 +142,47 @@ export function PatientMeasurementWizard({ token, cpf, patient, period, onSucces
   const isReview = step === STEP_COUNT;
   return (
     <div className="min-h-screen grid place-items-center p-4 sm:p-6" style={GRADIENT_BG}>
-      <div className="bg-card border border-border rounded-3xl shadow-xl shadow-primary/5 p-6 sm:p-8 w-full max-w-[480px]">
-        <PatientMeasurementHeader name={patient.name} monitoringDay={patient.monitoringDay} period={period} />
+      <div className="w-full max-w-[480px]">
+        <div className="bg-card border border-border rounded-3xl shadow-xl shadow-primary/5 p-6 sm:p-8 w-full">
+          <PatientMeasurementHeader name={patient.name} monitoringDay={patient.monitoringDay} period={period} />
 
-        <div className="mt-5">
-          <PatientSummaryCard patient={patient} />
-        </div>
-
-        <div className="mt-6">
-          <PatientMeasurementStepIndicator current={step} />
-        </div>
-
-        <form className="mt-6" onSubmit={handleSubmit} noValidate>
-          <div key={step} className="animate-entry">
-            {step === 1 && <VitalSignsStep form={form} errors={errors} setField={setField} ranges={INPUT_RANGES} />}
-            {step === 2 && (
-              <SymptomsStep form={form} errors={errors} setField={setField} isNight={isNight} ranges={INPUT_RANGES} />
-            )}
-            {step === 3 && (
-              <PhotosStep form={form} errors={errors} setField={setField} onError={(msg) => toast.error(msg)} />
-            )}
-            {step === 4 && <ReviewStep form={form} period={period} />}
+          <div className="mt-5">
+            <PatientSummaryCard patient={patient} />
           </div>
 
-          {/* Navegação — sem "Voltar" na primeira etapa; principal em destaque */}
-          <WizardNavigationButtons
-            onBack={step > 1 ? goBack : undefined}
-            nextLabel={isReview ? 'Enviar medição' : 'Continuar'}
-            loadingLabel={isReview ? 'Enviando…' : 'Continuando…'}
-            isLoading={submitting}
-            nextIcon={isReview ? <Send className="size-4" /> : undefined}
-          />
-        </form>
+          <div className="mt-6">
+            <PatientMeasurementStepIndicator current={step} />
+          </div>
+
+          <form className="mt-6" onSubmit={handleSubmit} noValidate>
+            <div key={step} className="animate-entry">
+              {step === 1 && <VitalSignsStep form={form} errors={errors} setField={setField} ranges={INPUT_RANGES} />}
+              {step === 2 && (
+                <SymptomsStep form={form} errors={errors} setField={setField} isNight={isNight} ranges={INPUT_RANGES} />
+              )}
+              {step === 3 && (
+                <PhotosStep
+                  form={form}
+                  errors={errors}
+                  setField={setField}
+                  isNight={isNight}
+                  onError={(msg) => toast.error(msg)}
+                />
+              )}
+              {step === 4 && <ReviewStep form={form} period={period} />}
+            </div>
+
+            {/* Navegação — sem "Voltar" na primeira etapa; principal em destaque */}
+            <WizardNavigationButtons
+              onBack={step > 1 ? goBack : undefined}
+              nextLabel={isReview ? 'Enviar medição' : 'Continuar'}
+              loadingLabel={isReview ? 'Enviando…' : 'Continuando…'}
+              isLoading={submitting}
+              nextIcon={isReview ? <Send className="size-4" /> : undefined}
+            />
+          </form>
+        </div>
+        <SupportFooter />
       </div>
     </div>
   );

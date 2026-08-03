@@ -52,22 +52,39 @@ export function validateVitals(f: MeasurementFormState, ranges: InputRanges): Me
   return e;
 }
 
-/** Etapa 2 — Sintomas: dor, dispneia e as três perguntas Sim/Não. */
-export function validateSymptoms(f: MeasurementFormState): MeasurementErrors {
+/** Etapa 2 — Sintomas: dor, dispneia, hídrica e as perguntas Sim/Não. Diurese só à noite. */
+export function validateSymptoms(f: MeasurementFormState, isNight: boolean): MeasurementErrors {
   const e: MeasurementErrors = {};
   if (f.pain === null) e.pain = 'Selecione seu nível de dor.';
   if (f.dyspnea === null) e.dyspnea = 'Selecione seu nível de falta de ar.';
-  if (f.urinatedNormally === null) e.urinatedNormally = 'Selecione se você urinou normalmente.';
+  if (f.waterIntakeOk === null) e.waterIntakeOk = 'Informe se está conseguindo tomar líquidos normalmente.';
+  if (isNight && f.urinatedNormally === null) e.urinatedNormally = 'Selecione se você urinou normalmente.';
   if (f.hadVomit === null) e.hadVomit = 'Informe se teve episódios de vômito.';
   if (f.hadBleeding === null) e.hadBleeding = 'Informe se observou sangramento.';
   return e;
 }
 
-/** Etapa 3 — Fotos: pergunta do dreno + foto da cicatriz (+ foto do dreno se houver). */
-export function validatePhotos(f: MeasurementFormState): MeasurementErrors {
+/**
+ * Etapa 3 — Fotos.
+ *  Noite: pergunta do dreno + foto da cicatriz obrigatória (+ dreno/débito se houver).
+ *  Manhã: só pergunta se notou algo diferente na cicatriz; a foto é SEMPRE opcional.
+ */
+export function validatePhotos(f: MeasurementFormState, isNight: boolean): MeasurementErrors {
   const e: MeasurementErrors = {};
+  if (!isNight) {
+    if (f.noticedWoundChange === null) {
+      e.noticedWoundChange = 'Informe se notou algo diferente na cicatriz ao acordar.';
+    }
+    return e;
+  }
   if (f.hasDrain === null) e.hasDrain = 'Informe se você possui dreno.';
   if (!f.woundPhoto) e.woundPhoto = 'Envie a foto da cicatriz operatória.';
-  if (f.hasDrain && !f.drainPhoto) e.drainPhoto = 'Envie a foto do dreno.';
+  if (f.hasDrain) {
+    if (!f.drainPhoto) e.drainPhoto = 'Envie a foto do dreno.';
+    const ml = f.drainOutputMl.trim() ? Number(f.drainOutputMl.replace(',', '.')) : NaN;
+    if (f.drainOutputMl.trim() === '' || Number.isNaN(ml) || ml < 0) {
+      e.drainOutputMl = 'Informe o débito do dreno em ml.';
+    }
+  }
   return e;
 }
