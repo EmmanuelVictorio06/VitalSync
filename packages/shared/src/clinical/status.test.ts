@@ -134,17 +134,19 @@ describe('evaluateDiuresis', () => {
     expect(evaluateDiuresis(true, undefined)).toBe(ClinicalStatus.GREEN));
 });
 
-describe('evaluateSteps', () => {
-  it('sem dia anterior (ou dia anterior zerado) é GREEN', () => {
+describe('evaluateSteps (referência de ~48h, protocolo do estudo)', () => {
+  it('sem referência (ou referência zerada) é GREEN', () => {
     expect(evaluateSteps(100, null)).toBe(ClinicalStatus.GREEN);
     expect(evaluateSteps(100, undefined)).toBe(ClinicalStatus.GREEN);
     expect(evaluateSteps(100, 0)).toBe(ClinicalStatus.GREEN);
   });
-  it('redução < 25% é GREEN', () => expect(evaluateSteps(800, 1000)).toBe(ClinicalStatus.GREEN));
-  it('redução >= 25% é YELLOW', () => expect(evaluateSteps(750, 1000)).toBe(ClinicalStatus.YELLOW));
-  it('redução >= 50% é RED', () => {
-    expect(evaluateSteps(500, 1000)).toBe(ClinicalStatus.RED);
-    expect(evaluateSteps(400, 1000)).toBe(ClinicalStatus.RED);
+  it('redução < 50% é GREEN', () => {
+    expect(evaluateSteps(800, 1000)).toBe(ClinicalStatus.GREEN);
+    expect(evaluateSteps(510, 1000)).toBe(ClinicalStatus.GREEN);
+  });
+  it('redução >= 50% é YELLOW (não há mais vermelho isolado de passos)', () => {
+    expect(evaluateSteps(500, 1000)).toBe(ClinicalStatus.YELLOW);
+    expect(evaluateSteps(400, 1000)).toBe(ClinicalStatus.YELLOW);
   });
 });
 
@@ -190,11 +192,11 @@ describe('evaluateVitalSigns — pressão arterial (sistólica+diastólica, pior
   });
 });
 
-describe('evaluateVitalSigns — ingestão hídrica', () => {
-  it('waterIntakeOk = false gera YELLOW e entra em triggers', () => {
+describe('evaluateVitalSigns — ingestão hídrica (protocolo do estudo: RED, não YELLOW)', () => {
+  it('waterIntakeOk = false gera RED e entra em triggers', () => {
     const result = evaluateVitalSigns({ ...baseInput, waterIntakeOk: false });
-    expect(result.byVital[VitalKind.WATER_INTAKE]).toBe(ClinicalStatus.YELLOW);
-    expect(result.overall).toBe(ClinicalStatus.YELLOW);
+    expect(result.byVital[VitalKind.WATER_INTAKE]).toBe(ClinicalStatus.RED);
+    expect(result.overall).toBe(ClinicalStatus.RED);
     expect(result.triggers.some((t) => t.kind === VitalKind.WATER_INTAKE)).toBe(true);
   });
   it('waterIntakeOk = true é GREEN', () => {
@@ -229,15 +231,97 @@ describe('evaluateVitalSigns — medição totalmente normal', () => {
   });
 });
 
-describe('evaluateVitalSigns — passos (contexto do dia anterior)', () => {
-  it('redução de 50% nos passos eleva o overall a RED e entra em triggers', () => {
+describe('evaluateVitalSigns — passos (referência de ~48h, sem vermelho isolado)', () => {
+  it('redução de 50% nos passos eleva o overall a YELLOW (não RED) e entra em triggers', () => {
     const result = evaluateVitalSigns({ ...baseInput, stepsCount: 400 }, { previousDaySteps: 1000 });
-    expect(result.overall).toBe(ClinicalStatus.RED);
+    expect(result.byVital[VitalKind.STEPS]).toBe(ClinicalStatus.YELLOW);
+    expect(result.overall).toBe(ClinicalStatus.YELLOW);
     expect(result.triggers.some((t) => t.kind === VitalKind.STEPS)).toBe(true);
+    expect(result.byVital[VitalKind.COMBINED_CRITERIA]).toBeUndefined();
   });
   it('sem stepsCount informado, STEPS nem aparece em byVital', () => {
     const result = evaluateVitalSigns(baseInput);
     expect(result.byVital[VitalKind.STEPS]).toBeUndefined();
+  });
+});
+
+describe('evaluateVitalSigns — critérios COMBINADOS de vermelho (protocolo 5.7.2/5.7.3)', () => {
+  it('queda de passos ≥50% + FC>110 → RED via COMBINED_CRITERIA', () => {
+    const result = evaluateVitalSigns(
+      { ...baseInput, stepsCount: 400, heartRate: 111 },
+      { previousDaySteps: 1000 },
+    );
+    expect(result.byVital[VitalKind.COMBINED_CRITERIA]).toBe(ClinicalStatus.RED);
+    expect(result.overall).toBe(ClinicalStatus.RED);
+  });
+  it('queda de passos ≥50% + aumento de dor ≥3 pontos → RED via COMBINED_CRITERIA', () => {
+    const result = evaluateVitalSigns(
+      { ...baseInput, stepsCount: 400, pain: 5 },
+      { previousDaySteps: 1000, previousPain: 2 },
+    );
+    expect(result.byVital[VitalKind.COMBINED_CRITERIA]).toBe(ClinicalStatus.RED);
+    expect(result.overall).toBe(ClinicalStatus.RED);
+  });
+  it('queda de passos ≥50% isolada (sem FC>110 nem dor +3) NÃO gera combinado', () => {
+    const result = evaluateVitalSigns(
+      { ...baseInput, stepsCount: 400, heartRate: 80, pain: 2 },
+      { previousDaySteps: 1000, previousPain: 1 },
+    );
+    expect(result.byVital[VitalKind.COMBINED_CRITERIA]).toBeUndefined();
+    expect(result.overall).toBe(ClinicalStatus.YELLOW);
+  });
+  it('diurese 2-3 + FC>=110 → RED via COMBINED_CRITERIA', () => {
+    const result = evaluateVitalSigns({ ...baseInput, urinationCount: 3, heartRate: 110 });
+    expect(result.byVital[VitalKind.COMBINED_CRITERIA]).toBe(ClinicalStatus.RED);
+    expect(result.overall).toBe(ClinicalStatus.RED);
+  });
+  it('diurese 2-3 + SpO2<=92 → RED via COMBINED_CRITERIA', () => {
+    const result = evaluateVitalSigns({ ...baseInput, urinationCount: 2, spo2: 92 });
+    expect(result.byVital[VitalKind.COMBINED_CRITERIA]).toBe(ClinicalStatus.RED);
+    expect(result.overall).toBe(ClinicalStatus.RED);
+  });
+  it('diurese 2-3 + Temp>=38 → RED via COMBINED_CRITERIA', () => {
+    const result = evaluateVitalSigns({ ...baseInput, urinationCount: 3, temperature: 38 });
+    expect(result.byVital[VitalKind.COMBINED_CRITERIA]).toBe(ClinicalStatus.RED);
+    expect(result.overall).toBe(ClinicalStatus.RED);
+  });
+  it('diurese 2-3 isolada (sem os outros critérios) NÃO gera combinado', () => {
+    const result = evaluateVitalSigns({ ...baseInput, urinationCount: 3 });
+    expect(result.byVital[VitalKind.COMBINED_CRITERIA]).toBeUndefined();
+    expect(result.overall).toBe(ClinicalStatus.YELLOW);
+  });
+  it('diurese < 2 (já RED isolado) não depende do combinado', () => {
+    const result = evaluateVitalSigns({ ...baseInput, urinationCount: 1 });
+    expect(result.byVital[VitalKind.DIURESIS]).toBe(ClinicalStatus.RED);
+    expect(result.overall).toBe(ClinicalStatus.RED);
+  });
+});
+
+describe('evaluateVitalSigns — contagem de critérios amarelos e isolamento (protocolo 5.7.2)', () => {
+  it('um único critério amarelo por passos é isolado', () => {
+    const result = evaluateVitalSigns({ ...baseInput, stepsCount: 400 }, { previousDaySteps: 1000 });
+    expect(result.yellowCriteriaCount).toBe(1);
+    expect(result.isolatedByStepsOrDiuresis).toBe(true);
+  });
+  it('um único critério amarelo por diurese é isolado', () => {
+    const result = evaluateVitalSigns({ ...baseInput, urinationCount: 3 });
+    expect(result.yellowCriteriaCount).toBe(1);
+    expect(result.isolatedByStepsOrDiuresis).toBe(true);
+  });
+  it('um único critério amarelo que NÃO é passos/diurese não é isolado nesse sentido', () => {
+    const result = evaluateVitalSigns({ ...baseInput, temperature: 38 });
+    expect(result.yellowCriteriaCount).toBe(1);
+    expect(result.isolatedByStepsOrDiuresis).toBe(false);
+  });
+  it('dois ou mais critérios amarelos: conta corretamente e não é isolado', () => {
+    const result = evaluateVitalSigns({ ...baseInput, temperature: 38, pain: 7 });
+    expect(result.yellowCriteriaCount).toBe(2);
+    expect(result.isolatedByStepsOrDiuresis).toBe(false);
+  });
+  it('medição normal: zero critérios amarelos', () => {
+    const result = evaluateVitalSigns(baseInput);
+    expect(result.yellowCriteriaCount).toBe(0);
+    expect(result.isolatedByStepsOrDiuresis).toBe(false);
   });
 });
 

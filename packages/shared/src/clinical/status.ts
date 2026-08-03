@@ -41,16 +41,25 @@ export function evaluateDiuresis(urinatedNormally: boolean, urinationCount?: num
   return urinatedNormally ? ClinicalStatus.GREEN : ClinicalStatus.YELLOW;
 }
 
-/** Passos: regra relativa ao dia anterior. */
-export function evaluateSteps(steps: number, previousDaySteps?: number | null): ClinicalStatus {
-  if (previousDaySteps == null || previousDaySteps <= 0) {
-    // Sem referência anterior não há como medir redução — status verde.
+/**
+ * Passos: regra relativa a uma referência de ~48h atrás (protocolo do estudo).
+ * Não há mais vermelho isolado — queda ≥50% é amarelo; o vermelho só existe
+ * combinado com outro critério (ver `evaluateVitalSigns`).
+ */
+export function evaluateSteps(steps: number, reference48h?: number | null): ClinicalStatus {
+  if (reference48h == null || reference48h <= 0) {
+    // Sem referência não há como medir redução — status verde.
     return ClinicalStatus.GREEN;
   }
-  const reduction = (previousDaySteps - steps) / previousDaySteps;
-  if (reduction >= STEPS_RULES.redReductionPct) return ClinicalStatus.RED;
+  const reduction = (reference48h - steps) / reference48h;
   if (reduction >= STEPS_RULES.yellowReductionPct) return ClinicalStatus.YELLOW;
   return ClinicalStatus.GREEN;
+}
+
+/** true quando a queda de passos vs. a referência de 48h já atinge o corte (≥50%). */
+function stepsSevereDrop(steps: number | null | undefined, reference48h: number | null | undefined): boolean {
+  if (steps == null || reference48h == null || reference48h <= 0) return false;
+  return (reference48h - steps) / reference48h >= STEPS_RULES.yellowReductionPct;
 }
 
 /** Pega o pior status entre vários (reduz a um status geral). */
@@ -64,11 +73,14 @@ export function worstStatus(statuses: ClinicalStatus[]): ClinicalStatus {
  * Avalia uma medição completa e devolve o status por dimensão + status geral.
  *
  * @param input  medição enviada pelo paciente
- * @param context dados contextuais necessários para regras relativas (ex.: passos do dia anterior)
+ * @param context dados contextuais necessários para regras relativas/combinadas:
+ *   `previousDaySteps` é a referência de passos de ~48h atrás (não o dia
+ *   anterior — nome mantido por compatibilidade com o backend legado) e
+ *   `previousPain` é a dor da medição anterior (critério combinado de +3 pontos).
  */
 export function evaluateVitalSigns(
   input: VitalSignInput,
-  context: { previousDaySteps?: number | null } = {},
+  context: { previousDaySteps?: number | null; previousPain?: number | null } = {},
 ): StatusEvaluation {
   const byVital: Partial<Record<VitalKind, ClinicalStatus>> = {};
 
@@ -97,6 +109,26 @@ export function evaluateVitalSigns(
     byVital[VitalKind.STEPS] = evaluateSteps(input.stepsCount, context.previousDaySteps);
   }
 
+  // Critérios COMBINADOS do protocolo (5.7.2/5.7.3) — elevam a VERMELHO mesmo
+  // quando nenhum sinal isolado chegaria lá sozinho.
+  const severeStepsDrop = stepsSevereDrop(input.stepsCount, context.previousDaySteps);
+  const heartRateOver110 = input.heartRate > 110;
+  const heartRateAtLeast110 = input.heartRate >= 110;
+  const painIncreased3Plus =
+    context.previousPain != null && input.pain - context.previousPain >= 3;
+  const diuresis2to3 =
+    input.urinationCount != null && input.urinationCount >= 2 && input.urinationCount <= 3;
+  const spo2At92OrBelow = input.spo2 <= 92;
+  const temperatureAt38OrAbove = input.temperature >= 38;
+
+  const combinedStepsRed = severeStepsDrop && (heartRateOver110 || painIncreased3Plus);
+  const combinedDiuresisRed =
+    diuresis2to3 && (heartRateAtLeast110 || spo2At92OrBelow || temperatureAt38OrAbove || severeStepsDrop);
+
+  if (combinedStepsRed || combinedDiuresisRed) {
+    byVital[VitalKind.COMBINED_CRITERIA] = ClinicalStatus.RED;
+  }
+
   // Pressão arterial agora entra normalmente no disparo/`overall` — confirmado
   // pela equipe médica (ago/2026), substitui a exclusão anterior (M-06).
   const driving = Object.entries(byVital) as Array<[VitalKind, ClinicalStatus]>;
@@ -107,7 +139,13 @@ export function evaluateVitalSigns(
 
   const overall = worstStatus(driving.map(([, status]) => status));
 
-  return { overall, byVital, triggers };
+  const yellowTriggers = triggers.filter((t) => t.status === ClinicalStatus.YELLOW);
+  const yellowCriteriaCount = yellowTriggers.length;
+  const onlyYellowTrigger = yellowCriteriaCount === 1 ? yellowTriggers[0] : undefined;
+  const isolatedByStepsOrDiuresis =
+    onlyYellowTrigger?.kind === VitalKind.STEPS || onlyYellowTrigger?.kind === VitalKind.DIURESIS;
+
+  return { overall, byVital, triggers, yellowCriteriaCount, isolatedByStepsOrDiuresis };
 }
 
 /** true se o status exige envio de alerta para a equipe (amarelo ou vermelho). */

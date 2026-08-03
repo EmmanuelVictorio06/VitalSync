@@ -263,7 +263,10 @@ function ClinicalTab() {
           </ClinicalRuleCard>
         ))}
 
-        <ClinicalRuleCard title={STEPS_RULES.label}>
+        <ClinicalRuleCard
+          title={STEPS_RULES.label}
+          note="Não há mais vermelho isolado de passos — a queda vira alerta só quando combinada com FC>110 ou aumento de dor ≥3 pontos."
+        >
           <ul className="space-y-1.5 text-sm">
             <li className="flex items-center justify-between">
               <span className="flex items-center gap-2"><span className="size-2 rounded-full bg-stable" /> Normal</span>
@@ -271,11 +274,11 @@ function ClinicalTab() {
             </li>
             <li className="flex items-center justify-between">
               <span className="flex items-center gap-2"><span className="size-2 rounded-full bg-warning" /> Atenção</span>
-              <span className="font-mono font-semibold">queda ≥ {STEPS_RULES.yellowReductionPct * 100}% vs. dia anterior</span>
+              <span className="font-mono font-semibold">queda ≥ {STEPS_RULES.yellowReductionPct * 100}% vs. referência de 48h</span>
             </li>
             <li className="flex items-center justify-between">
-              <span className="flex items-center gap-2"><span className="size-2 rounded-full bg-alert" /> Alerta</span>
-              <span className="font-mono font-semibold">queda ≥ {STEPS_RULES.redReductionPct * 100}% vs. dia anterior</span>
+              <span className="flex items-center gap-2"><span className="size-2 rounded-full bg-alert" /> Alerta (combinado)</span>
+              <span className="font-mono font-semibold">queda ≥50% + FC&gt;110 ou dor +3 pontos</span>
             </li>
           </ul>
         </ClinicalRuleCard>
