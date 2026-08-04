@@ -60,7 +60,7 @@ import type { EntityStatus, UserOverview, UserRole, UserTeamLink } from '../../s
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function UsersPage() {
+export function () {
   const { user } = useAuth();
   const toast = useToast();
 
