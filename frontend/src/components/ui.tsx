@@ -186,7 +186,7 @@ interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
 export function TextareaField({ label, hint, error, required, className, ...rest }: TextareaProps) {
   return (
     <Field label={label} hint={hint} error={error} required={required}>
-      <textarea className={cn('input', error && 'invalid', className)} {...rest} />
+      <textarea className={cn('input resize-none overflow-y-auto', error && 'invalid', className)} {...rest} />
     </Field>
   );
 }

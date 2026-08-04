@@ -37,12 +37,28 @@ const PAGE_TITLES: Array<{ match: (path: string) => boolean; title: string }> = 
   { match: (p) => p.startsWith('/invites'), title: 'Convidar Profissional' },
 ];
 
+function scrollToPageTop() {
+  const scroll = () => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    document.scrollingElement?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  };
+
+  scroll();
+  window.requestAnimationFrame(scroll);
+  window.setTimeout(scroll, 0);
+}
+
 function SidebarLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
   const Icon = item.icon;
   return (
     <NavLink
       to={item.to}
-      onClick={onNavigate}
+      onClick={() => {
+        scrollToPageTop();
+        onNavigate?.();
+      }}
       className={({ isActive }) =>
         cn(
           'flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors',
@@ -221,6 +237,7 @@ export function Layout() {
               <li key={item.to}>
                 <NavLink
                   to={item.to}
+                  onClick={scrollToPageTop}
                   className={({ isActive }) =>
                     cn(
                       'relative flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-semibold transition-colors',
@@ -244,6 +261,7 @@ export function Layout() {
           <li>
             <NavLink
               to="/profile"
+              onClick={scrollToPageTop}
               className={({ isActive }) =>
                 cn(
                   'flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-semibold transition-colors',

@@ -39,6 +39,8 @@
   --color-warning-foreground: var(--warning-foreground);
   --color-alert: var(--alert);
   --color-alert-foreground: var(--alert-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
 }
 
 :root {
@@ -69,6 +71,14 @@
   --warning-foreground: #ffffff;
   --alert: #ef4444;
   --alert-foreground: #ffffff;
+  /* "info" — cor semântica usada pelo badge de Gerente de Equipe (e o card de
+     filtro rápido correspondente). É um sky-blue (#0ea5e9) distinto do --primary
+     (#2563eb, azul mais escuro) para diferenciar visualmente Gerente de Equipe
+     de Administrador. Antes desta definição o utilitário `bg-info` (e
+     `text-info`, `border-info`) não resolvia nada no Tailwind v4, deixando a
+     bolinha do badge invisível. */
+  --info: #0ea5e9;
+  --info-foreground: #ffffff;
 }
 
 .vitalsync-home {
@@ -310,6 +320,11 @@
   img,
   video {
     height: auto;
+  }
+
+  textarea {
+    resize: none;
+    overflow-y: auto;
   }
 }
 

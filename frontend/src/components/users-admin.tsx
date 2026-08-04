@@ -411,7 +411,7 @@ export function UserAdvancedFilters({ value, onApply, onClose }: {
 
         <div className="p-5 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FilterSelect label="Perfil do usuário" value={draft.role} onChange={(v) => set('role', v as UserRoleFilter)}
-            options={[{ value: 'ALL', label: 'Todos' }, { value: 'ADMIN', label: 'Administrador' }, { value: 'MEDICAL_SURGEON', label: 'Médico Cirurgião' }, { value: 'ASSOCIATED_DOCTOR', label: 'Médico Associado' }, { value: 'SUPPORT', label: 'Suporte' }, { value: 'TEAM_MANAGER', label: 'Gerente de Equipe' }]} />
+            options={[{ value: 'ALL', label: 'Todos' }, { value: 'ADMIN', label: 'Administrador' }, { value: 'MEDICAL_SURGEON', label: 'Médico Cirurgião' }, { value: 'ASSOCIATED_DOCTOR', label: 'Médico Associado' }, { value: 'SUPPORT', label: 'Suporte' }, { value: 'TEAM_MANAGER', label: 'Gerente de Equipe' }, { value: 'NURSING_PROFESSIONAL', label: 'Profissional de Enfermagem' }]} />
           <FilterSelect label="Status" value={draft.status} onChange={(v) => set('status', v as UserStatusFilter)}
             options={[{ value: 'ALL', label: 'Todos' }, { value: 'ACTIVE', label: 'Ativos' }, { value: 'INACTIVE', label: 'Inativos' }]} />
           <FilterSelect label="Equipe" value={draft.team} onChange={(v) => set('team', v as UserTeamFilter)}

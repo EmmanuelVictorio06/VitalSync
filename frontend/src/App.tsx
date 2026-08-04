@@ -1,4 +1,5 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { useLayoutEffect } from 'react';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Role } from './auth/AuthContext';
 import { AlertCountProvider } from './components/AlertCount';
 import { Layout } from './components/Layout';
@@ -27,9 +28,39 @@ import { SettingsPage } from './pages/admin/SettingsPage';
 import { SurgeryTypesPage } from './pages/admin/SurgeryTypesPage';
 import { ManagerTeamsPage } from './pages/ManagerTeamsPage';
 
+function ScrollToTop() {
+  const location = useLocation();
+
+  useLayoutEffect(() => {
+    if ('scrollRestoration' in window.history) window.history.scrollRestoration = 'manual';
+  }, []);
+
+  useLayoutEffect(() => {
+    const scroll = () => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      document.scrollingElement?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    };
+
+    scroll();
+    const frame = window.requestAnimationFrame(scroll);
+    const timeout = window.setTimeout(scroll, 0);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timeout);
+    };
+  }, [location.pathname, location.search, location.hash, location.key]);
+
+  return null;
+}
+
 export function App() {
   return (
-    <Routes>
+    <>
+      <ScrollToTop />
+      <Routes>
       {/* Públicas */}
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
@@ -225,6 +256,7 @@ export function App() {
       </Route>
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
-    </Routes>
+      </Routes>
+    </>
   );
 }

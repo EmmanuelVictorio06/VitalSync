@@ -139,7 +139,7 @@ export const userService = {
         .eq('main_surgeon_id', userId),
       supabase
         .from('team_members')
-        .select('team_id, medical_teams!inner(id, team_number, status, surgeon:profiles!medical_teams_main_surgeon_id_fkey(name))')
+        .select('team_id, role_in_team, medical_teams!inner(id, team_number, status, surgeon:profiles!medical_teams_main_surgeon_id_fkey(name))')
         .eq('doctor_id', userId)
         .eq('status', 'ACTIVE'),
     ]);
@@ -153,10 +153,10 @@ export const userService = {
       links.push({ teamId: t.id, teamNumber: t.team_number, roleInTeam: 'MAIN_SURGEON', surgeonName: t.surgeon?.name ?? '—', patientCount: 0, teamStatus: t.status });
       teamIds.add(t.id);
     }
-    for (const m of (memberRes.data ?? []) as unknown as Array<{ medical_teams: { id: string; team_number: number; status: EntityStatus; surgeon: { name: string } | null } }>) {
+    for (const m of (memberRes.data ?? []) as unknown as Array<{ role_in_team: UserTeamLink['roleInTeam']; medical_teams: { id: string; team_number: number; status: EntityStatus; surgeon: { name: string } | null } }>) {
       const t = m.medical_teams;
       if (!t || teamIds.has(t.id)) continue;
-      links.push({ teamId: t.id, teamNumber: t.team_number, roleInTeam: 'ASSOCIATED_DOCTOR', surgeonName: t.surgeon?.name ?? '—', patientCount: 0, teamStatus: t.status });
+      links.push({ teamId: t.id, teamNumber: t.team_number, roleInTeam: m.role_in_team, surgeonName: t.surgeon?.name ?? '—', patientCount: 0, teamStatus: t.status });
       teamIds.add(t.id);
     }
 
