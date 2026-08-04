@@ -176,8 +176,10 @@ export interface AdminColumn<T> {
   className?: string;
   /**
    * Coluna de badge: a célula não clipa o conteúdo (overflow-visible +
-   * whitespace-nowrap) — o badge aparece sempre inteiro e, se faltar largura,
-   * a tabela rola horizontalmente dentro do card (overflow-x-auto do wrapper).
+   * whitespace-nowrap) — o badge aparece sempre inteiro. Use só para badges
+   * pequenos que jamais devem quebrar (ex.: Status). Para badges de texto
+   * longo (ex.: Papel), NÃO use noClip: deixe a célula overflow-hidden e o
+   * badge quebra de forma controlada dentro da coluna.
    */
   noClip?: boolean;
   /** Ajuste opcional da linha no card mobile. */
@@ -214,22 +216,27 @@ export function AdminTable<T>({
     <>
       {/* Desktop: tabela tradicional. `Responsive` evita montar a versão mobile
           em paralelo (sem rodar hooks/render dela fora do breakpoint).
-          overflow-x-auto: se faltar largura, rola DENTRO do card (nunca na página);
-          os menus de ação usam portal, então não são cortados pelo container. */}
+          overflow-hidden: o `table-fixed` + `w-full` já faz as colunas caberem
+          no container, então NUNCA há scroll lateral (nem na página, nem dentro
+          do card). Os menus de ação usam portal, então não são cortados. */}
       <Responsive min={desktopMin}>
-      <div className="bg-card border border-border rounded-xl shadow-sm overflow-x-auto">
+      <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
         <table className={cn('w-full table-fixed text-sm', tableClassName)}>
           <thead>
             <tr className="border-b border-border bg-muted/40">
               {columns.map((c) => (
                 <th
                   key={c.header}
-                  className={cn('text-left px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground', c.className)}
+                  // Sem `text-left` baked: a coluna decide o alinhamento via
+                  // `className` (text-left/text-center/text-right). `align-middle`
+                  // garante o alinhamento vertical do header com o conteúdo,
+                  // inclusive quando a linha fica mais alta (badge em 2 linhas).
+                  className={cn('px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground align-middle', c.className)}
                 >
                   {c.header}
                 </th>
               ))}
-              {actions && <th className={cn('px-4 py-3 text-right', actionsClassName)} />}
+              {actions && <th className={cn('px-4 py-3 text-right align-middle', actionsClassName)} />}
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -238,14 +245,14 @@ export function AdminTable<T>({
                 {columns.map((c) => (
                   <td
                     key={c.header}
-                    className={cn('px-4 py-3', c.noClip ? 'overflow-visible whitespace-nowrap' : 'overflow-hidden', c.className)}
+                    className={cn('px-4 py-3 align-middle', c.noClip ? 'overflow-visible whitespace-nowrap' : 'overflow-hidden', c.className)}
                   >
                     {c.render(row)}
                   </td>
                 ))}
                 {actions && (
-                  <td className={cn('px-4 py-3 overflow-visible', actionsClassName)}>
-                    <div className="flex gap-2 justify-end">{actions(row)}</div>
+                  <td className={cn('px-4 py-3 overflow-visible align-middle', actionsClassName)}>
+                    <div className="flex items-center gap-2 justify-end">{actions(row)}</div>
                   </td>
                 )}
               </tr>
