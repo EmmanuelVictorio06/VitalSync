@@ -45,12 +45,20 @@ export const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
 /* ---------------- Badge de papel ---------------- */
 export function RoleBadge({ role }: { role: UserRole }) {
   const meta = ROLE_META[role] ?? ROLE_META.ASSOCIATED_DOCTOR;
-  // whitespace-nowrap + padding fluido: o badge acompanha o texto e nunca corta
-  // ("ADMINISTRAI"). Se faltar espaço, quem se adapta é o container, não o badge.
+  // O badge sempre aceita quebra de linha (whitespace-normal): papéis longos
+  // como "Profissional de Enfermagem" viram duas linhas controladas dentro da
+  // coluna, sem reticências, sem abreviação e sem empurrar o layout. max-w-full
+  // + min-w-0 garantem que o badge respeite a largura da célula.
   return (
-    <span className={cn('inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider leading-tight border', meta.badge)}>
+    <span
+      className={cn(
+        'inline-flex max-w-full items-center justify-center gap-1.5 whitespace-normal text-center rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider leading-tight border',
+        meta.badge,
+      )}
+      title={meta.label}
+    >
       <span className={cn('size-1.5 shrink-0 rounded-full', meta.dot)} aria-hidden />
-      {meta.label}
+      <span className="min-w-0 text-center">{meta.label}</span>
     </span>
   );
 }
@@ -403,7 +411,7 @@ export function UserAdvancedFilters({ value, onApply, onClose }: {
 
         <div className="p-5 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FilterSelect label="Perfil do usuário" value={draft.role} onChange={(v) => set('role', v as UserRoleFilter)}
-            options={[{ value: 'ALL', label: 'Todos' }, { value: 'ADMIN', label: 'Administrador' }, { value: 'MEDICAL_SURGEON', label: 'Médico Cirurgião' }, { value: 'ASSOCIATED_DOCTOR', label: 'Médico Associado' }, { value: 'SUPPORT', label: 'Suporte' }, { value: 'TEAM_MANAGER', label: 'Gerente de Equipe' }]} />
+            options={[{ value: 'ALL', label: 'Todos' }, { value: 'ADMIN', label: 'Administrador' }, { value: 'MEDICAL_SURGEON', label: 'Médico Cirurgião' }, { value: 'ASSOCIATED_DOCTOR', label: 'Médico Associado' }, { value: 'SUPPORT', label: 'Suporte' }, { value: 'TEAM_MANAGER', label: 'Gerente de Equipe' }, { value: 'NURSING_PROFESSIONAL', label: 'Profissional de Enfermagem' }]} />
           <FilterSelect label="Status" value={draft.status} onChange={(v) => set('status', v as UserStatusFilter)}
             options={[{ value: 'ALL', label: 'Todos' }, { value: 'ACTIVE', label: 'Ativos' }, { value: 'INACTIVE', label: 'Inativos' }]} />
           <FilterSelect label="Equipe" value={draft.team} onChange={(v) => set('team', v as UserTeamFilter)}

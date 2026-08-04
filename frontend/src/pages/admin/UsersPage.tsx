@@ -210,22 +210,29 @@ export function UsersPage() {
       ) : filtered.length === 0 ? (
         <EmptyState title="Nenhum usuário encontrado para os filtros selecionados." hint="Ajuste a busca ou os filtros para ver outros usuários." />
       ) : (
-        <div className="animate-entry [animation-delay:150ms]">
+        <div className="animate-entry [animation-delay:150ms] min-w-0">
           <AdminTable
             rows={filtered}
             keyFor={(u) => u.id}
-            desktopMin="md"
-            mobileMax="sm"
-            // Largura mínima p/ os badges de Papel/Status nunca cortarem: em md a
-            // tabela rola horizontalmente DENTRO do card (overflow-x-auto do shell).
-            tableClassName="min-w-[64rem]"
-            actionsClassName="w-32 px-2"
+            // Desktop só a partir de `lg` (≥1024px): abaixo disso a tabela não
+            // cabe sem scroll lateral, então mostramos os cards mobile (até `md`).
+            // Em md (768-1023, faixa de tablet) também vamos de card — sem scroll.
+            desktopMin="lg"
+            mobileMax="md"
+            // SEM min-width na <table>: com `table-fixed` + `w-full` (da
+            // AdminTable) ela ocupa exatamente a largura do container e as colunas
+            // se distribuem proporcionalmente. A coluna Ações é travada em 10rem
+            // (min/max) p/ sempre abrigar os 3 botões com folga, sem estourar.
+            actionsClassName="w-40 min-w-[10rem] max-w-[10rem]"
             columns={[
               {
                 header: 'Usuário',
-                className: 'w-[29%]',
-                mobileRowClassName: 'grid grid-cols-[minmax(5.5rem,max-content)_minmax(0,1fr)] items-start',
-                mobileValueClassName: 'flex justify-end',
+                // Coluna mais larga: sem min-width, segue o flex do conteúdo.
+                // text-left explícito p/ alinhar com WhatsApp (cols centrais usam
+                // text-center, Ações usa text-right).
+                className: 'w-72 text-left',
+                mobileRowClassName: 'flex flex-col items-start gap-1',
+                mobileValueClassName: 'w-full max-w-full text-left ml-0',
                 render: (u) => (
                   <div className="flex max-w-full items-center gap-3 min-w-0">
                     <UserAvatar name={u.name} avatarPath={u.avatar_url} />
@@ -237,15 +244,24 @@ export function UsersPage() {
                   </div>
                 ),
               },
-              { header: 'WhatsApp', className: 'w-[14%] whitespace-nowrap', render: (u) => <span className="block text-muted-foreground whitespace-nowrap">{u.whatsapp ? formatPhone(u.whatsapp) : '—'}</span> },
-              // Colunas de badge: largura fixa que cabe o rótulo mais longo +
-              // noClip (célula não corta). No card mobile, shrink-0 garante que o
-              // badge nunca encolhe — se faltar espaço, quebra inteiro de linha.
-              { header: 'Papel', className: 'w-44 whitespace-nowrap', noClip: true, mobileValueClassName: 'shrink-0', render: (u) => <RoleBadge role={u.role} /> },
-              { header: 'Status', className: 'w-28 whitespace-nowrap', noClip: true, mobileValueClassName: 'shrink-0', render: (u) => <StatusPill status={u.status} /> },
-              { header: 'Equipes', className: 'w-[6%] text-center', render: (u) => <span className="inline-block min-w-6 text-center font-semibold">{u.team_count}</span> },
-              { header: 'Último acesso', className: 'w-28 whitespace-nowrap', noClip: true, render: (u) => <span className="block text-muted-foreground text-xs whitespace-nowrap">{u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleDateString('pt-BR') : '—'}</span> },
-              { header: 'Cadastro', className: 'w-28 whitespace-nowrap', noClip: true, render: (u) => <span className="block text-muted-foreground font-mono text-xs whitespace-nowrap">{u.created_at.slice(0, 10)}</span> },
+              // WhatsApp: truncate p/ garantir que telefone muito longo não force
+              // largura (telefone normal sempre cabe sem reticências).
+              { header: 'WhatsApp', className: 'w-36 text-left', render: (u) => <span className="block truncate text-muted-foreground">{u.whatsapp ? formatPhone(u.whatsapp) : '—'}</span> },
+              // Papel: SEM `noClip` e SEM `whitespace-nowrap` na coluna. A célula
+              // fica `overflow-hidden` (padrão) e o RoleBadge quebra em até duas
+              // linhas dentro do max-w-full — nome completo, sem reticências, sem
+              // invadir a coluna de Status. `text-center` alinha o badge ao centro
+              // da coluna, igual aos badges curtos (Status) e aos números (Equipes).
+              { header: 'Papel', className: 'w-52 text-center', render: (u) => <RoleBadge role={u.role} /> },
+              // Status: badge pequeno manter nowrap p/ nunca quebrar. text-center
+              // alinha com a coluna Papel (acentua separação visual).
+              { header: 'Status', className: 'w-28 text-center whitespace-nowrap', mobileValueClassName: 'shrink-0', render: (u) => <StatusPill status={u.status} /> },
+              { header: 'Equipes', className: 'w-14 text-center', render: (u) => <span className="inline-block min-w-6 text-center font-semibold">{u.team_count}</span> },
+              // inline-block + text-center na coluna: a data fica centralizada na
+              // coluna e o cabeçalho acompanha. whitespace-nowrap nunca deixa a
+              // data quebrar.
+              { header: 'Último acesso', className: 'w-28 text-center whitespace-nowrap', render: (u) => <span className="inline-block text-muted-foreground text-xs whitespace-nowrap">{u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleDateString('pt-BR') : '—'}</span> },
+              { header: 'Cadastro', className: 'w-24 text-center whitespace-nowrap', render: (u) => <span className="inline-block text-muted-foreground font-mono text-xs whitespace-nowrap">{u.created_at.slice(0, 10)}</span> },
             ]}
             actions={(u) => (
               <>
@@ -599,6 +615,8 @@ function UserDetailsDrawer({ user, onClose }: { user: UserOverview; onClose: () 
     userService.getUserTeamLinks(user.id).then(setLinks).catch(() => setLinks([]));
   }, [user.id]);
 
+  const teamCount = links ? links.length : user.team_count;
+
   return (
     <Drawer title="Detalhes do usuário" onClose={onClose}>
       {/* Dados */}
@@ -614,7 +632,7 @@ function UserDetailsDrawer({ user, onClose }: { user: UserOverview; onClose: () 
           <Info label="WhatsApp" value={user.whatsapp ? formatPhone(user.whatsapp) : '—'} />
           <Info label="Papel" value={ROLE_META[user.role].label} />
           <Info label="Status" value={user.status === 'ACTIVE' ? 'Ativo' : 'Inativo'} />
-          <Info label="Equipes" value={String(user.team_count)} />
+          <Info label="Equipes" value={String(teamCount)} />
           <Info label="Cadastro" value={user.created_at.slice(0, 10)} />
           <Info label="Último acesso" value={user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString('pt-BR') : '—'} />
         </dl>
@@ -640,7 +658,7 @@ function UserDetailsDrawer({ user, onClose }: { user: UserOverview; onClose: () 
                 <div className="min-w-0">
                   <p className="text-sm font-semibold">Equipe nº {String(l.teamNumber).padStart(2, '0')}</p>
                   <p className="text-xs text-muted-foreground truncate">
-                    {l.roleInTeam === 'MAIN_SURGEON' ? 'Cirurgião Principal' : 'Médico Associado'} · {l.patientCount} paciente(s)
+                    {teamRoleLabel(l.roleInTeam)} · {l.patientCount} paciente(s)
                   </p>
                 </div>
                 <Link to={`/admin/teams/${l.teamId}`} className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1 shrink-0">
@@ -663,6 +681,12 @@ function UserDetailsDrawer({ user, onClose }: { user: UserOverview; onClose: () 
       </section>
     </Drawer>
   );
+}
+
+function teamRoleLabel(role: UserTeamLink['roleInTeam']): string {
+  if (role === 'MAIN_SURGEON') return 'Cirurgião Principal';
+  if (role === 'NURSING_PROFESSIONAL') return 'Profissional de Enfermagem';
+  return 'Médico Associado';
 }
 
 function Info({ label, value }: { label: string; value: string }) {

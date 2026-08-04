@@ -302,6 +302,7 @@ export function PatientEditModal({ patientId, onClose, onSaved }: PatientEditMod
                 label="Resumo de prontuário"
                 hint="Breve histórico clínico relevante para o acompanhamento (opcional)."
                 rows={3}
+                className="min-h-[140px]"
                 value={form.medicalRecordSummary}
                 onChange={(e) => set('medicalRecordSummary', e.target.value)}
               />
@@ -344,6 +345,7 @@ export function PatientEditModal({ patientId, onClose, onSaved }: PatientEditMod
                 label="Comorbidades"
                 hint="Separe por vírgula (ex.: diabetes, hipertensão) — opcional."
                 rows={2}
+                className="min-h-[120px]"
                 value={form.comorbidities}
                 onChange={(e) => set('comorbidities', e.target.value)}
               />
