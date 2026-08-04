@@ -35,8 +35,25 @@
 -- 1) eval_clinical_status — hídrica RED, passos só amarelo (48h), critérios
 --    combinados de vermelho.
 -- ----------------------------------------------------------------------------
-drop function if exists public.eval_clinical_status(
-  numeric, int, int, int, int, boolean, int, boolean, boolean, int, int, int, int, boolean);
+-- Drop ROBUSTO: remove QUALQUER sobrecarga de eval_clinical_status,
+-- independentemente da assinatura viva no banco remoto. O histórico de
+-- migrations pode estar dessincronizado do schema real — havia uma versão de
+-- 15 args no banco, então o drop por assinatura fixa de 14 args não a encontrava
+-- ("does not exist, skipping") e o create falhava com 42P13 ("cannot change
+-- return type of existing function"). Chamadas feitas por outras funções
+-- (submit_vital_record) resolvem em runtime, então o drop não precisa de CASCADE.
+do $$
+declare r record;
+begin
+  for r in
+    select oid::regprocedure::text as sig
+    from pg_proc
+    where proname = 'eval_clinical_status'
+      and pronamespace = 'public'::regnamespace
+  loop
+    execute 'drop function ' || r.sig;
+  end loop;
+end $$;
 
 create or replace function public.eval_clinical_status(
   p_temperature       numeric,
