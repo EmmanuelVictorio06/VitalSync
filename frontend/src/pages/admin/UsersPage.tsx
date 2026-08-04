@@ -615,6 +615,8 @@ function UserDetailsDrawer({ user, onClose }: { user: UserOverview; onClose: () 
     userService.getUserTeamLinks(user.id).then(setLinks).catch(() => setLinks([]));
   }, [user.id]);
 
+  const teamCount = links ? links.length : user.team_count;
+
   return (
     <Drawer title="Detalhes do usuário" onClose={onClose}>
       {/* Dados */}
@@ -630,7 +632,7 @@ function UserDetailsDrawer({ user, onClose }: { user: UserOverview; onClose: () 
           <Info label="WhatsApp" value={user.whatsapp ? formatPhone(user.whatsapp) : '—'} />
           <Info label="Papel" value={ROLE_META[user.role].label} />
           <Info label="Status" value={user.status === 'ACTIVE' ? 'Ativo' : 'Inativo'} />
-          <Info label="Equipes" value={String(user.team_count)} />
+          <Info label="Equipes" value={String(teamCount)} />
           <Info label="Cadastro" value={user.created_at.slice(0, 10)} />
           <Info label="Último acesso" value={user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString('pt-BR') : '—'} />
         </dl>
@@ -656,7 +658,7 @@ function UserDetailsDrawer({ user, onClose }: { user: UserOverview; onClose: () 
                 <div className="min-w-0">
                   <p className="text-sm font-semibold">Equipe nº {String(l.teamNumber).padStart(2, '0')}</p>
                   <p className="text-xs text-muted-foreground truncate">
-                    {l.roleInTeam === 'MAIN_SURGEON' ? 'Cirurgião Principal' : 'Médico Associado'} · {l.patientCount} paciente(s)
+                    {teamRoleLabel(l.roleInTeam)} · {l.patientCount} paciente(s)
                   </p>
                 </div>
                 <Link to={`/admin/teams/${l.teamId}`} className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1 shrink-0">
@@ -679,6 +681,12 @@ function UserDetailsDrawer({ user, onClose }: { user: UserOverview; onClose: () 
       </section>
     </Drawer>
   );
+}
+
+function teamRoleLabel(role: UserTeamLink['roleInTeam']): string {
+  if (role === 'MAIN_SURGEON') return 'Cirurgião Principal';
+  if (role === 'NURSING_PROFESSIONAL') return 'Profissional de Enfermagem';
+  return 'Médico Associado';
 }
 
 function Info({ label, value }: { label: string; value: string }) {

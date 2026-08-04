@@ -92,6 +92,26 @@ export function PatientInfoGrid({
  * opcional: quando informado, as fotos abrem em zoom ao clicar (usado pelo
  * Detalhes do Atendimento); sem ele, as fotos só são exibidas.
  */
+
+/** Mapeia dyspnea_level (0-2) p/ label legível, igual ao ReviewStep do
+ *  paciente (só trocamos "Sem dispneia" por "Ausente" p/ maior clareza). */
+const DYSPNEA_LABEL: Record<number, string> = {
+  0: 'Ausente',
+  1: 'Leve',
+  2: 'Moderada/Intensa',
+};
+
+/** Vômitos: usa `had_vomit` como primário (boolean); quando ausente, fallback
+ *  p/ `vomiting_count > 0`. Se true, mostra "Sim (N episódios)" ou só "Sim". */
+function fmtVomiting(r: VitalSignRecord | null | undefined): string {
+  if (!r) return '—';
+  const hadVomit = r.had_vomit ?? (r.vomiting_count ?? 0) > 0;
+  if (!hadVomit) return 'Não';
+  return r.vomiting_count != null && r.vomiting_count > 0
+    ? `Sim (${r.vomiting_count} episódios)`
+    : 'Sim';
+}
+
 export function MeasurementGrid({
   record,
   photoUrl,
@@ -118,9 +138,9 @@ export function MeasurementGrid({
           ],
           ['Frequência cardíaca', r?.heart_rate != null ? `${r.heart_rate} bpm` : '—'],
           ['Dor', r?.pain_level != null ? `${r.pain_level}/10` : '—'],
-          ['Dispneia', r?.dyspnea_level != null ? `${r.dyspnea_level}/10` : '—'],
+          ['Dispneia', r?.dyspnea_level != null ? (DYSPNEA_LABEL[r.dyspnea_level] ?? String(r.dyspnea_level)) : '—'],
           ['Diurese', r?.urination_count != null ? `${r.urination_count}×` : '—'],
-          ['Vômitos', r?.vomiting_count != null ? `${r.vomiting_count}×` : '—'],
+          ['Vômitos', fmtVomiting(r)],
           ['Sangramento', r?.has_bleeding ? 'Sim' : 'Não'],
           ['Passos', r?.steps != null ? String(r.steps) : '—'],
         ]}
