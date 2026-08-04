@@ -1,7 +1,7 @@
 /** Tipos das linhas das tabelas do Supabase (camada de serviços). */
 
 export type UserRole = 'ADMIN' | 'MEDICAL_SURGEON' | 'ASSOCIATED_DOCTOR' | 'SUPPORT' | 'TEAM_MANAGER' | 'NURSING_PROFESSIONAL';
-export type RoleInTeam = 'MAIN_SURGEON' | 'ASSOCIATED_DOCTOR' | 'NURSING_PROFESSIONAL';
+export type RoleInTeam = 'MAIN_SURGEON' | 'ASSOCIATED_DOCTOR' | 'NURSING_PROFESSIONAL' | 'TEAM_MANAGER';
 export type EntityStatus = 'ACTIVE' | 'INACTIVE';
 export type MeasurementPeriod = 'MORNING' | 'NIGHT';
 export type ClinicalStatus = 'GREEN' | 'YELLOW' | 'RED';

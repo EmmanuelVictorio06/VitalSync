@@ -342,13 +342,18 @@ export function CustomSelect({
     };
   }, [open]);
 
+  const prevOpen = useRef(open);
+
   // Reseta o destaque ao abrir e devolve o foco ao botão ao fechar.
+  // prevOpen evita que o focus dispare no mount inicial (onde open é false),
+  // o que antes fazia o último CustomSelect da página roubar o scroll.
   useEffect(() => {
     if (open) {
       setHighlight(0);
-    } else {
+    } else if (prevOpen.current) {
       btnRef.current?.focus();
     }
+    prevOpen.current = open;
   }, [open]);
 
   function choose(v: string) {

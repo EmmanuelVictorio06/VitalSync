@@ -160,6 +160,39 @@ export const userService = {
       teamIds.add(t.id);
     }
 
+    // TEAM_MANAGER: equipes dos cirurgiões gerenciados via team_manager_surgeons.
+    // Um gerente não aparece em medical_teams nem em team_members — o vínculo
+    // existe exclusivamente nesta tabela-ponte (gerente → cirurgião → equipe).
+    // Essa consulta resolve a divergência entre a tabela (que usa a RPC
+    // admin_get_users_overview, que já conta team_manager_surgeons) e o drawer
+    // de detalhes (que antes ignorava essa relação).
+    const { data: tmsLinks } = await supabase
+      .from('team_manager_surgeons')
+      .select('surgeon_id')
+      .eq('team_manager_id', userId)
+      .eq('is_active', true);
+
+    if (tmsLinks && tmsLinks.length > 0) {
+      const managerSurgeonIds = [...new Set(tmsLinks.map((l: any) => l.surgeon_id))];
+      const { data: managerTeams } = await supabase
+        .from('medical_teams')
+        .select('id, team_number, status, surgeon:profiles!medical_teams_main_surgeon_id_fkey(name)')
+        .in('main_surgeon_id', managerSurgeonIds);
+
+      for (const t of (managerTeams ?? []) as unknown as Array<{ id: string; team_number: number; status: EntityStatus; surgeon: { name: string } | null }>) {
+        if (teamIds.has(t.id)) continue;
+        links.push({
+          teamId: t.id,
+          teamNumber: t.team_number,
+          roleInTeam: 'TEAM_MANAGER',
+          surgeonName: t.surgeon?.name ?? '—',
+          patientCount: 0,
+          teamStatus: t.status,
+        });
+        teamIds.add(t.id);
+      }
+    }
+
     // contagem de pacientes ativos por equipe (uma query só)
     if (teamIds.size) {
       const { data: patients } = await supabase.from('patients').select('team_id').is('deleted_at', null).in('team_id', [...teamIds]);

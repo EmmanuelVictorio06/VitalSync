@@ -686,6 +686,7 @@ function UserDetailsDrawer({ user, onClose }: { user: UserOverview; onClose: () 
 function teamRoleLabel(role: UserTeamLink['roleInTeam']): string {
   if (role === 'MAIN_SURGEON') return 'Cirurgião Principal';
   if (role === 'NURSING_PROFESSIONAL') return 'Profissional de Enfermagem';
+  if (role === 'TEAM_MANAGER') return 'Equipe gerenciada';
   return 'Médico Associado';
 }
 
