@@ -123,8 +123,11 @@ with checagens as (
   -- 7) NOTIFICAÇÕES FALHADAS ----------------------------------------------
   union all
   select 10, 'Notificações com falha',
+    -- QUALQUER falha conta como ATENÇÃO. Já ter sido "alarmada"
+    -- (escalated_failure_at preenchido) não resolve nada: significa que o
+    -- retry esgotou e alguém REALMENTE não foi avisado.
     case when (select count(*) from public.notification_logs
-                where status in ('FAILED','failed') and escalated_failure_at is null) > 0
+                where status in ('FAILED','failed')) > 0
          then 'ATENÇÃO' else 'OK' end,
     (select count(*) from public.notification_logs where status in ('FAILED','failed'))::text
       || ' falha(s) no total · '
