@@ -27,6 +27,8 @@ import {
 } from 'lucide-react';
 import { Role, useAuth } from '../auth/AuthContext';
 import { useAlertCount } from './AlertCount';
+import { useMissedMeasurementCount } from './MissedMeasurementCount';
+import { useNurseQueueCount } from './NurseQueueCount';
 import { canAccessAdmin } from '../lib/permissions';
 
 type IconType = React.ComponentType<{ className?: string }>;
@@ -45,6 +47,10 @@ export function useRoleMenus(): { main: NavItem[]; admin: NavItem[] } {
   const isAdmin = hasRole(Role.ADM);
   // Contagem REAL de alertas não atendidos (Supabase, escopo por RLS).
   const { count: unattended } = useAlertCount();
+  // Contagem de pacientes com período de hoje esquecido (janela fechada, sem registro).
+  const { count: missed } = useMissedMeasurementCount();
+  // Fila de triagem da enfermagem: ofertados a mim + fila aberta.
+  const { count: triagem } = useNurseQueueCount();
 
   // Seção Administração: ADM sempre; cirurgião apenas se autorizado (ver
   // lib/permissions). Exportações gerais continuam exclusivas do ADM.
@@ -71,7 +77,7 @@ export function useRoleMenus(): { main: NavItem[]; admin: NavItem[] } {
         { to: '/invites', label: 'Convidar Profissional', short: 'Convites', icon: Send },
         { to: '/teams', label: 'Gerenciar Equipes', short: 'Equipes', icon: Users },
         { to: '/patients/new', label: 'Cadastro de Pacientes', short: 'Cadastrar', icon: UserPlus },
-        { to: '/monitoring', label: 'Pacientes em Monitoramento', short: 'Pacientes', icon: Activity },
+        { to: '/monitoring', label: 'Pacientes em Monitoramento', short: 'Pacientes', icon: Activity, badge: missed },
         { to: '/alerts', label: 'Alertas', short: 'Alertas', icon: Bell, badge: unattended },
         { to: '/profile', label: 'Meu Perfil', short: 'Perfil', icon: User },
       ],
@@ -85,7 +91,7 @@ export function useRoleMenus(): { main: NavItem[]; admin: NavItem[] } {
     return {
       main: [
         { to: '/dashboard', label: 'Dashboard', short: 'Início', icon: LayoutDashboard },
-        { to: '/monitoring', label: 'Pacientes em Monitoramento', short: 'Pacientes', icon: Activity },
+        { to: '/monitoring', label: 'Pacientes em Monitoramento', short: 'Pacientes', icon: Activity, badge: missed },
         { to: '/alerts', label: 'Alertas', short: 'Alertas', icon: Bell, badge: unattended },
         { to: '/my-team', label: 'Minhas Equipes', short: 'Equipes', icon: Users },
         { to: '/my-care', label: 'Meus Atendimentos', short: 'Atendim.', icon: ClipboardList },
@@ -101,7 +107,7 @@ export function useRoleMenus(): { main: NavItem[]; admin: NavItem[] } {
       main: [
         { to: '/dashboard', label: 'Dashboard', short: 'Início', icon: LayoutDashboard },
         { to: '/patients/new', label: 'Cadastro de Pacientes', short: 'Cadastrar', icon: UserPlus },
-        { to: '/monitoring', label: 'Pacientes em Monitoramento', short: 'Pacientes', icon: Activity },
+        { to: '/monitoring', label: 'Pacientes em Monitoramento', short: 'Pacientes', icon: Activity, badge: missed },
         { to: '/alerts', label: 'Alertas', short: 'Alertas', icon: Bell, badge: unattended },
         { to: '/manager-teams', label: 'Equipes Vinculadas', short: 'Equipes', icon: Users },
         { to: '/profile', label: 'Meu Perfil', short: 'Perfil', icon: User },
@@ -129,8 +135,10 @@ export function useRoleMenus(): { main: NavItem[]; admin: NavItem[] } {
     return {
       main: [
         { to: '/dashboard', label: 'Dashboard', short: 'Início', icon: LayoutDashboard },
-        { to: '/monitoring', label: 'Pacientes em Monitoramento', short: 'Pacientes', icon: Activity },
-        { to: '/alerts', label: 'Alertas', short: 'Alertas', icon: Bell, badge: unattended },
+        { to: '/monitoring', label: 'Pacientes em Monitoramento', short: 'Pacientes', icon: Activity, badge: missed },
+        // Badge da enfermagem = fila de TRIAGEM (ofertados a mim + fila aberta),
+        // não o total de alertas não atendidos do escopo.
+        { to: '/alerts', label: 'Alertas', short: 'Alertas', icon: Bell, badge: triagem },
         { to: '/my-care', label: 'Meus Atendimentos', short: 'Atendim.', icon: ClipboardList },
         { to: '/profile', label: 'Meu Perfil', short: 'Perfil', icon: User },
       ],
@@ -142,7 +150,7 @@ export function useRoleMenus(): { main: NavItem[]; admin: NavItem[] } {
   return {
     main: [
       { to: '/dashboard', label: 'Dashboard', short: 'Início', icon: LayoutDashboard },
-      { to: '/monitoring', label: 'Pacientes em Monitoramento', short: 'Pacientes', icon: Activity },
+      { to: '/monitoring', label: 'Pacientes em Monitoramento', short: 'Pacientes', icon: Activity, badge: missed },
       { to: '/alerts', label: 'Alertas', short: 'Alertas', icon: Bell, badge: unattended },
       { to: '/my-teams', label: 'Minhas Equipes', short: 'Equipes', icon: Users2 },
       { to: '/my-care', label: 'Meus Atendimentos', short: 'Atendim.', icon: ClipboardList },

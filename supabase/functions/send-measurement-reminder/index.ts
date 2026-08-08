@@ -51,7 +51,7 @@ function toBrWhatsApp(phone: string): string {
 /**
  * Envia o template aprovado via Meta Cloud API. {{1}} do corpo = nome do
  * paciente. O botão "Registrar agora" (URL dinâmica) tem a base fixa
- * `https://vital-sync-frontend.vercel.app/registro-sinais/` configurada na
+ * `https://vital-sync-frontend-iota.vercel.app/registro-sinais/` configurada na
  * aprovação do template — aqui só passamos o `secure_token` como {{1}} do
  * botão (não o path inteiro, diferente do send-whatsapp-alert que usa
  * `patients/${patientId}` porque aquele link é da equipe, não do paciente).
@@ -80,7 +80,7 @@ async function sendViaMeta(
             sub_type: 'url',
             index: '0',
             // {{1}} do botão = só o secure_token; a base
-            // "https://vital-sync-frontend.vercel.app/registro-sinais/" é fixa no template.
+            // "https://vital-sync-frontend-iota.vercel.app/registro-sinais/" é fixa no template.
             parameters: [{ type: 'text', text: secureToken }],
           },
         ],

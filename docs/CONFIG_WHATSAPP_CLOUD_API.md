@@ -158,16 +158,22 @@ enviou o registro daquele período. Implementada na migration
   > vitais no VitalSync. Toque no botão abaixo para registrar antes que a
   > janela feche. 🙏
   > Lembrete: os horários são das 8h às 10h (manhã) e das 18h às 20h (noite)."
-- **Botão "Visitar site" (URL dinâmica)**, texto **"Registrar agora"**, URL:
-  `https://vital-sync-frontend.vercel.app/registro-sinais/{{1}}` — onde o
-  `{{1}}` do botão é o **`secure_token`** do paciente (a Edge Function envia só
-  o token, não o path inteiro; o `/r/:token` é apenas um alias). Diferente do
-  botão "Ver no VitalSync" do alerta clínico, que usa `patients/${patientId}`
-  porque aquele link é da equipe — aqui o link é do próprio paciente.
+- **Botão "Visitar site" (URL dinâmica)**, texto **"Registrar agora"**. Na URL
+  do botão, a **base termina em `/registro-sinais/`** (SEM `{{1}}`): a Meta anexa
+  a variável dinâmica automaticamente **no final** da URL.
+    - URL do site (base): `https://vital-sync-frontend-iota.vercel.app/registro-sinais/`
+    - Variável `{{1}}` (anexada pela Meta) = o **`secure_token`** do paciente.
+    - URL de amostra: `https://vital-sync-frontend-iota.vercel.app/registro-sinais/<token-exemplo>`
+  ⚠️ **Não** digite `{{1}}` dentro da base (ex.: `.../registro-sinais/{{1}}`):
+  isso deixa o `{{1}}` literal no meio e a Meta ainda anexa o token no fim,
+  gerando `.../registro-sinais/{{1}}<token>` — link quebrado (404). A Edge
+  Function envia só o token como parâmetro do botão, não o path inteiro; o
+  `/r/:token` é apenas um alias. Diferente do botão "Ver no VitalSync" do alerta
+  clínico, que usa `patients/${patientId}` porque aquele link é da equipe.
 - Se migrar para domínio próprio (`https://vitalsync.com.br`), o template
   precisa ser **editado na Meta** (a URL base do botão é fixa na aprovação, só
   o `{{1}}` é dinâmico) e `VITE_PUBLIC_APP_URL` em produção precisa continuar
-  igual à base do template — hoje `https://vital-sync-frontend.vercel.app`.
+  igual à base do template — hoje `https://vital-sync-frontend-iota.vercel.app`.
 
 ### Deploy e agendamento
 
@@ -207,3 +213,70 @@ migration recria os dois jobs (`measurement-reminder-morning` /
 - Assim como o alerta clínico, mantenha o **modo homologação** ligado durante
   os testes (Passo 7) — só os números da whitelist ficam `PENDING`; os demais
   viram `SKIPPED_TEST_MODE` em `reminder_logs`.
+
+---
+
+## Alerta de esquecimento à equipe (+ lançamento pela enfermagem)
+
+Terceira automação: quando o paciente NÃO registrou um período mesmo depois do
+horário-limite (janela fechada — 10:00/20:00 America/Sao_Paulo), avisa a
+EQUIPE (priorizando o Profissional de Enfermagem; sem enfermeiro na equipe,
+cai para os demais membros ativos), 15 minutos após o fechamento da janela.
+Aditivo ao lembrete ao paciente acima — não o substitui. Implementado nas
+migrations `0059_vital_sign_records_source.sql` (colunas `source`/
+`entered_by_profile_id` em `vital_sign_records`), `0060_missed_measurement_logs.sql`
+(tabela `missed_measurement_logs`) e `0061_missed_measurement_alerts.sql`
+(`enqueue_missed_measurement_alerts`/`dispatch_missed_measurement_alerts` +
+`pg_cron`) + Edge Function `send-missed-measurement-alert`. A RPC
+`staff_insert_vital_record` (`0062_staff_insert_vital_record.sql`) permite que
+Enfermagem/Cirurgião/Associado lancem, em nome do paciente, só o período de
+HOJE já fechado — resolve automaticamente o alerta de esquecimento ao gravar.
+
+### Template novo a submeter na Meta
+
+- **Nome**: `alerta_medicao_esquecida_vitalsync` (precisa bater com
+  `WHATSAPP_MISSED_MEASUREMENT_TEMPLATE_NAME`, cujo default no código já é
+  esse nome).
+- **Idioma**: `pt_BR`.
+- **Categoria: Utilidade (Utility)** — alerta operacional, não Marketing.
+- **Corpo** (`{{1}}` = nome do destinatário, `{{2}}` = nome do paciente,
+  `{{3}}` = "manhã"/"noite" — sem dado clínico):
+  > "Olá, {{1}}. O paciente {{2}} não registrou a medição da {{3}} de hoje.
+  > Acesse o VitalSync para verificar e, se necessário, registrar em nome
+  > dele(a)."
+- **Botão "Visitar site" (URL dinâmica)**, texto **"Ver paciente"** — mesmo
+  padrão do template `alerta_clinico_vitalsync` (link é da equipe, não do
+  paciente): base fixa `https://vital-sync-frontend-iota.vercel.app/`, `{{1}}`
+  (anexado pela Meta) = `patients/<patientId>`.
+
+### Deploy e agendamento
+
+```bash
+supabase functions deploy send-missed-measurement-alert
+supabase db push        # aplica 0059-0062 (colunas + tabela + funções + cron + RPC)
+# opcional (já tem default no código):
+#   supabase secrets set WHATSAPP_MISSED_MEASUREMENT_TEMPLATE_NAME=alerta_medicao_esquecida_vitalsync
+```
+
+Reaproveita os MESMOS secrets `WHATSAPP_API_TOKEN`/`WHATSAPP_PHONE_NUMBER_ID`/
+`WHATSAPP_TEMPLATE_LANG` e os MESMOS segredos do Vault já configurados acima.
+Cria dois jobs `pg_cron` idempotentes (`missed-measurement-alert-morning`/
+`missed-measurement-alert-night`, 10:15/20:15 America/Sao_Paulo) — mesma
+ressalva de permissão do `pg_cron` descrita acima para o lembrete.
+
+### Como testar sem enviar de verdade
+
+- **Modo simulado**: sem credenciais Meta, a Edge Function marca os
+  `missed_measurement_logs` como `logged` em vez de `SENT`.
+- **Disparo manual**: `select public.enqueue_missed_measurement_alerts('MORNING');`
+  no SQL Editor, depois `supabase functions invoke send-missed-measurement-alert
+  --body '{"period":"MORNING"}'`.
+- **Prioridade de enfermagem**: com um `NURSING_PROFESSIONAL` ativo na equipe,
+  confirme que só ele(s) recebe(m) (`recipient_is_nurse = true`); removendo o
+  enfermeiro da equipe, confirme o fallback para os demais membros ativos.
+- **Resolução automática**: chame `staff_insert_vital_record` (autenticado,
+  depois do fechamento da janela) para o paciente/período de teste e confirme
+  que as linhas `missed_measurement_logs` em aberto viram `resolved_at`
+  preenchido (e `status='CANCELLED'` se ainda estavam `PENDING`).
+- Mantenha o **modo homologação** ligado durante os testes, como nos dois
+  fluxos acima.

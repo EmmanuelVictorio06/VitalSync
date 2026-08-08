@@ -19,7 +19,8 @@ import {
   StatusDonutCard,
   WeeklyBarChart,
 } from '../components/dashboard';
-import { Loading, PageContainer } from '../components/ui';
+import { NurseDashboard } from '../components/NurseDashboard';
+import { PageContainer } from '../components/ui';
 import { dashboardService } from '../services/dashboardService';
 import type { DashboardData } from '../lib/dashboard-data';
 
@@ -57,17 +58,40 @@ function DashboardError() {
   );
 }
 
+/** Cabeçalho e subtítulo por perfil. TODOS os papéis precisam de uma entrada aqui. */
+const PROFILE_LABEL: Record<Role, { subtitle: string; sectionTitle: string }> = {
+  [Role.ADM]: { subtitle: 'Visão geral de todas as equipes e pacientes do sistema.', sectionTitle: 'Visão Geral do Sistema' },
+  [Role.SURGEON]: { subtitle: 'Visão geral dos pacientes monitorados pelas suas equipes.', sectionTitle: 'Resumo das Minhas Equipes' },
+  [Role.ASSOCIATE]: { subtitle: 'Visão geral dos pacientes das equipes em que você participa.', sectionTitle: 'Resumo dos Meus Pacientes' },
+  [Role.SUPPORT]: { subtitle: 'Acompanhamento operacional dos pacientes.', sectionTitle: 'Pacientes' },
+  [Role.MANAGER]: { subtitle: 'Visão geral das equipes e pacientes sob sua gestão.', sectionTitle: 'Resumo das Equipes Vinculadas' },
+  [Role.NURSE]: {
+    subtitle: 'Triagem, contato ativo e acompanhamento dos pacientes das suas equipes.',
+    sectionTitle: 'Central de Enfermagem',
+  },
+};
+
+function profileLabelFor(role: Role | undefined) {
+  return PROFILE_LABEL[role ?? Role.ASSOCIATE] ?? PROFILE_LABEL[Role.ASSOCIATE];
+}
+
 export function DashboardPage() {
   const { user, hasRole } = useAuth();
   const navigate = useNavigate();
   const isAdmin = hasRole(Role.ADM);
   const isSurgeon = hasRole(Role.SURGEON);
   const isAssociate = hasRole(Role.ASSOCIATE);
+  const isNurse = hasRole(Role.NURSE);
 
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // A Central de Enfermagem não usa os KPIs genéricos — evita a query extra.
+    if (isNurse) {
+      setLoading(false);
+      return;
+    }
     let alive = true;
     dashboardService
       .getDashboard()
@@ -75,10 +99,27 @@ export function DashboardPage() {
       .catch(() => alive && setData(null))
       .finally(() => alive && setLoading(false));
     return () => { alive = false; };
-  }, []);
+  }, [isNurse]);
 
   function handleSegmentClick(param: string) {
     navigate(`/monitoring?status=${param}`);
+  }
+
+  // Profissional de Enfermagem tem um painel operacional próprio (triagem,
+  // reaferições, contato ativo) — os demais papéis seguem o painel gerencial.
+  if (isNurse) {
+    const nurseLabel = profileLabelFor(Role.NURSE);
+    return (
+      <PageContainer size="wide">
+        <div className="animate-entry">
+          <h2 className="text-xl md:text-2xl font-extrabold tracking-tight">
+            Olá, {user?.name?.split(' ')[0] ?? 'Enfermeiro(a)'}
+          </h2>
+          <p className="text-sm text-muted-foreground mt-0.5">{nurseLabel.subtitle}</p>
+        </div>
+        <NurseDashboard />
+      </PageContainer>
+    );
   }
 
   if (loading) return <DashboardSkeleton />;
@@ -93,14 +134,7 @@ export function DashboardPage() {
     return a.postOpDay - b.postOpDay;
   });
 
-  // Configuração de cabeçalho e subtítulo por perfil.
-  const profileLabel = ({
-    [Role.ADM]: { subtitle: 'Visão geral de todas as equipes e pacientes do sistema.', sectionTitle: 'Visão Geral do Sistema' },
-    [Role.SURGEON]: { subtitle: 'Visão geral dos pacientes monitorados pelas suas equipes.', sectionTitle: 'Resumo das Minhas Equipes' },
-    [Role.ASSOCIATE]: { subtitle: 'Visão geral dos pacientes das equipes em que você participa.', sectionTitle: 'Resumo dos Meus Pacientes' },
-    [Role.SUPPORT]: { subtitle: 'Acompanhamento operacional dos pacientes.', sectionTitle: 'Pacientes' },
-    [Role.MANAGER]: { subtitle: 'Visão geral das equipes e pacientes sob sua gestão.', sectionTitle: 'Resumo das Equipes Vinculadas' },
-  } as Record<Role, { subtitle: string; sectionTitle: string }>)[user?.role ?? Role.ASSOCIATE];
+  const profileLabel = profileLabelFor(user?.role);
 
   return (
     <PageContainer size="wide">

@@ -6,6 +6,7 @@ import { formatCpf } from '../lib/cpfUtils';
 import { publicAccessService, type PatientAccessValidation } from '../services/publicAccessService';
 import { type PatientLinkInfo } from '../services/vitalSignsService';
 import {
+  ContatoAtivoAviso,
   GRADIENT_BG,
   MeasurementSuccess,
   PatientMeasurementWizard,
@@ -268,6 +269,12 @@ function CpfGate({
           {busy ? 'Validando…' : 'Acessar meu registro'}
         </button>
       </form>
+
+      {/* Primeiro acesso: o paciente precisa saber que pode receber contato
+          ANTES de recebê-lo, senão a ligação parece golpe e ele bloqueia. */}
+      <div className="mt-5">
+        <ContatoAtivoAviso compacto />
+      </div>
 
       <p className="text-xs text-muted-foreground mt-4">Em caso de dúvida, entre em contato com sua equipe médica.</p>
     </CenteredCard>

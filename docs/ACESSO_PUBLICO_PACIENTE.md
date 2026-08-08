@@ -43,7 +43,7 @@ ele bate na parede da Vercel.
 
 ✅ Correto (produção):
 ```
-https://vital-sync-frontend.vercel.app/registro-sinais/<TOKEN>
+https://vital-sync-frontend-iota.vercel.app/registro-sinais/<TOKEN>
 ```
 
 ❌ Errado (preview protegido):
@@ -63,7 +63,7 @@ preview que o admin estiver navegando).
 Configure na Vercel → **Settings → Environment Variables**, escopo **Production**:
 
 ```
-VITE_PUBLIC_APP_URL = https://vital-sync-frontend.vercel.app
+VITE_PUBLIC_APP_URL = https://vital-sync-frontend-iota.vercel.app
 ```
 
 (Substitua pelo domínio de produção real, ou pelo domínio próprio, ex.

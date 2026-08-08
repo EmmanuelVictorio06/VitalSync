@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   Activity,
   AlertCircle,
@@ -11,6 +11,7 @@ import {
   MessageCircle,
   Pencil,
   Thermometer,
+  UserCog,
   Wind,
 } from 'lucide-react';
 import {
@@ -23,7 +24,7 @@ import {
   worstStatus,
   type VitalThreshold,
 } from '@vitalsync/shared';
-import { useAuth } from '../auth/AuthContext';
+import { Role, useAuth } from '../auth/AuthContext';
 import { PatientEditModal } from '../components/PatientEditModal';
 import { PatientFollowupSection } from '../components/PatientFollowupSection';
 import { PatientDay30Section } from '../components/PatientDay30Section';
@@ -40,6 +41,7 @@ import { PatientMeasurementPhotoSection } from '../components/photo';
 import { Button, Loading, PageContainer, StatusBadge, cn, statusBorder } from '../components/ui';
 import { patientDashboardService } from '../services/patientDashboardService';
 import { permissionService } from '../services/permissionService';
+import { getMissedPeriodsToday } from '../lib/staffEntry';
 import type { PatientDashboard, VitalRecord } from '../lib/dto';
 
 type PeriodFilter = 'MORNING' | 'NIGHT' | 'BOTH';
@@ -53,7 +55,8 @@ const PERIOD_OPTIONS: Array<{ value: PeriodFilter; label: string }> = [
 
 export function PatientDashboardPage() {
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { user, hasRole } = useAuth();
   const toast = useToast();
   const [data, setData] = useState<PatientDashboard | null>(null);
   const [loading, setLoading] = useState(true);
@@ -139,6 +142,13 @@ export function PatientDashboardPage() {
     const recs = data?.records ?? [];
     return recs.length ? recs[recs.length - 1] : null;
   }, [data]);
+
+  // Período(s) de hoje já com a janela fechada e sem registro — dispara o banner.
+  const missedToday = useMemo(
+    () => getMissedPeriodsToday(data?.records ?? [], data?.patient.monitoringDay ?? null),
+    [data],
+  );
+  const canEnterMissedVitals = hasRole(Role.SURGEON, Role.ASSOCIATE, Role.NURSE);
 
   // Registros do período selecionado (para a seção de fotos da ferida).
   const periodRecords = useMemo(() => {
@@ -262,6 +272,34 @@ export function PatientDashboardPage() {
         </div>
       </section>
 
+      {/* Banner de esquecimento: período de hoje com a janela fechada e sem registro */}
+      {(missedToday.morning || missedToday.night) && (
+        <section className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-amber-900">
+            <strong>Atenção:</strong>{' '}
+            {missedToday.morning && missedToday.night
+              ? 'as medições da manhã e da noite de hoje ainda não foram registradas.'
+              : missedToday.morning
+                ? 'a medição da manhã de hoje ainda não foi registrada.'
+                : 'a medição da noite de hoje ainda não foi registrada.'}
+          </p>
+          {canEnterMissedVitals && id && (
+            <div className="flex gap-2">
+              {missedToday.morning && (
+                <Button size="sm" variant="secondary" onClick={() => navigate(`/patients/${id}/registrar-medicao?period=MORNING`)}>
+                  Registrar manhã
+                </Button>
+              )}
+              {missedToday.night && (
+                <Button size="sm" variant="secondary" onClick={() => navigate(`/patients/${id}/registrar-medicao?period=NIGHT`)}>
+                  Registrar noite
+                </Button>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
       {/* Período */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Período:</span>
@@ -299,9 +337,17 @@ export function PatientDashboardPage() {
           {/* Indicadores do último registro */}
           {latest && (
             <>
-              <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground pt-2">
-                Indicadores do último registro ({latest.monitoringDay}º dia ·{' '}
-                {latest.period === Period.MORNING ? 'manhã' : 'noite'})
+              <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground pt-2 flex items-center gap-2 flex-wrap">
+                <span>
+                  Indicadores do último registro ({latest.monitoringDay}º dia ·{' '}
+                  {latest.period === Period.MORNING ? 'manhã' : 'noite'})
+                </span>
+                {latest.source === 'STAFF' && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] normal-case font-semibold tracking-normal text-blue-800">
+                    <UserCog className="size-3" />
+                    Registrado por {latest.enteredByName ?? 'equipe'} (equipe)
+                  </span>
+                )}
               </h3>
               <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 <ScaleIndicatorCard title="Dor" icon={AlertCircle} value={latest.pain} status={worst(latest.statusByVital.PAIN)} />
