@@ -180,6 +180,35 @@ export interface VitalSignRecord {
   drain_photo_path: string | null;
   clinical_status: ClinicalStatus;
   created_at: string;
+  /** PATIENT = enviado pelo paciente (fluxo padrão). STAFF = lançado pela equipe. */
+  source: 'PATIENT' | 'STAFF';
+  /** Profissional que lançou a medição, quando source=STAFF. */
+  entered_by_profile_id: string | null;
+}
+
+/** Status do alerta operacional de esquecimento (espelha public.missed_measurement_logs). */
+export type MissedMeasurementStatus =
+  | 'PENDING'
+  | 'SENT'
+  | 'FAILED'
+  | 'SKIPPED_TEST_MODE'
+  | 'CANCELLED'
+  | 'logged'
+  | (string & {});
+
+export interface MissedMeasurementLog {
+  id: string;
+  patient_id: string;
+  team_id: string | null;
+  period: MeasurementPeriod;
+  missed_date: string;
+  recipient_profile_id: string;
+  recipient_name: string | null;
+  recipient_is_nurse: boolean;
+  status: MissedMeasurementStatus;
+  created_at: string;
+  resolved_at: string | null;
+  resolved_by: string | null;
 }
 
 /** Tipo da foto de acompanhamento. */
@@ -222,8 +251,38 @@ export interface ClinicalAlert {
   recheck_due_at: string | null;
   /** Quando a reaferição chegou — null se ainda pendente ou não se aplica. */
   recheck_completed_at: string | null;
+  /**
+   * Escalonamento pela enfermagem (0064). NÃO altera `status`: a severidade
+   * clínica é imutável. Quem precisa tratar como vermelho lê `escalated_at`.
+   */
+  escalated_at: string | null;
+  escalated_by: string | null;
+  escalation_reason: string | null;
+  /** Escalonamento automático por tempo (SLA máximo), não por julgamento humano. */
+  auto_escalated: boolean;
+  /** Enfermeiro a quem o alerta foi OFERECIDO (preferência, não exclusividade — 0065/0068). */
+  assigned_nurse_id: string | null;
+  assigned_at: string | null;
+  offer_expires_at: string | null;
+  /** Amarelo que passou do SLA de fila com plantão aberto (0068). */
+  sla_breached_at: string | null;
+  /** Amarelo finalizado sorteado para revisão médica por amostragem. */
+  review_pending: boolean;
   created_at: string;
   updated_at: string | null;
+}
+
+/** Estado do plantão do enfermeiro logado (RPC nurse_my_shift, 0065). */
+export interface NurseShift {
+  shift_id: string;
+  pool_id: string;
+  pool_name: string;
+  starts_at: string;
+  paused_at: string | null;
+  on_duty: boolean;
+  active_load: number;
+  wip_limit: number;
+  is_free: boolean;
 }
 
 /** Status de uma notificação de WhatsApp. Em homologação, números fora da
@@ -266,8 +325,10 @@ export interface AttendanceConfirmation {
   id: string;
   patient_id: string;
   alert_id: string | null;
-  attended_by: string;
-  status: string | null; // IN_ANALYSIS | ATTENDED | IGNORED
+  /** Null = evento gerado pelo sistema (oferta expirada, escalonamento automático — 0068). */
+  attended_by: string | null;
+  /** IN_ANALYSIS | ATTENDED | IGNORED | RELEASED | OFFERED | DECLINED | OFFER_EXPIRED | CONTACT | ESCALATED | ESCALATION_UNANSWERED */
+  status: string | null;
   observation: string | null;
   created_at: string;
 }

@@ -25,8 +25,35 @@ Camada de serviços em `frontend/src/services/*Service.ts`. Dois padrões:
 ## Regras e mapeamentos de fonte única (não duplicar)
 
 - **Regras clínicas** → `packages/shared/src/clinical/thresholds.ts` (faixas de validação de entrada + limiares verde/amarelo/vermelho) e `status.ts`. Ponto de manutenção **único**: backend, frontend e gráficos leem daqui. Campos com `PENDING_MEDICAL_VALIDATION = true` são provisórios (Pressão Arterial e FC aguardam confirmação médica — ver `docs/PONTOS_PENDENTES.md`). Não invente limiares finais.
-- **Papéis** → `frontend/src/lib/roles.ts`. O banco usa `profiles.role` (`ADMIN`/`MEDICAL_SURGEON`/`ASSOCIATED_DOCTOR`/`SUPPORT`/`TEAM_MANAGER`); o app usa o enum `Role` de `@vitalsync/shared` (`ADM`/`SURGEON`/`ASSOCIATE`/`SUPPORT`/`MANAGER`). Converta com `dbRoleToAppRole`; rótulos PT-BR em `APP_ROLE_LABEL_PT`. Não recriar esse de-para (era duplicado em `AuthContext`, `MyProfilePage`, `profile` e `exportService` antes de ser centralizado).
+- **Papéis** → `frontend/src/lib/roles.ts`. O banco usa `profiles.role` (`ADMIN`/`MEDICAL_SURGEON`/`ASSOCIATED_DOCTOR`/`SUPPORT`/`TEAM_MANAGER`/`NURSING_PROFESSIONAL`); o app usa o enum `Role` de `@vitalsync/shared` (`ADM`/`SURGEON`/`ASSOCIATE`/`SUPPORT`/`MANAGER`/`NURSE`). Converta com `dbRoleToAppRole`; rótulos PT-BR em `APP_ROLE_LABEL_PT`. Não recriar esse de-para (era duplicado em `AuthContext`, `MyProfilePage`, `profile` e `exportService` antes de ser centralizado). `DB_ROLE_TO_APP_ROLE` e `APP_ROLE_LABEL_PT` são `Record<...>` completos: adicionar um papel novo ao enum quebra o build até o de-para ser atualizado — isso é proposital.
+- **Parâmetros operacionais** → tabela `app_settings` (`section` text PK + `data` jsonb; seções em uso: `security`, `nursing`), lida no SQL por `nursing_setting_num/bool` (0063). Janelas, limites e feature flags vivem aqui para mudarem **sem deploy** — não hardcode valores desses no TS nem no SQL.
 - **Pacote `@vitalsync/shared`** (`packages/shared`) é neutro de framework (tipos, utils, clínico) e é dependência dos três workspaces — **precisa ser compilado antes** de backend/frontend. Todos os scripts `dev`/`build` já fazem `build:shared` primeiro.
+
+## Ciclo de vida de um alerta clínico (espalhado por várias migrations)
+
+`clinical_alerts` acumulou **camadas ortogonais** que é fácil confundir. Cada uma responde a uma pergunta diferente:
+
+| Camada | Colunas | Pergunta | Onde |
+|---|---|---|---|
+| Severidade clínica | `status` (GREEN/YELLOW/RED) | O que a regra clínica calculou? | `eval_clinical_status` (SQL) + `thresholds.ts` (TS) |
+| Atendimento | `attendance_status` (PENDING/IN_ANALYSIS/ATTENDED/IGNORED) | Em que ponto do fluxo está? | 0008 |
+| Lock | `in_analysis_by/at` | Quem está atendendo **agora** (exclusividade)? | 0044/0045, TTL na 0063 |
+| Atribuição | `assigned_nurse_id`, `offer_expires_at` | De quem é a **preferência** de triar? | 0065/0068 |
+| Escalonamento | `escalated_at/by`, `escalation_reason` | A equipe julgou que precisa de médico? | 0064 |
+
+Invariantes que **não** podem ser quebradas:
+
+- **`status` nunca é sobrescrito por decisão humana.** Escalar grava numa camada separada justamente por isso — `status` alimenta as métricas do estudo (0055) e distingue "o algoritmo achou vermelho" de "a enfermeira achou que precisa de médico". Quem precisa tratar como vermelho lê `escalated_at is not null`.
+- **Lock ≠ atribuição.** Atribuição é preferência (o alerta continua visível a todo o pool); lock é exclusividade. O claim atômico (`update ... where in_analysis_by is null`) é quem decide corrida entre profissionais — não reimplemente com `select` + `update`.
+- **Só o dono do lock finaliza** (Admin é a exceção administrativa). Para assumir de outro, libere primeiro.
+
+Toda mudança de estado passa por RPC `security definer` (`alert_set_in_analysis`, `alert_mark_attended`, `alert_ignore`, `alert_release_analysis`, `alert_escalate_to_red`, `alert_register_contact`) — o frontend **nunca** faz `update` direto em `clinical_alerts`. Cada uma grava a timeline em `attendance_confirmations` (campo `status` é texto livre: `ATTENDED`, `IGNORED`, `RELEASED`, `OFFERED`, `DECLINED`, `OFFER_EXPIRED`, `CONTACT`, `ESCALATED`, `ESCALATION_UNANSWERED`; `attended_by` nulo = evento gerado pelo sistema) e audita em `audit_logs`.
+
+Fluxo completo da triagem de enfermagem (pool, plantão, oferta, SLA) em **`docs/FLUXO_ENFERMAGEM.md`** — inclui a nota de que esse desenho substitui a premissa de escopo por equipe da `0054`.
+
+### Escopo de acesso: quatro funções combinadas, não uma
+
+As políticas de RLS e as guardas internas das RPCs combinam `is_admin()`, `is_team_member(team_id)`, `is_team_manager_of(team_id)` e `is_nurse_for_patient(patient_id)`. Ao estender uma política, **acrescente** um `or` — nunca reescreva removendo condições (o histórico de 0016/0030/0039/0066 é uma cadeia de extensões aditivas, e cada uma lista no cabeçalho as políticas que tocou). Lembre que RPCs `security definer` **ignoram RLS** e repetem a checagem no corpo: mudar só a política deixa o usuário vendo o registro e sem conseguir agir sobre ele.
 
 ## Rotas e autorização no frontend
 
@@ -57,7 +84,9 @@ npm run test --workspace @vitalsync/shared          # vitest run do pacote share
 npm run test:watch --workspace @vitalsync/frontend
 ```
 
-Rodar um único teste: `npx vitest run caminho/do/arquivo.test.ts` dentro de `frontend/`, ou `-t "nome do teste"`. Suítes existentes hoje: `packages/shared/src/utils.test.ts`, `packages/shared/src/clinical/status.test.ts`, `frontend/src/lib/roles.test.ts`, `frontend/src/lib/teamLimits.test.ts`, `frontend/src/components/attendances/utils.test.ts`.
+Rodar um único teste: `npx vitest run src/lib/arquivo.test.ts --root frontend` a partir da raiz (ou `npx vitest run caminho.test.ts` dentro de `frontend/`), e `-t "nome do teste"` para filtrar.
+
+Os testes cobrem **lógica pura**, não componentes — não há testing-library nem testes de render no projeto. O padrão ao criar uma regra derivável é extraí-la para um módulo em `lib/` (ou `packages/shared`) e testar ali: `packages/shared/src/{utils,clinical/status,clinical/measurementWindows}.test.ts` e `frontend/src/lib/{roles,teamLimits,staffEntry,nurseDashboard,nurseTriage}.test.ts` + `frontend/src/components/attendances/utils.test.ts`.
 
 **Não existe script `lint`** em nenhum workspace — não procure nem tente rodar lint; só `typecheck` + `test`. A CI (`.github/workflows/ci.yml`) roda `npm run build` (shared+backend+frontend) e depois `test` do shared e do frontend; o backend legado não tem testes automatizados, mas quebrar seu build derruba a CI mesmo assim.
 
@@ -68,13 +97,17 @@ npm run db:up / db:down     # Postgres via docker-compose (porta host 5544, não
 npm run db:migrate / db:seed / db:reset
 ```
 
-Supabase (banco de produção): migrations aplicadas com `supabase db push`; Edge Functions com `supabase functions deploy <nome>`. Segredos via `supabase secrets set ...` (CPF_PEPPER, CPF_ENC_KEY, WHATSAPP_*). Reset local completo em `supabase/_scripts/0000_reset.sql`. Funções atuais em `supabase/functions/`: `create-patient`, `update-patient`, `submit-vital-record`, `process-vital-record`, `send-whatsapp-alert`, `send-measurement-reminder`, `whatsapp-webhook`, `validate-patient-access`, `admin-create-user`, `accept-invite`, `export-data`, `upload-patient-photo`.
+Supabase (banco de produção): migrations aplicadas com `supabase db push`; Edge Functions com `supabase functions deploy <nome>`. Segredos via `supabase secrets set ...` (CPF_PEPPER, CPF_ENC_KEY, WHATSAPP_*). Reset local completo em `supabase/_scripts/0000_reset.sql`. Funções atuais em `supabase/functions/`: `create-patient`, `update-patient`, `submit-vital-record`, `process-vital-record`, `send-whatsapp-alert`, `send-measurement-reminder`, `send-missed-measurement-alert`, `whatsapp-webhook`, `validate-patient-access`, `admin-create-user`, `accept-invite`, `export-data`, `upload-patient-photo`.
 
 ## Gotchas de migrations Supabase (histórico real de quebras)
 
-- Numeração sequencial `NNNN_descricao.sql` em `supabase/migrations/` (atual vai até `0047`). **Não** repita um número já usado — duplicatas de `0010` e `0041` já quebraram `db push`.
+- Numeração sequencial `NNNN_descricao.sql` em `supabase/migrations/` — **confira o maior número com `ls` antes de criar** (esta linha envelhece). **Não** repita um número já usado: duplicatas de `0010` e `0041` já quebraram `db push`.
+- Migrations são **aditivas e idempotentes**; nunca edite uma já aplicada. Para mudar uma função, `create or replace` numa migration nova — e **parta da versão viva**, que raramente é a que criou a função (ex.: `submit_vital_record` nasceu na 0008 mas a viva está na 0053; `alert_mark_attended` nasceu na 0044 e foi reescrita na 0045 e na 0067). `grep -ln "nome_da_funcao" supabase/migrations/*.sql | tail -1` acha a mais recente.
 - **`CPF_PEPPER` é imutável**: se trocar depois, todos os hashes de CPF existentes deixam de bater.
-- Coloque `ALTER TYPE ... ADD VALUE` (enum) em uma **migration isolada** — não pode rodar na mesma transação que o usa.
+- Coloque `ALTER TYPE ... ADD VALUE` (enum existente) em uma **migration isolada** — não pode rodar na mesma transação que usa o valor novo. `CREATE TYPE` de enum novo não tem essa restrição.
+- Funções nascem com `EXECUTE` para `PUBLIC`: revogue de `public` **e** de `anon` antes de conceder a quem deve (a 0022 documenta o caso em que revogar só de `anon` não teve efeito).
+- **`pg_cron` é carga funcional, não enfeite** — expiração de lock, fila de triagem, SLA, lembretes e alertas de medição esquecida dependem dele. Envolva `create extension` num bloco com `exception when insufficient_privilege` (em alguns projetos só o Dashboard habilita) e torne o `cron.schedule` idempotente (unschedule antes de recriar). Sem pg_cron o app funciona, mas as redes de segurança silenciam.
+- Os blocos `-- VERIFICAÇÃO` no rodapé das migrations recentes trazem o SQL para conferir o efeito depois do `db push`; siga o padrão.
 
 ## Ambiente
 
@@ -82,4 +115,13 @@ Há **dois `.env.example` distintos, não confunda**: o da **raiz** é do backen
 
 ## Documentação de apoio
 
-`README.md` descreve a arquitetura Clean do backend legado (útil para conceitos, não para o fluxo atual). `docs/`: `CONFIG_SUPABASE.md` (setup), `ACESSO_PUBLICO_PACIENTE.md` (fluxo do link do paciente), `HOMOLOGACAO.md`, `PONTOS_PENDENTES.md` (valores clínicos aguardando validação). `AUDITORIA_VitalSync_*.md` e `PROMPT_*.md` na raiz são notas de trabalho/auditoria.
+`README.md` descreve a arquitetura Clean do backend legado (útil para conceitos, não para o fluxo atual). `docs/`:
+
+- `CONFIG_SUPABASE.md` — setup do ambiente.
+- `ACESSO_PUBLICO_PACIENTE.md` — fluxo do link do paciente.
+- `CONFIG_WHATSAPP_CLOUD_API.md` — Meta Cloud API: templates aprovados, secrets, deploy das Edge Functions e das automações agendadas.
+- `HOMOLOGACAO.md` — modo de teste com médicos; o gate de homologação (`homologation_settings` + status `SKIPPED_TEST_MODE`) vale para **toda** notificação nova.
+- `FLUXO_ENFERMAGEM.md` — triagem de enfermagem ponta a ponta (pool, plantão, oferta, SLA, LGPD).
+- `PONTOS_PENDENTES.md` — decisões clínicas e operacionais **aguardando confirmação humana**. Consulte antes de "corrigir" um limiar ou um default que pareça arbitrário: provavelmente já está registrado ali como pendência consciente.
+
+`AUDITORIA_VitalSync_*.md`, `PROMPT_*.md` e `council-*` na raiz são notas de trabalho/auditoria, não especificação viva.

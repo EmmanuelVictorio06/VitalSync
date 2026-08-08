@@ -221,7 +221,7 @@ export function PatientRegisterPage() {
             <TextInput label="Peso (kg)" inputMode="decimal" placeholder="Ex. 72,5" value={form.weightKg} onChange={(e) => set('weightKg', e.target.value)} />
             <TextInput label="Altura (cm)" inputMode="numeric" placeholder="Ex. 170" value={form.heightCm} onChange={(e) => set('heightCm', e.target.value)} />
             <TextInput label="Tempo de internação (dias)" inputMode="numeric" value={form.lengthOfStayDays} onChange={(e) => set('lengthOfStayDays', e.target.value)} />
-            <TextInput label="TCLE assinado em" type="date" hint="Data de assinatura do Termo de Consentimento." value={form.tcleAcceptedAt} onChange={(e) => set('tcleAcceptedAt', e.target.value)} />
+            <TextInput label="TCLE assinado em" type="date" hint="Data de assinatura do Termo de Consentimento. O termo precisa conter a cláusula de contato ativo (ver docs/AVISO_CONTATO_ATIVO.md)." value={form.tcleAcceptedAt} onChange={(e) => set('tcleAcceptedAt', e.target.value)} />
           </div>
           <div className="mt-4">
             <TextareaField
