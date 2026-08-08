@@ -90,15 +90,27 @@ with checagens as (
   -- 5) HOSPITAIS SEM COBERTURA (buraco silencioso) -------------------------
   union all
   select 7, 'Hospitais sem pool',
-    case when exists (
-      select 1 from public.hospitals h
-       where h.status = 'ACTIVE'
-         and not exists (select 1 from public.nurse_pool_hospitals nph where nph.hospital_id = h.id)
-    ) then 'ATENÇÃO' else 'OK' end,
-    coalesce((select string_agg(h.name, ', ') from public.hospitals h
-       where h.status = 'ACTIVE'
-         and not exists (select 1 from public.nurse_pool_hospitals nph where nph.hospital_id = h.id)),
-      'Todos os hospitais ativos estão cobertos por algum pool.')
+    -- Cuidado com VERDADE VÁCUA: sem nenhum hospital cadastrado, "nenhum
+    -- hospital está descoberto" seria trivialmente verdadeiro e apareceria
+    -- como OK. Zero hospitais é um problema, não uma aprovação.
+    case
+      when (select count(*) from public.hospitals where status = 'ACTIVE') = 0 then 'ATENÇÃO'
+      when exists (
+        select 1 from public.hospitals h
+         where h.status = 'ACTIVE'
+           and not exists (select 1 from public.nurse_pool_hospitals nph where nph.hospital_id = h.id)
+      ) then 'ATENÇÃO'
+      else 'OK'
+    end,
+    case
+      when (select count(*) from public.hospitals where status = 'ACTIVE') = 0
+        then 'Nenhum hospital ATIVO cadastrado — não há o que cobrir (e nenhum paciente pode ser cadastrado).'
+      else coalesce(
+        (select 'Sem cobertura de pool: ' || string_agg(h.name, ', ') from public.hospitals h
+          where h.status = 'ACTIVE'
+            and not exists (select 1 from public.nurse_pool_hospitals nph where nph.hospital_id = h.id)),
+        'Todos os hospitais ativos estão cobertos por algum pool.')
+    end
 
   -- 6) EQUIPES ------------------------------------------------------------
   union all
