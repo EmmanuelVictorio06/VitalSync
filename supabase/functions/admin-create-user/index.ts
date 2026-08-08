@@ -94,6 +94,35 @@ serve(async (req) => {
       .eq('id', userId);
     if (profErr) return json({ error: profErr.message }, 400);
 
+    // 7. CONFERE o que realmente persistiu.
+    //
+    // Não é paranoia: `role` e `status` são campos privilegiados protegidos
+    // pelo trigger `protect_profile_privileged_fields`. Até a migration 0073
+    // ele descartava em silêncio o que esta função escrevia (o service_role não
+    // era reconhecido), e a UI confirmava sucesso enquanto o banco guardava
+    // 'ACTIVE'. Foi exatamente essa ausência de conferência que escondeu o bug.
+    // Uma escrita que não persistiu nunca deve ser reportada como 201.
+    const { data: saved, error: readErr } = await admin
+      .from('profiles')
+      .select('role, status')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (readErr || !saved) {
+      return json({ error: 'Usuário criado, mas não foi possível confirmar os dados salvos.' }, 500);
+    }
+    if (saved.role !== role || saved.status !== status) {
+      return json(
+        {
+          error:
+            `A conta foi criada, mas os dados não foram salvos como solicitado ` +
+            `(papel: ${saved.role}, status: ${saved.status}). ` +
+            `Ajuste o usuário na tela de edição e avise o suporte técnico.`,
+        },
+        500,
+      );
+    }
+
     return json({ id: userId }, 201);
   } catch (e) {
     return json({ error: String(e) }, 500);
