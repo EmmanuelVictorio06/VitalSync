@@ -10,7 +10,13 @@ implementadas em `packages/shared/src/clinical/thresholds.ts` (fonte única — 
 🚩 Flag no código: `PENDING_MEDICAL_VALIDATION: true`
 
 Para listar as pendências em tempo de execução (frontend): `listPendingMedicalValidations()`
-em `thresholds.ts`.
+em `thresholds.ts` — exibida no painel do Admin (Configurações → Clínica).
+
+> **Desde 08/08/2026 não há mais NENHUMA flag `PENDING_MEDICAL_VALIDATION: true` no código**
+> (a última era a faixa de entrada da FC, confirmada nessa data) e a função retorna lista vazia.
+> As pendências que restam abaixo (SpO₂ em 92, escala do D+30, perda de seguimento e as decisões
+> operacionais) são **documentais** — não estão sinalizadas em código. O mecanismo da flag
+> permanece para a próxima regra provisória.
 
 ---
 
@@ -21,10 +27,16 @@ em `thresholds.ts`.
 | Protocolo do estudo (`FLUXOoperacional.pdf`, 5.7.1) | PAS **> 160** (sem faixa amarela alta explícita) |
 | Código atual (confirmado pela equipe médica, ago/2026 — migration `0048`) | PAS **≥ 140** (amarelo 130–139) |
 
-**Status:** ⚠️ PENDENTE — não alterado. A regra ago/2026 pode ser uma decisão médica posterior
-e mais rigorosa que o protocolo, ou o protocolo pode não ter sido atualizado desde então. Não
-decidimos sozinhos: o cirurgião responsável precisa confirmar **qual das duas regras vale** antes
-de qualquer mudança em `thresholds.ts`/`eval_clinical_status`.
+**Status:** ✅ **RESOLVIDO em 08/08/2026 — vale PAS ≥ 140 (amarelo 130–139).** A equipe médica
+confirmou a regra mais rigorosa que já estava implementada desde a migration `0048`: a decisão
+médica de ago/2026 **prevalece** sobre o valor do protocolo (`> 160`), que não foi atualizado.
+
+Consequências: **nenhuma mudança de código** — `thresholds.ts` e `eval_clinical_status` já usam
+≥ 140. O dataset de referência (`thresholds.golden.test.ts`) trava esse comportamento e o
+comentário que citava esta pendência como aberta deve ser atualizado.
+
+> ⚠️ Preencher o nome do cirurgião responsável que confirmou: ______________________.
+> Decisão clínica precisa de autoria registrada para o estudo — não deixe como "a equipe".
 
 ## 2. Saturação de O2 — fronteira exata em 92% (ambiguidade no próprio protocolo)
 
@@ -154,7 +166,7 @@ Estas regras **foram alteradas** para seguir o protocolo do estudo e já estão 
 | Temperatura | < 37,8 °C | 37,8–38,4 °C | ≥ 38,5 °C |
 | Saturação SpO₂ | > 94% (ver pendência acima p/ o valor 92) | 92,1–94% | ≤ 92% |
 | Frequência cardíaca | ≤ 110 bpm | 111–119 bpm | ≥ 120 bpm |
-| Pressão sistólica (ago/2026 — ver pendência acima) | 100–129 mmHg | 90–99 / 130–139 mmHg | ≤89 / ≥140 mmHg |
+| Pressão sistólica (resolvida em 08/08/2026 — ver seção 1) | 100–129 mmHg | 90–99 / 130–139 mmHg | ≤89 / ≥140 mmHg |
 | Pressão diastólica | 60–89 mmHg | 50–59 / 90–99 mmHg | ≤49 / ≥100 mmHg |
 | Diurese | ≥ 4 micções/dia | 2–3 micções/dia | < 2 micções/dia |
 | Ingestão hídrica | Sim | — | Não |
@@ -163,6 +175,13 @@ Estas regras **foram alteradas** para seguir o protocolo do estudo e já estão 
 | Dor (0–10) | 0–6 | 7–8 | 9–10 |
 | Dispneia (3 níveis) | Sem dispneia | Leve | Moderada/intensa |
 | Passos | sem redução relevante | queda ≥50% vs. referência 48h | só combinado (ver acima) |
+
+**Faixas de ENTRADA confirmadas** (validação de digitação — não confundir com os limiares de
+alerta da tabela acima):
+
+- **Frequência cardíaca: 30–220 bpm** — confirmada pela equipe médica em **08/08/2026**. Era a
+  última faixa marcada como provisória no código (`INPUT_RANGES.heartRate`); os limiares de
+  alerta da FC (linha da tabela acima) já estavam confirmados antes e não mudaram.
 
 ---
 

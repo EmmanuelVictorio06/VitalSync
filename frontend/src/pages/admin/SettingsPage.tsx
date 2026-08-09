@@ -262,7 +262,17 @@ function ClinicalTab() {
         </div>
       </div>
 
-      {pendencias.length > 0 && (
+      {pendencias.length === 0 ? (
+        /* Ausência de pendência é INFORMAÇÃO, não espaço em branco: o admin
+           precisa saber que todas as regras estão confirmadas — sumir com a
+           seção deixaria a dúvida "esqueceram de listar ou não há nenhuma?". */
+        <div className="bg-card border border-stable/30 rounded-xl p-4 flex items-center gap-2">
+          <CheckCircle2 className="size-4 text-stable shrink-0" />
+          <p className="text-sm font-semibold text-stable">
+            Nenhuma pendência de confirmação médica — todas as faixas e limiares em uso foram validados.
+          </p>
+        </div>
+      ) : (
         <div className="bg-card border border-alert/30 rounded-xl p-4">
           <h3 className="text-sm font-bold flex items-center gap-2 text-alert">
             <ShieldAlert className="size-4" />
@@ -277,10 +287,9 @@ function ClinicalTab() {
             ))}
           </ul>
           <p className="text-[11px] text-muted-foreground mt-3">
-            Enquanto não houver decisão do cirurgião responsável, estas faixas seguem provisórias. Divergências
-            conhecidas entre o protocolo do estudo e o código estão em <code className="font-mono">docs/PONTOS_PENDENTES.md</code> —
-            hoje a mais relevante é a pressão sistólica (protocolo: vermelho &gt; 160; código: ≥ 140), que muda
-            bastante o volume de alertas.
+            Enquanto não houver decisão do cirurgião responsável, estas faixas seguem provisórias. O histórico das
+            divergências entre o protocolo do estudo e o código (abertas e resolvidas) está em{' '}
+            <code className="font-mono">docs/PONTOS_PENDENTES.md</code>.
           </p>
         </div>
       )}

@@ -81,14 +81,13 @@ export const INPUT_RANGES = {
     PENDING_MEDICAL_VALIDATION: false,
   } satisfies InputRange,
 
-  /** Frequência cardíaca: documento marca "*******" — PENDENTE. Faixa provisória. */
+  /** Frequência cardíaca: faixa de entrada 30–220 bpm confirmada pela equipe médica em 08/08/2026. */
   heartRate: {
     min: 30,
     max: 220,
     example: 'Ex. 71',
     unit: 'bpm',
-    PENDING_MEDICAL_VALIDATION: true,
-    pendingNote: 'Faixa de entrada da frequência cardíaca aguardando confirmação médica.',
+    PENDING_MEDICAL_VALIDATION: false,
   } satisfies InputRange,
 
   /** Passos: somente números, sem teto clínico definido. */
@@ -323,7 +322,12 @@ export const WATER_INTAKE_RULE = {
  */
 export function listPendingMedicalValidations(): string[] {
   const pending: string[] = [];
-  for (const [key, range] of Object.entries(INPUT_RANGES)) {
+  for (const [key, rangeRaw] of Object.entries(INPUT_RANGES)) {
+    // Cast para o tipo declarado (como o loop abaixo faz com VitalThreshold):
+    // com zero pendências, o `satisfies` estreita o tipo inferido e
+    // `pendingNote` deixaria de existir nele — o que quebrou o build na
+    // primeira vez que a lista ficou vazia (08/2026).
+    const range = rangeRaw as InputRange;
     if (range.PENDING_MEDICAL_VALIDATION) {
       pending.push(`Entrada [${key}]: ${range.pendingNote ?? 'pendente'}`);
     }

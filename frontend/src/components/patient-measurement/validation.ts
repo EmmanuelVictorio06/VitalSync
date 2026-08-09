@@ -22,7 +22,9 @@ export const INPUT_RANGES: InputRanges = {
   spo2: { min: 70, max: 100, example: '98', unit: '%' },
   systolic: { min: 70, max: 220, example: '120', unit: 'mmHg' },
   diastolic: { min: 40, max: 140, example: '80', unit: 'mmHg' },
-  heartRate: { min: 30, max: 200, example: '72', unit: 'bpm' },
+  // FC: faixa de entrada 30–220 confirmada pela equipe médica em 08/08/2026
+  // (tem de bater com INPUT_RANGES.heartRate do @vitalsync/shared).
+  heartRate: { min: 30, max: 220, example: '72', unit: 'bpm' },
   steps: { min: 0, max: 100000, example: '2000', unit: 'passos' },
 };
 

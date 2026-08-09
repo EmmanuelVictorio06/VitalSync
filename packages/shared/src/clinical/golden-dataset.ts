@@ -10,15 +10,15 @@
  *      (esperado × TS × SQL). Divergência TS↔SQL é defeito grave: o gráfico
  *      mostraria uma cor e o alerta dispararia outra.
  *
- * ⚠️ PENDÊNCIAS CLÍNICAS TRAVADAS COMO ESTÃO (docs/PONTOS_PENDENTES.md):
- *   • SpO2 = 92 → RED. O protocolo é ambíguo exatamente em 92 (aparece no
- *     amarelo "92–94" e no vermelho "≤92"); o código mantém RED, mais
- *     conservador. Este dataset trava o atual — NÃO é uma correção.
- *   • PAS ≥ 140 → RED. O protocolo diz vermelho > 160; o código usa ≥ 140
- *     (migration 0048, confirmação ago/2026). Divergência ABERTA, decisão do
- *     cirurgião responsável. Este dataset trava o atual.
- * Se a decisão médica mudar qualquer um dos dois, os casos aqui DEVEM falhar —
- * é esse o papel deles.
+ * SITUAÇÃO DAS REGRAS SENSÍVEIS (docs/PONTOS_PENDENTES.md):
+ *   • PAS ≥ 140 → RED: ✅ RESOLVIDA em 08/08/2026 — a equipe médica confirmou
+ *     que a regra implementada desde a 0048 prevalece sobre o valor do
+ *     protocolo (> 160). Os casos abaixo testam a regra OFICIAL.
+ *   • SpO2 = 92 → RED: ⚠️ SEGUE PENDENTE. O protocolo é ambíguo exatamente em
+ *     92 (aparece no amarelo "92–94" e no vermelho "≤92"); o código mantém
+ *     RED, mais conservador. O dataset trava o atual — NÃO é uma correção.
+ * Se uma decisão médica futura mudar qualquer regra, os casos aqui DEVEM
+ * falhar — é esse o papel deles.
  */
 
 export type StatusEsperado = 'GREEN' | 'YELLOW' | 'RED';
@@ -94,7 +94,7 @@ export const CASOS_OURO: CasoOuro[] = [
   caso('PAS 129 verde', 'GREEN', { sistolica: 129 }),
   caso('PAS 130 amarelo', 'YELLOW', { sistolica: 130 }),
   caso('PAS 139 amarelo', 'YELLOW', { sistolica: 139 }),
-  caso('PAS 140 vermelho (pendência: protocolo diz >160; código ≥140)', 'RED', { sistolica: 140 }),
+  caso('PAS 140 vermelho (decisão médica de 08/08/2026: ≥140 prevalece sobre o protocolo)', 'RED', { sistolica: 140 }),
   caso('PAS 160 vermelho', 'RED', { sistolica: 160 }),
   caso('PAS 161 vermelho', 'RED', { sistolica: 161 }),
 
