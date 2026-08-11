@@ -25,6 +25,7 @@ import {
   type VitalThreshold,
 } from '@vitalsync/shared';
 import { Role, useAuth } from '../auth/AuthContext';
+import { sanitizeRichText } from '../lib/richText';
 import { PatientEditModal } from '../components/PatientEditModal';
 import { PatientFollowupSection } from '../components/PatientFollowupSection';
 import { PatientDay30Section } from '../components/PatientDay30Section';
@@ -224,7 +225,13 @@ export function PatientDashboardPage() {
                 <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
                   Resumo de prontuário
                 </span>
-                <p className="text-sm text-foreground whitespace-pre-wrap">{p.medicalRecordSummary}</p>
+                {/* medical_record_summary pode vir do editor rich text (HTML sanitizado) ou,
+                    para pacientes antigos, texto puro com quebras de linha literais —
+                    whitespace-pre-wrap cobre os dois casos. */}
+                <div
+                  className="text-sm text-foreground whitespace-pre-wrap break-words [&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-0.5"
+                  dangerouslySetInnerHTML={{ __html: sanitizeRichText(p.medicalRecordSummary) }}
+                />
               </div>
             )}
           </div>

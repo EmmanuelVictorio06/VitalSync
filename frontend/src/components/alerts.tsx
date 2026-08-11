@@ -37,6 +37,7 @@ import { attendanceService, type AttendanceRow } from '../services/attendanceSer
 import { storageService } from '../services/storageService';
 import { DSection, DGrid, MeasurementGrid, PatientInfoGrid } from './clinical/DetailBlocks';
 import { isSlaBreached, slaLabel } from '../lib/sla';
+import { richTextToPlainText, sanitizeRichText } from '../lib/richText';
 import {
   clinicalRule as attClinicalRule,
   fmtDateTime as attFmtDateTime,
@@ -523,6 +524,10 @@ export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, 
   const resolved = alert.attendance_status === 'ATTENDED' || alert.attendance_status === 'IGNORED';
   const TypeIcon = (alert.type && SIGNAL_ICON[alert.type]) || Stethoscope;
   const slaInput = { createdAt: alert.created_at, inAnalysisAt: alert.in_analysis_at, attendedAt: alert.attended_at };
+  // medical_record_summary pode vir do editor rich text (HTML) — renderiza sanitizado
+  // só quando há texto visível; senão mostra a mensagem padrão de "nenhum resumo".
+  const rawSummary = alert.patient?.medical_record_summary ?? '';
+  const summaryHtml = richTextToPlainText(rawSummary).trim() ? sanitizeRichText(rawSummary) : null;
 
   useEffect(() => {
     let active = true;
@@ -685,9 +690,14 @@ export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, 
               <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
                 Resumo do prontuário
               </p>
-              <p className="text-sm whitespace-pre-line">
-                {alert.patient?.medical_record_summary?.trim() || 'Nenhum resumo de prontuário registrado no cadastro.'}
-              </p>
+              {summaryHtml ? (
+                <div
+                  className="text-sm whitespace-pre-line break-words [&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-0.5"
+                  dangerouslySetInnerHTML={{ __html: summaryHtml }}
+                />
+              ) : (
+                <p className="text-sm">Nenhum resumo de prontuário registrado no cadastro.</p>
+              )}
             </div>
           </DSection>
 

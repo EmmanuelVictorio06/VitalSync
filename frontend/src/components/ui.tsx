@@ -11,8 +11,24 @@ import {
   type TextareaHTMLAttributes,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown, Search } from 'lucide-react';
+import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  Bold,
+  Check,
+  ChevronDown,
+  Italic,
+  List as ListIcon,
+  Redo2,
+  RemoveFormatting,
+  Search,
+  Type as FontSizeIcon,
+  Underline,
+  Undo2,
+} from 'lucide-react';
 import { ClinicalStatus, formatPhoneBR, onlyDigits } from '@vitalsync/shared';
+import { plainTextToHtml, sanitizeRichText } from '../lib/richText';
 
 /** Junta classes condicionalmente (equivalente leve do `cn` da referência). */
 export function cn(...classes: Array<string | false | null | undefined>): string {
@@ -188,6 +204,313 @@ export function TextareaField({ label, hint, error, required, className, ...rest
     <Field label={label} hint={hint} error={error} required={required}>
       <textarea className={cn('input resize-none overflow-y-auto', error && 'invalid', className)} {...rest} />
     </Field>
+  );
+}
+
+/* ---------------- Rich text field (editor estilo Word) ----------------
+   Editor contentEditable + document.execCommand: solução deliberadamente leve
+   (sem lib de rich text) já que o projeto não tem nenhuma instalada e o campo
+   é usado só em dois lugares do formulário de cadastro/edição de paciente.
+   `toolbar="compact"` esconde tamanho de fonte, alinhamento e lista com
+   marcadores — usado em campos de lista curta (ex. Comorbidades) onde essas
+   opções não fazem sentido e a formatação não é persistida (só o texto). */
+interface RichTextFieldProps {
+  label: string;
+  hint?: string;
+  error?: string;
+  required?: boolean;
+  value: string;
+  onChange: (html: string) => void;
+  toolbar?: 'full' | 'compact';
+  minHeightClassName?: string;
+}
+
+export function RichTextField({ label, hint, error, required, value, onChange, toolbar = 'full', minHeightClassName }: RichTextFieldProps) {
+  return (
+    <Field label={label} hint={hint} error={error} required={required}>
+      <RichTextEditor value={value} onChange={onChange} toolbar={toolbar} minHeightClassName={minHeightClassName} ariaLabel={label} invalid={!!error} />
+    </Field>
+  );
+}
+
+interface RichTextActiveState {
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  list: boolean;
+  alignLeft: boolean;
+  alignCenter: boolean;
+  alignRight: boolean;
+}
+
+const RICH_TEXT_ACTIVE_DEFAULT: RichTextActiveState = {
+  bold: false,
+  italic: false,
+  underline: false,
+  list: false,
+  alignLeft: false,
+  alignCenter: false,
+  alignRight: false,
+};
+
+const RICH_TEXT_FONT_SIZES: Array<{ value: string; label: string }> = [
+  { value: '2', label: 'Pequeno' },
+  { value: '3', label: 'Normal' },
+  { value: '5', label: 'Grande' },
+  { value: '7', label: 'Título' },
+];
+
+function RichTextEditor({
+  value,
+  onChange,
+  toolbar,
+  minHeightClassName = 'min-h-[140px]',
+  ariaLabel,
+  invalid,
+}: {
+  value: string;
+  onChange: (html: string) => void;
+  toolbar: 'full' | 'compact';
+  minHeightClassName?: string;
+  ariaLabel: string;
+  invalid?: boolean;
+}) {
+  const editableRef = useRef<HTMLDivElement>(null);
+  const lastEmitted = useRef(value);
+  const sizeWrapRef = useRef<HTMLDivElement>(null);
+  const [active, setActive] = useState<RichTextActiveState>(RICH_TEXT_ACTIVE_DEFAULT);
+  const [fontSize, setFontSize] = useState('3');
+  const [sizeMenuOpen, setSizeMenuOpen] = useState(false);
+
+  // Monta o conteúdo inicial uma única vez (o efeito abaixo, que reage a `value`,
+  // não dispara no primeiro render porque lastEmitted já começa igual a value).
+  useEffect(() => {
+    if (editableRef.current) {
+      const safe = sanitizeRichText(value);
+      editableRef.current.innerHTML = safe;
+      lastEmitted.current = safe;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Sincroniza atualizações externas (reset do formulário, carregar paciente
+  // existente) sem sobrescrever o conteúdo enquanto o usuário digita.
+  useEffect(() => {
+    if (value !== lastEmitted.current && editableRef.current) {
+      const safe = sanitizeRichText(value);
+      editableRef.current.innerHTML = safe;
+      lastEmitted.current = safe;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  useEffect(() => {
+    if (!sizeMenuOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (sizeWrapRef.current && !sizeWrapRef.current.contains(e.target as Node)) setSizeMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [sizeMenuOpen]);
+
+  useEffect(() => {
+    function onSelectionChange() {
+      const el = editableRef.current;
+      const sel = window.getSelection();
+      if (!el || !sel || sel.rangeCount === 0 || !sel.anchorNode) return;
+      if (!el.contains(sel.anchorNode)) return;
+      updateActiveState();
+    }
+    document.addEventListener('selectionchange', onSelectionChange);
+    return () => document.removeEventListener('selectionchange', onSelectionChange);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function updateActiveState() {
+    try {
+      setActive({
+        bold: document.queryCommandState('bold'),
+        italic: document.queryCommandState('italic'),
+        underline: document.queryCommandState('underline'),
+        list: document.queryCommandState('insertUnorderedList'),
+        alignLeft: document.queryCommandState('justifyLeft'),
+        alignCenter: document.queryCommandState('justifyCenter'),
+        alignRight: document.queryCommandState('justifyRight'),
+      });
+      const size = document.queryCommandValue('fontSize');
+      if (size) setFontSize(size);
+    } catch {
+      // queryCommandState pode lançar fora de um contexto de seleção válido.
+    }
+  }
+
+  function handleInput() {
+    const html = editableRef.current?.innerHTML ?? '';
+    lastEmitted.current = html;
+    onChange(html);
+    updateActiveState();
+  }
+
+  function focusEditor() {
+    if (document.activeElement !== editableRef.current) editableRef.current?.focus();
+  }
+
+  function exec(command: string, arg?: string) {
+    focusEditor();
+    document.execCommand(command, false, arg);
+    handleInput();
+  }
+
+  function clearFormatting() {
+    focusEditor();
+    document.execCommand('removeFormat');
+    document.execCommand('justifyLeft');
+    if (document.queryCommandState('insertUnorderedList')) {
+      document.execCommand('insertUnorderedList');
+    }
+    handleInput();
+  }
+
+  function selectFontSize(size: string) {
+    focusEditor();
+    document.execCommand('fontSize', false, size);
+    setSizeMenuOpen(false);
+    handleInput();
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLDivElement>) {
+    e.preventDefault();
+    const html = e.clipboardData.getData('text/html');
+    const text = e.clipboardData.getData('text/plain');
+    const toInsert = html ? sanitizeRichText(html) : plainTextToHtml(text);
+    document.execCommand('insertHTML', false, toInsert);
+    handleInput();
+  }
+
+  return (
+    <div
+      className={cn(
+        'rounded-lg border border-border bg-card overflow-hidden transition-[border-color,box-shadow]',
+        'focus-within:border-primary focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--primary)_20%,transparent)]',
+        invalid && 'border-alert',
+      )}
+    >
+      <div className="flex flex-wrap items-center gap-0.5 p-1 border-b border-border bg-muted/40">
+        <RichTextToolbarButton icon={Bold} label="Negrito" active={active.bold} onClick={() => exec('bold')} />
+        <RichTextToolbarButton icon={Italic} label="Itálico" active={active.italic} onClick={() => exec('italic')} />
+        <RichTextToolbarButton icon={Underline} label="Sublinhado" active={active.underline} onClick={() => exec('underline')} />
+
+        {toolbar === 'full' && (
+          <div className="relative" ref={sizeWrapRef}>
+            <button
+              type="button"
+              title="Tamanho do texto"
+              aria-label="Tamanho do texto"
+              aria-expanded={sizeMenuOpen}
+              aria-haspopup="listbox"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setSizeMenuOpen((v) => !v)}
+              className={cn(
+                'inline-flex items-center gap-0.5 h-9 px-2 shrink-0 rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+                sizeMenuOpen && 'bg-muted text-foreground',
+              )}
+            >
+              <FontSizeIcon className="size-4" />
+              <ChevronDown className="size-3" />
+            </button>
+            {sizeMenuOpen && (
+              <div
+                role="listbox"
+                className="absolute z-20 mt-1 w-32 rounded-lg border border-border bg-card shadow-lg overflow-hidden py-1"
+              >
+                {RICH_TEXT_FONT_SIZES.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    role="option"
+                    aria-selected={fontSize === opt.value}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => selectFontSize(opt.value)}
+                    className={cn(
+                      'w-full text-left px-3 py-2 text-sm transition-colors hover:bg-muted/60',
+                      fontSize === opt.value && 'text-primary font-semibold',
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {toolbar === 'full' && (
+          <RichTextToolbarButton icon={ListIcon} label="Lista com marcadores" active={active.list} onClick={() => exec('insertUnorderedList')} />
+        )}
+
+        {toolbar === 'full' && (
+          <>
+            <span className="w-px h-6 bg-border mx-0.5 shrink-0" aria-hidden />
+            <RichTextToolbarButton icon={AlignLeft} label="Alinhar à esquerda" active={active.alignLeft} onClick={() => exec('justifyLeft')} />
+            <RichTextToolbarButton icon={AlignCenter} label="Centralizar" active={active.alignCenter} onClick={() => exec('justifyCenter')} />
+            <RichTextToolbarButton icon={AlignRight} label="Alinhar à direita" active={active.alignRight} onClick={() => exec('justifyRight')} />
+          </>
+        )}
+
+        <span className="w-px h-6 bg-border mx-0.5 shrink-0" aria-hidden />
+        <RichTextToolbarButton icon={Undo2} label="Desfazer" onClick={() => exec('undo')} />
+        <RichTextToolbarButton icon={Redo2} label="Refazer" onClick={() => exec('redo')} />
+        <RichTextToolbarButton icon={RemoveFormatting} label="Limpar formatação" onClick={clearFormatting} />
+      </div>
+
+      <div
+        ref={editableRef}
+        contentEditable
+        suppressContentEditableWarning
+        role="textbox"
+        aria-multiline="true"
+        aria-label={ariaLabel}
+        onInput={handleInput}
+        onPaste={handlePaste}
+        onKeyUp={updateActiveState}
+        onMouseUp={updateActiveState}
+        onFocus={updateActiveState}
+        className={cn(
+          'rich-text-input w-full bg-transparent px-3 py-2.5 text-sm outline-none overflow-y-auto break-words',
+          '[&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-0.5',
+          minHeightClassName,
+        )}
+      />
+    </div>
+  );
+}
+
+function RichTextToolbarButton({
+  icon: Icon,
+  label,
+  active,
+  onClick,
+}: {
+  icon: typeof Bold;
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      aria-pressed={active}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onClick}
+      className={cn(
+        'inline-flex items-center justify-center size-9 shrink-0 rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+        active && 'bg-primary/10 text-primary',
+      )}
+    >
+      <Icon className="size-4" />
+    </button>
   );
 }
 
