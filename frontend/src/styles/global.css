@@ -333,7 +333,8 @@
   input,
   select,
   textarea,
-  .input {
+  .input,
+  .rich-text-input {
     font-size: 16px;
   }
 }
