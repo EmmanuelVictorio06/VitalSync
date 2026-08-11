@@ -48,6 +48,10 @@ export interface AlertRow extends ClinicalAlert {
   attended_by_name: string | null;
   /** Quem travou o alerta para atendimento ("EM ANÁLISE POR …"). */
   in_analysis_by_name: string | null;
+  /** Enfermeiro a quem o alerta está oferecido ("aguardando …" — 0068). */
+  assigned_nurse_name: string | null;
+  /** Quem escalou o caso para o médico (0064). Null em escalonamento automático. */
+  escalated_by_name: string | null;
 }
 
 export interface AlertSummary {
@@ -60,6 +64,20 @@ export interface AlertSummary {
   attendedToday: number;
   failedNotifications: number;
   patientsWithActiveAlert: number;
+}
+
+/** Linha da lista acionável de falhas de notificação (painel do Admin — 0071). */
+export interface FailedNotificationRow {
+  id: string;
+  alertId: string | null;
+  patientName: string;
+  alertStatus: string | null;
+  recipientName: string | null;
+  retryCount: number;
+  /** true = esgotou as tentativas automáticas; só reenvio manual resolve. */
+  exhausted: boolean;
+  errorMessage: string | null;
+  createdAt: string;
 }
 
 export interface TeamProfessional {
@@ -108,6 +126,8 @@ export const alertService = {
       if (r.team?.main_surgeon_id) ids.add(r.team.main_surgeon_id);
       if (r.attended_by) ids.add(r.attended_by);
       if (r.in_analysis_by) ids.add(r.in_analysis_by);
+      if (r.assigned_nurse_id) ids.add(r.assigned_nurse_id);
+      if (r.escalated_by) ids.add(r.escalated_by);
     }
     const names = new Map<string, string>();
     if (ids.size > 0) {
@@ -119,6 +139,8 @@ export const alertService = {
       r.surgeon_name = r.team?.main_surgeon_id ? names.get(r.team.main_surgeon_id) ?? null : null;
       r.attended_by_name = r.attended_by ? names.get(r.attended_by) ?? null : null;
       r.in_analysis_by_name = r.in_analysis_by ? names.get(r.in_analysis_by) ?? null : null;
+      r.assigned_nurse_name = r.assigned_nurse_id ? names.get(r.assigned_nurse_id) ?? null : null;
+      r.escalated_by_name = r.escalated_by ? names.get(r.escalated_by) ?? null : null;
     }
     return rows;
   },
@@ -172,6 +194,70 @@ export const alertService = {
         return p.status === 'ACTIVE';
       })
       .length;
+  },
+
+  /**
+   * Badge da enfermagem: alertas amarelos ofertados a mim + os da fila aberta
+   * (sem dono ou com oferta vencida). Exclui escalados e pacientes inativos.
+   */
+  async getNurseQueueCount(): Promise<number> {
+    const { data: userData } = await supabase.auth.getUser();
+    const me = userData.user?.id ?? null;
+    const { data, error } = await supabase
+      .from('clinical_alerts')
+      .select('id, assigned_nurse_id, offer_expires_at, patient:patients(status)')
+      .eq('status', 'YELLOW')
+      .eq('attendance_status', 'PENDING')
+      .is('escalated_at', null)
+      .is('in_analysis_by', null);
+    if (error) return 0;
+
+    const now = Date.now();
+    return ((data ?? []) as unknown as Array<{
+      assigned_nurse_id: string | null;
+      offer_expires_at: string | null;
+      patient: { status: string } | Array<{ status: string }> | null;
+    }>).filter((a) => {
+      const p = Array.isArray(a.patient) ? a.patient[0] : a.patient;
+      if (p?.status !== 'ACTIVE') return false;
+      const expirada = !a.offer_expires_at || new Date(a.offer_expires_at).getTime() <= now;
+      // Fila aberta (sem dono ou oferta vencida) ou oferta válida para mim.
+      return !a.assigned_nurse_id || expirada || a.assigned_nurse_id === me;
+    }).length;
+  },
+
+  /**
+   * Notificações que falharam, para a lista acionável do Admin. Traz paciente,
+   * severidade do alerta e tentativas já feitas — o contador sozinho não diz
+   * o que fazer. `escalated_failure_at` marca as que esgotaram o retry (0071).
+   */
+  async getFailedNotifications(): Promise<FailedNotificationRow[]> {
+    const { data, error } = await supabase
+      .from('notification_logs')
+      .select(
+        'id, alert_id, recipient_name, recipient_phone, retry_count, escalated_failure_at, created_at, ' +
+          'error_message, patient:patients(name), alert:clinical_alerts(status)',
+      )
+      .in('status', ['FAILED', 'failed'])
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) throw new Error(error.message);
+
+    return ((data ?? []) as unknown as Array<Record<string, unknown>>).map((r) => {
+      const patient = r.patient as { name: string } | Array<{ name: string }> | null;
+      const alert = r.alert as { status: string } | Array<{ status: string }> | null;
+      return {
+        id: String(r.id),
+        alertId: (r.alert_id as string | null) ?? null,
+        patientName: (Array.isArray(patient) ? patient[0]?.name : patient?.name) ?? '—',
+        alertStatus: (Array.isArray(alert) ? alert[0]?.status : alert?.status) ?? null,
+        recipientName: (r.recipient_name as string | null) ?? null,
+        retryCount: Number(r.retry_count ?? 0),
+        exhausted: Boolean(r.escalated_failure_at),
+        errorMessage: (r.error_message as string | null) ?? null,
+        createdAt: String(r.created_at),
+      };
+    });
   },
 
   /** Conta notificações com falha entre os alertas visíveis (card do Admin). */
@@ -256,6 +342,42 @@ export const alertService = {
 
   async resendNotification(alertId: string): Promise<void> {
     const { error } = await supabase.rpc('alert_resend_notification', { p_alert: alertId });
+    if (error) throw new Error(error.message);
+  },
+
+  /* --------------------- Triagem de enfermagem (0064–0068) ----------------- */
+
+  /**
+   * Assume o alerta (da oferta ou da fila aberta) e já o coloca em análise.
+   * A corrida entre dois enfermeiros é decidida pelo claim atômico no banco:
+   * quem perder recebe "já está em análise por outro profissional".
+   */
+  async claimOffer(alertId: string): Promise<void> {
+    const { error } = await supabase.rpc('nurse_claim_alert', { p_alert: alertId });
+    if (error) throw new Error(error.message);
+  },
+
+  /** Devolve o alerta à fila aberta (recusa explícita da oferta). */
+  async declineOffer(alertId: string): Promise<void> {
+    const { error } = await supabase.rpc('nurse_decline_alert', { p_alert: alertId });
+    if (error) throw new Error(error.message);
+  },
+
+  /**
+   * Escala o caso para o médico. NÃO altera o `status` do alerta — a severidade
+   * clínica continua sendo a que `eval_clinical_status` calculou (0064).
+   */
+  async escalate(alertId: string, reason: string): Promise<void> {
+    const { error } = await supabase.rpc('alert_escalate_to_red', { p_alert: alertId, p_reason: reason });
+    if (error) throw new Error(error.message);
+  },
+
+  /**
+   * Registra o contato ativo na timeline SEM finalizar o alerta — é o caminho
+   * do enfermeiro num alerta vermelho, que ele não pode fechar.
+   */
+  async registerContact(alertId: string, note: string): Promise<void> {
+    const { error } = await supabase.rpc('alert_register_contact', { p_alert: alertId, p_note: note });
     if (error) throw new Error(error.message);
   },
 };

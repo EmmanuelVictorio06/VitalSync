@@ -96,6 +96,17 @@ export interface VitalRecord {
   drainPhotoUrl: string | null;
   drainPhotoFileName: string | null;
   drainPhotoUploadedAt: string | null;
+  /** PATIENT = enviado pelo paciente. STAFF = lançado pela equipe em nome dele. */
+  source: 'PATIENT' | 'STAFF';
+  /** Nome do profissional que lançou, quando source = STAFF. */
+  enteredByName: string | null;
+}
+
+/** Estado do esquecimento de um período de HOJE, para o banner do painel individual. */
+export interface MissedPeriodInfo {
+  status: string;
+  resolvedAt: string | null;
+  resolvedByName: string | null;
 }
 
 export interface PatientDashboard {
@@ -117,6 +128,8 @@ export interface PatientDashboard {
     monitoringDay: number | null;
     /** Resumo de prontuário (texto livre, opcional). */
     medicalRecordSummary: string | null;
+    /** Esquecimento de hoje (janela fechada, sem registro) — null quando não se aplica. */
+    missedToday: { morning: MissedPeriodInfo | null; night: MissedPeriodInfo | null };
   };
   records: VitalRecord[];
   teamMembers: SelectItem[];

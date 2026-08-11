@@ -4,6 +4,7 @@
  */
 import { CheckCircle2 } from 'lucide-react';
 import { GRADIENT_BG } from './types';
+import { ContatoAtivoAviso } from './ContatoAtivoAviso';
 import { SupportFooter } from './SupportFooter';
 
 export function MeasurementSuccess({ photoSent }: { photoSent?: boolean }) {
@@ -26,6 +27,9 @@ export function MeasurementSuccess({ photoSent }: { photoSent?: boolean }) {
           <p className="text-xs text-muted-foreground mt-3 text-balance">
             Fique tranquilo(a): se identificarmos qualquer sinal de alerta, um profissional entrará em contato.
           </p>
+          <div className="mt-5">
+            <ContatoAtivoAviso compacto />
+          </div>
           <button
             onClick={() => window.close()}
             className="mt-8 inline-flex items-center justify-center w-full py-3.5 bg-primary text-primary-foreground rounded-xl font-bold text-sm hover:bg-primary/90 shadow-lg shadow-primary/20 transition-colors"

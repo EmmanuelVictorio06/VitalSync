@@ -592,7 +592,30 @@ export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, 
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               <StatusBadge status={alert.status} />
               <AttendanceStatusBadge status={alert.attendance_status} label={attendanceBadgeLabel(alert)} />
+              {alert.escalated_at && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-alert/10 border border-alert/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-alert">
+                  Escalado pela enfermagem
+                </span>
+              )}
             </div>
+            {alert.escalated_at && (
+              /* A cor do alerta NÃO muda ao escalar (a severidade clínica é imutável —
+                 migration 0064). Este bloco é o que diz ao médico "trate como vermelho". */
+              <div className="mb-3 rounded-lg border border-alert/30 bg-alert/5 p-3 space-y-1">
+                <p className="text-xs font-bold text-alert">
+                  {alert.auto_escalated
+                    ? 'Escalonamento automático por tempo'
+                    : `Escalado por ${alert.escalated_by_name ?? 'enfermagem'} · ${fmtDateTime(alert.escalated_at)}`}
+                </p>
+                {alert.escalation_reason && (
+                  <p className="text-sm text-foreground whitespace-pre-wrap">{alert.escalation_reason}</p>
+                )}
+                <p className="text-[11px] text-muted-foreground">
+                  A classificação clínica permanece {alert.status === 'RED' ? 'vermelha' : 'amarela'} — o escalonamento
+                  é um julgamento da equipe, registrado à parte. O histórico de contato está na linha do tempo abaixo.
+                </p>
+              </div>
+            )}
             <DGrid items={[
               ['Tipo', alert.type ?? '—'],
               ['Valor que disparou', triggerValue(alert)],
@@ -756,6 +779,24 @@ export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, 
 
 /* ============================ Timeline ============================ */
 
+/**
+ * Rótulos dos eventos da timeline. Os de triagem (oferta, contato ativo,
+ * escalonamento) vêm das migrations 0064–0068 — é o histórico que o médico lê
+ * antes de assumir um caso escalado, para o paciente não ter que repetir tudo.
+ */
+const TIMELINE_LABEL: Record<string, string> = {
+  ATTENDED: 'Marcado como atendido',
+  IN_ANALYSIS: 'Marcado como em análise',
+  IGNORED: 'Alerta ignorado',
+  RELEASED: 'Liberado de volta para a fila',
+  OFFERED: 'Oferecido à enfermagem',
+  DECLINED: 'Devolvido à fila pela enfermagem',
+  OFFER_EXPIRED: 'Oferta expirada sem aceite',
+  CONTACT: 'Contato com o paciente',
+  ESCALATED: 'Escalado para o médico',
+  ESCALATION_UNANSWERED: 'Escalonamento sem resposta — Cirurgião Principal avisado',
+};
+
 export function AlertTimeline({ alert, timeline, logs }: {
   alert: AlertRow; timeline: AttendanceConfirmation[] | null; logs: NotificationLog[] | null;
 }) {
@@ -770,10 +811,7 @@ export function AlertTimeline({ alert, timeline, logs }: {
       out.push({ at: firstSent.sent_at ?? alert.created_at, label: `WhatsApp enviado para a equipe (${delivered.length})` });
     }
     for (const t of timeline ?? []) {
-      const label = t.status === 'ATTENDED' ? 'Marcado como atendido'
-        : t.status === 'IN_ANALYSIS' ? 'Marcado como em análise'
-          : t.status === 'IGNORED' ? 'Alerta ignorado'
-            : t.status === 'RELEASED' ? 'Liberado de volta para a fila' : 'Atualização';
+      const label = TIMELINE_LABEL[t.status ?? ''] ?? 'Atualização';
       out.push({ at: t.created_at, label: t.observation ? `${label}: ${t.observation}` : label });
     }
     return out.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());

@@ -5,6 +5,7 @@ import {
   BINARY_RULES,
   ClinicalStatus,
   STEPS_RULES,
+  listPendingMedicalValidations,
   type RangeRule,
   type VitalThreshold,
 } from '@vitalsync/shared';
@@ -16,6 +17,7 @@ import {
   SettingsSection,
   ToggleSwitch,
 } from '../../components/admin';
+import { FailedNotificationsPanel } from '../../components/FailedNotificationsPanel';
 import { Button, ConfirmModal, Field, PageContainer, SelectField, TextInput, cn } from '../../components/ui';
 import { settingsService } from '../../services/settingsService';
 import { homologationService, type HomologationStats } from '../../services/homologationService';
@@ -241,6 +243,10 @@ function RuleRows({ threshold }: { threshold: VitalThreshold }) {
 
 function ClinicalTab() {
   const thresholds = Object.values(ALERT_THRESHOLDS) as VitalThreshold[];
+  // Fonte única: a mesma lista que `thresholds.ts` expõe. Antes esta função
+  // existia sem NENHUM consumidor — a pendência clínica ficava só no arquivo
+  // docs/PONTOS_PENDENTES.md, invisível para quem opera o sistema.
+  const pendencias = listPendingMedicalValidations();
 
   return (
     <div className="space-y-6">
@@ -255,6 +261,29 @@ function ClinicalTab() {
           </p>
         </div>
       </div>
+
+      {pendencias.length > 0 && (
+        <div className="bg-card border border-alert/30 rounded-xl p-4">
+          <h3 className="text-sm font-bold flex items-center gap-2 text-alert">
+            <ShieldAlert className="size-4" />
+            {pendencias.length} regra(s) aguardando validação médica
+          </h3>
+          <ul className="mt-2 space-y-1.5">
+            {pendencias.map((p) => (
+              <li key={p} className="text-xs text-foreground flex gap-2">
+                <span className="text-alert font-bold shrink-0">•</span>
+                <span>{p}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-[11px] text-muted-foreground mt-3">
+            Enquanto não houver decisão do cirurgião responsável, estas faixas seguem provisórias. Divergências
+            conhecidas entre o protocolo do estudo e o código estão em <code className="font-mono">docs/PONTOS_PENDENTES.md</code> —
+            hoje a mais relevante é a pressão sistólica (protocolo: vermelho &gt; 160; código: ≥ 140), que muda
+            bastante o volume de alertas.
+          </p>
+        </div>
+      )}
 
       <div className="grid md:grid-cols-2 gap-4">
         {thresholds.map((t) => (
@@ -547,6 +576,13 @@ function HomologationTab() {
         <MetricCard label="Bloqueados (fora da lista)" value={stats.whatsapp_skipped} />
         <MetricCard label="Números autorizados" value={stats.authorized_numbers} />
       </div>
+
+      <SettingsSection
+        title="Falhas de envio"
+        description="Notificações que não chegaram ao destinatário. O retry automático tenta 3 vezes (5/15/60 min); depois disso, só reenvio manual resolve."
+      >
+        <FailedNotificationsPanel />
+      </SettingsSection>
 
       <SettingsSection
         title="Números autorizados para teste"
