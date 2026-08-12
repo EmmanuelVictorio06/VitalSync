@@ -5,6 +5,7 @@ import {
   AlertCircle,
   ArrowLeft,
   Droplets,
+  FileText,
   Footprints,
   Gauge,
   HeartPulse,
@@ -27,6 +28,7 @@ import {
 import { Role, useAuth } from '../auth/AuthContext';
 import { sanitizeRichText } from '../lib/richText';
 import { PatientEditModal } from '../components/PatientEditModal';
+import { PatientRecordSummaryModal } from '../components/PatientRecordSummaryModal';
 import { PatientFollowupSection } from '../components/PatientFollowupSection';
 import { PatientDay30Section } from '../components/PatientDay30Section';
 import { useToast } from '../components/Toast';
@@ -65,6 +67,7 @@ export function PatientDashboardPage() {
   const [attendant, setAttendant] = useState('');
   const [marking, setMarking] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [recordViewer, setRecordViewer] = useState<{ mode: 'view' | 'edit' } | null>(null);
 
   const canEditPatient = permissionService.isAdmin(user);
 
@@ -220,19 +223,36 @@ export function PatientDashboardPage() {
               <SummaryItem label="Dia de monitoramento" value={p.monitoringDay ? `D+${p.monitoringDay}` : 'Fora da janela'} mono />
               <SummaryItem label="Dias pós-alta" value={String(p.daysSinceDischarge)} mono />
             </dl>
-            {p.medicalRecordSummary && (
+            {p.medicalRecordSummary ? (
               <div className="mt-4 rounded-lg bg-muted/40 border border-border px-3.5 py-2.5">
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-                  Resumo de prontuário
-                </span>
+                <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Resumo de prontuário
+                  </span>
+                  <Button variant="secondary" size="sm" onClick={() => setRecordViewer({ mode: 'view' })}>
+                    <FileText className="size-3.5" /> Ver prontuário completo
+                  </Button>
+                </div>
                 {/* medical_record_summary pode vir do editor rich text (HTML sanitizado) ou,
                     para pacientes antigos, texto puro com quebras de linha literais —
-                    whitespace-pre-wrap cobre os dois casos. */}
+                    whitespace-pre-wrap cobre os dois casos. line-clamp-3 mantém o card
+                    como um resumo mesmo para prontuários longos (ver visualizador). */}
                 <div
-                  className="text-sm text-foreground whitespace-pre-wrap break-words [&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-0.5"
+                  className="text-sm text-foreground whitespace-pre-wrap break-words line-clamp-3 [&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-0.5"
                   dangerouslySetInnerHTML={{ __html: sanitizeRichText(p.medicalRecordSummary) }}
                 />
               </div>
+            ) : (
+              canEditPatient && (
+                <div className="mt-4 rounded-lg bg-muted/40 border border-border px-3.5 py-2.5 flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Resumo de prontuário
+                  </span>
+                  <Button variant="secondary" size="sm" onClick={() => setRecordViewer({ mode: 'edit' })}>
+                    <Pencil className="size-3.5" /> Adicionar prontuário
+                  </Button>
+                </div>
+              )
             )}
           </div>
           <div className="flex flex-col gap-2 lg:items-end lg:min-w-64">
@@ -400,6 +420,18 @@ export function PatientDashboardPage() {
             setEditing(false);
             await load();
           }}
+        />
+      )}
+
+      {recordViewer && id && (
+        <PatientRecordSummaryModal
+          patientId={id}
+          patientName={p.name}
+          html={p.medicalRecordSummary ?? ''}
+          canEdit={canEditPatient}
+          initialMode={recordViewer.mode}
+          onClose={() => setRecordViewer(null)}
+          onSaved={load}
         />
       )}
     </PageContainer>

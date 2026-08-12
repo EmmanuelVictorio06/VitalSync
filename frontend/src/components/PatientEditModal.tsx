@@ -20,8 +20,9 @@ import { Loader2 } from 'lucide-react';
 import { onlyDigits } from '@vitalsync/shared';
 import { useToast } from './Toast';
 import { PatientCpfField } from './PatientCpfField';
-import { Button, PhoneInput, RichTextField, SelectField, TextareaField, TextInput } from './ui';
+import { Button, PhoneInput, RichTextField, SelectField, TextInput } from './ui';
 import { validateCpf } from '../lib/cpfUtils';
+import { parseComorbidities } from '../lib/comorbidities';
 import { richTextToPlainText, sanitizeRichText } from '../lib/richText';
 import { hospitalService } from '../services/hospitalService';
 import { patientService } from '../services/patientService';
@@ -56,11 +57,6 @@ const emptyForm: FormState = {
   sex: '', weightKg: '', heightCm: '', comorbidities: '', lengthOfStayDays: '', alternativePhone: '', tcleAcceptedAt: '',
   studyGroup: 'INTERVENTION',
 };
-
-/** Comorbidades: campo de texto (separado por vírgula) vira lista para o banco (jsonb). */
-function parseCommaList(v: string): string[] {
-  return v.split(',').map((s) => s.trim()).filter(Boolean);
-}
 
 export interface PatientEditModalProps {
   patientId: string;
@@ -169,7 +165,10 @@ export function PatientEditModal({ patientId, onClose, onSaved }: PatientEditMod
         sex: form.sex || undefined,
         weight_kg: form.weightKg ? Number(form.weightKg.replace(',', '.')) : undefined,
         height_cm: form.heightCm ? Number(form.heightCm.replace(',', '.')) : undefined,
-        comorbidities: parseCommaList(form.comorbidities),
+        // Comorbidades: o editor rich text é só apoio à digitação; a lista continua
+        // sendo persistida como texto puro (string[]), um item por vírgula ou por
+        // quebra visual (inclusive cada <li> da lista com marcadores).
+        comorbidities: parseComorbidities(form.comorbidities),
         length_of_stay_days: form.lengthOfStayDays ? Number(form.lengthOfStayDays) : undefined,
         alternative_phone: form.alternativePhone || undefined,
         tcle_accepted_at: form.tcleAcceptedAt || undefined,
@@ -345,13 +344,13 @@ export function PatientEditModal({ patientId, onClose, onSaved }: PatientEditMod
                   ]}
                 />
               </div>
-              <TextareaField
+              <RichTextField
                 label="Comorbidades"
                 hint="Separe por vírgula (ex.: diabetes, hipertensão) — opcional."
-                rows={2}
-                className="min-h-[120px]"
+                toolbar="full"
+                minHeightClassName="min-h-[120px]"
                 value={form.comorbidities}
-                onChange={(e) => set('comorbidities', e.target.value)}
+                onChange={(html) => set('comorbidities', html)}
               />
             </fieldset>
 

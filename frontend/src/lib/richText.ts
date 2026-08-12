@@ -69,10 +69,24 @@ export function sanitizeRichText(html: string): string {
 
 const NBSP = String.fromCharCode(160);
 
-/** Extrai texto puro (sem tags) de um HTML do editor — usado para campos que não persistem formatação. */
+/**
+ * Tags que representam uma quebra visual no editor (blocos e <br>). Fonte única
+ * do "o que separa uma linha da outra" — usada aqui e por `parseComorbidities`
+ * (lib/comorbidities.ts), para que texto puro e lista salva quebrem igual.
+ */
+export const BLOCK_BREAK_TAG = /<\s*\/?\s*(?:br|div|p|li|ul|ol)\b[^>]*>/gi;
+
+/**
+ * Extrai texto puro (sem tags) de um HTML do editor — usado para campos que não
+ * persistem formatação e para decidir "está vazio?".
+ *
+ * `textContent` sozinho NÃO insere separador entre blocos: o contentEditable
+ * gera <div>/<p>/<li> a cada Enter, então `<div>a</div><div>b</div>` viraria
+ * "ab" (itens grudados). Por isso as quebras viram "\n" ANTES da extração.
+ */
 export function richTextToPlainText(html: string): string {
   const template = document.createElement('template');
-  template.innerHTML = html;
+  template.innerHTML = html.replace(BLOCK_BREAK_TAG, '\n');
   return (template.content.textContent ?? '').split(NBSP).join(' ');
 }
 

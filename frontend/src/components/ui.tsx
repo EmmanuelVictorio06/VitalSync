@@ -209,11 +209,17 @@ export function TextareaField({ label, hint, error, required, className, ...rest
 
 /* ---------------- Rich text field (editor estilo Word) ----------------
    Editor contentEditable + document.execCommand: solução deliberadamente leve
-   (sem lib de rich text) já que o projeto não tem nenhuma instalada e o campo
-   é usado só em dois lugares do formulário de cadastro/edição de paciente.
+   (sem lib de rich text) já que o projeto não tem nenhuma instalada.
+   Usado em Resumo de prontuário e Comorbidades (cadastro e edição de paciente).
+
+   Nem todo campo persiste a formatação: Comorbidades usa a barra completa só
+   como apoio à digitação, mas é salvo como texto puro (string[] no jsonb) por
+   `parseComorbidities` (lib/comorbidities.ts) — a lista com marcadores vira um
+   item por <li>. Resumo de prontuário persiste o HTML sanitizado.
+
    `toolbar="compact"` esconde tamanho de fonte, alinhamento e lista com
-   marcadores — usado em campos de lista curta (ex. Comorbidades) onde essas
-   opções não fazem sentido e a formatação não é persistida (só o texto). */
+   marcadores. Mantido para campos de lista curta, mas HOJE SEM USO: os dois
+   campos passaram a usar a barra completa. */
 interface RichTextFieldProps {
   label: string;
   hint?: string;
@@ -278,9 +284,11 @@ function RichTextEditor({
   const editableRef = useRef<HTMLDivElement>(null);
   const lastEmitted = useRef(value);
   const sizeWrapRef = useRef<HTMLDivElement>(null);
+  const sizeBtnRef = useRef<HTMLButtonElement>(null);
   const [active, setActive] = useState<RichTextActiveState>(RICH_TEXT_ACTIVE_DEFAULT);
   const [fontSize, setFontSize] = useState('3');
   const [sizeMenuOpen, setSizeMenuOpen] = useState(false);
+  const [sizeMenuStyle, setSizeMenuStyle] = useState<React.CSSProperties>({});
 
   // Monta o conteúdo inicial uma única vez (o efeito abaixo, que reage a `value`,
   // não dispara no primeiro render porque lastEmitted já começa igual a value).
@@ -307,10 +315,52 @@ function RichTextEditor({
   useEffect(() => {
     if (!sizeMenuOpen) return;
     const onDocClick = (e: MouseEvent) => {
-      if (sizeWrapRef.current && !sizeWrapRef.current.contains(e.target as Node)) setSizeMenuOpen(false);
+      // O menu é portado para o body, então sizeWrapRef não o contém: checa
+      // também o próprio menu (data-attribute), como faz o CustomSelect.
+      const t = e.target as Node | null;
+      if (!t) return;
+      if (sizeWrapRef.current?.contains(t)) return;
+      if (t instanceof Element && t.closest?.('[data-rt-size-menu]')) return;
+      setSizeMenuOpen(false);
     };
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
+  }, [sizeMenuOpen]);
+
+  // Posiciona o menu de tamanho (portado para o body) em relação ao botão e abre
+  // para cima quando não há espaço abaixo. O wrapper do editor usa
+  // `overflow-hidden` (para arredondar a barra), então um menu `absolute` fica
+  // cortado — sobretudo em campos baixos (Comorbidades, min-h-120px) e dentro do
+  // modal de edição. Mesmo problema e mesma solução do CustomSelect acima.
+  useEffect(() => {
+    if (!sizeMenuOpen) return;
+    const btn = sizeBtnRef.current;
+    if (!btn) return;
+
+    const MENU_W = 128; // w-32
+    const MAX_H = 176; // 4 opções + padding, com folga
+    const GAP = 4; // mt-1 / mb-1
+
+    const place = () => {
+      const r = btn.getBoundingClientRect();
+      const below = window.innerHeight - r.bottom - GAP;
+      const above = r.top - GAP;
+      const up = below < MAX_H && above > below;
+      setSizeMenuStyle({
+        position: 'fixed',
+        // Clampa à direita para não estourar a largura em telas estreitas.
+        left: Math.max(GAP, Math.min(r.left, window.innerWidth - MENU_W - GAP)),
+        ...(up ? { bottom: window.innerHeight - r.top + GAP } : { top: r.bottom + GAP }),
+      });
+    };
+
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
   }, [sizeMenuOpen]);
 
   useEffect(() => {
@@ -403,6 +453,7 @@ function RichTextEditor({
         {toolbar === 'full' && (
           <div className="relative" ref={sizeWrapRef}>
             <button
+              ref={sizeBtnRef}
               type="button"
               title="Tamanho do texto"
               aria-label="Tamanho do texto"
@@ -418,29 +469,33 @@ function RichTextEditor({
               <FontSizeIcon className="size-4" />
               <ChevronDown className="size-3" />
             </button>
-            {sizeMenuOpen && (
-              <div
-                role="listbox"
-                className="absolute z-20 mt-1 w-32 rounded-lg border border-border bg-card shadow-lg overflow-hidden py-1"
-              >
-                {RICH_TEXT_FONT_SIZES.map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    role="option"
-                    aria-selected={fontSize === opt.value}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => selectFontSize(opt.value)}
-                    className={cn(
-                      'w-full text-left px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                      fontSize === opt.value && 'text-primary font-semibold',
-                    )}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            )}
+            {sizeMenuOpen &&
+              createPortal(
+                <div
+                  data-rt-size-menu
+                  role="listbox"
+                  style={sizeMenuStyle}
+                  className="z-[1000] w-32 rounded-lg border border-border bg-card shadow-lg overflow-hidden py-1"
+                >
+                  {RICH_TEXT_FONT_SIZES.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      role="option"
+                      aria-selected={fontSize === opt.value}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => selectFontSize(opt.value)}
+                      className={cn(
+                        'w-full text-left px-3 py-2 text-sm transition-colors hover:bg-muted/60',
+                        fontSize === opt.value && 'text-primary font-semibold',
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>,
+                document.body,
+              )}
           </div>
         )}
 

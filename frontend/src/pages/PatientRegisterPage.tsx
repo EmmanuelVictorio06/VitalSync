@@ -7,6 +7,7 @@ import { ToggleSwitch } from '../components/admin';
 import { Button, CustomSelect, Field, PageContainer, PageHeader, PhoneInput, RichTextField, TextInput } from '../components/ui';
 import { featureFlags } from '../config/featureFlags';
 import { patientVitalsLink } from '../lib/publicUrl';
+import { parseComorbidities } from '../lib/comorbidities';
 import { richTextToPlainText, sanitizeRichText } from '../lib/richText';
 import { formatCpf, validateCpf } from '../lib/cpfUtils';
 import { hospitalService } from '../services/hospitalService';
@@ -36,10 +37,6 @@ interface FormState {
   lengthOfStayDays: string;
   alternativePhone: string;
   tcleAcceptedAt: string;
-}
-/** Comorbidades: campo de texto (separado por vírgula) vira lista para o banco (jsonb). */
-function parseCommaList(v: string): string[] {
-  return v.split(',').map((s) => s.trim()).filter(Boolean);
 }
 
 const empty: FormState = {
@@ -131,9 +128,10 @@ export function PatientRegisterPage() {
         sex: form.sex || undefined,
         weight_kg: form.weightKg ? Number(form.weightKg.replace(',', '.')) : undefined,
         height_cm: form.heightCm ? Number(form.heightCm.replace(',', '.')) : undefined,
-        // Comorbidades: editor rich text só de apoio à digitação (negrito/itálico/sublinhado);
-        // a lista continua sendo persistida como texto puro (string[] via vírgula), não HTML.
-        comorbidities: parseCommaList(richTextToPlainText(form.comorbidities)),
+        // Comorbidades: o editor rich text é só apoio à digitação; a lista continua
+        // sendo persistida como texto puro (string[]), um item por vírgula ou por
+        // quebra visual (inclusive cada <li> da lista com marcadores).
+        comorbidities: parseComorbidities(form.comorbidities),
         length_of_stay_days: form.lengthOfStayDays ? Number(form.lengthOfStayDays) : undefined,
         alternative_phone: form.alternativePhone || undefined,
         tcle_accepted_at: form.tcleAcceptedAt || undefined,
@@ -232,7 +230,7 @@ export function PatientRegisterPage() {
             <RichTextField
               label="Comorbidades"
               hint="Separe por vírgula (ex.: diabetes, hipertensão) — opcional."
-              toolbar="compact"
+              toolbar="full"
               minHeightClassName="min-h-[120px]"
               value={form.comorbidities}
               onChange={(html) => set('comorbidities', html)}
