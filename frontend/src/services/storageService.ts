@@ -4,6 +4,7 @@
  * O acesso é por URL assinada (nunca pública). Para demo, qualquer autenticado
  * lê; em produção, restringir por equipe (ver políticas no SQL).
  */
+import { WOUND_PHOTO, isAcceptedWoundPhotoType, woundPhotoExtension } from '@vitalsync/shared';
 import { supabase } from '../lib/supabase';
 import { extractEdgeError } from '../lib/edgeError';
 
@@ -39,6 +40,48 @@ export const storageService = {
     }
     const path = (data as { path?: string })?.path;
     if (!path) throw new Error('Não foi possível enviar a foto. Tente novamente.');
+    return path;
+  },
+
+  /**
+   * Sobe a foto de acompanhamento pelo cliente AUTENTICADO (staff logado) e
+   * retorna o caminho salvo — usado no lançamento da medição pela equipe
+   * (FUNC 3 / migration 0074).
+   *
+   * Não passa por Edge Function de propósito: a policy `patient_photos_write`
+   * (0020, intacta após a 0042) já autoriza `authenticated` a inserir em
+   * `{patientId}/...` quando `is_admin() or is_team_member(...)` — quem não é da
+   * equipe do paciente é barrado pelo próprio Storage. O fluxo ANÔNIMO por token
+   * continua exclusivamente em `uploadPatientPhotoViaToken`; os dois caminhos não
+   * se cruzam.
+   *
+   * NOTA CONHECIDA (fora do escopo da FUNC 3): a policy de escrita checa
+   * `is_team_member`, não `is_nurse_for_patient` — um enfermeiro SÓ-de-pool (sem
+   * vínculo de equipe) não conseguiria subir foto. Irrelevante no piloto, que é
+   * por equipe.
+   *
+   * Valida antes de subir com as MESMAS regras da Edge Function
+   * `upload-patient-photo` (10 MB, jpg/png/webp), via `WOUND_PHOTO` do
+   * @vitalsync/shared — fonte única.
+   */
+  async uploadPatientPhotoAsStaff(
+    file: File,
+    patientId: string,
+    kind: PatientPhotoKind = 'wound',
+  ): Promise<string> {
+    if (!isAcceptedWoundPhotoType(file.type)) throw new Error(WOUND_PHOTO.messages.invalidFormat);
+    if (file.size === 0 || file.size > WOUND_PHOTO.maxBytes) {
+      throw new Error(file.size === 0 ? WOUND_PHOTO.messages.invalidFormat : WOUND_PHOTO.messages.tooLarge);
+    }
+
+    // Extensão derivada do MIME (não do nome do arquivo, que o usuário controla).
+    const path = `${patientId}/${kind}-${Date.now()}.${woundPhotoExtension(file.type)}`;
+    const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
+      cacheControl: '3600',
+      upsert: false,
+      contentType: file.type,
+    });
+    if (error) throw new Error(WOUND_PHOTO.messages.uploadFailed);
     return path;
   },
 
