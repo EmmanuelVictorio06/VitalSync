@@ -280,3 +280,89 @@ ressalva de permissão do `pg_cron` descrita acima para o lembrete.
   preenchido (e `status='CANCELLED'` se ainda estavam `PENDING`).
 - Mantenha o **modo homologação** ligado durante os testes, como nos dois
   fluxos acima.
+
+---
+
+## Boas-vindas no cadastro (primeira mensagem do paciente)
+
+Quarta automação — e, cronologicamente, a **primeira** mensagem que o paciente
+recebe: no momento em que ele é cadastrado, explica o acompanhamento, os dois
+horários de medição e entrega o link do primeiro acesso. Implementada na
+migration `0072_boas_vindas_cadastro.sql` (tabela `welcome_logs`, funções
+`enqueue_welcome_message`/`dispatch_welcome_message` e **trigger AFTER INSERT em
+`patients`**) + Edge Function `send-welcome-message`.
+
+Não usa `pg_cron`: o gatilho é o cadastro, não o relógio. Como o disparo é um
+trigger no banco, a Edge Function `create-patient` **não muda** — qualquer
+caminho de cadastro (Edge Function, SQL Editor, seed) dispara as boas-vindas.
+O envio é **best-effort**: uma falha de WhatsApp vira `warning` e **nunca**
+impede o cadastro do paciente.
+
+### Template novo a submeter na Meta
+
+- **Nome**: `boas_vindas_vitalsync` (precisa bater com
+  `WHATSAPP_WELCOME_TEMPLATE_NAME`, cujo default no código já é esse nome).
+- **Idioma**: `pt_BR`.
+- **Categoria: Utilidade (Utility)** — onboarding transacional, não Marketing.
+- **Corpo** (`{{1}}` = nome do paciente, sem dado clínico):
+  > "Olá, {{1}}! Você foi incluído(a) no acompanhamento pós-operatório do
+  > VitalSync pela sua equipe de saúde. Nos próximos 10 dias, registre seus
+  > sinais vitais 2x ao dia — manhã (8h às 10h) e noite (18h às 20h). Em cada
+  > período você receberá um lembrete por aqui. Toque no botão abaixo para
+  > fazer seu primeiro acesso."
+- **Botão "Visitar site" (URL dinâmica)**, texto **"Acessar VitalSync"** —
+  idêntico ao botão do template `lembrete_medicao_vitalsync`: a **base termina
+  em `/registro-sinais/`** (SEM `{{1}}`), e a Meta anexa a variável dinâmica
+  automaticamente no final da URL.
+    - URL do site (base): `https://vital-sync-frontend-iota.vercel.app/registro-sinais/`
+    - Variável `{{1}}` (anexada pela Meta) = o **`secure_token`** do paciente.
+    - URL de amostra: `https://vital-sync-frontend-iota.vercel.app/registro-sinais/<token-exemplo>`
+  ⚠️ Mesma armadilha do lembrete: **não** digite `{{1}}` dentro da base — o
+  link sai quebrado (404).
+
+### Deploy e agendamento
+
+```bash
+supabase functions deploy send-welcome-message
+supabase db push        # aplica a 0072 (tabela + funções + trigger)
+# opcional (já tem default no código):
+#   supabase secrets set WHATSAPP_WELCOME_TEMPLATE_NAME=boas_vindas_vitalsync
+```
+
+Reaproveita os MESMOS secrets `WHATSAPP_API_TOKEN`/`WHATSAPP_PHONE_NUMBER_ID`/
+`WHATSAPP_TEMPLATE_LANG` e os MESMOS segredos do Vault (`project_url`,
+`service_role_key`) já configurados acima. Sem os segredos do Vault, a linha
+fica `PENDING` e nada se perde: a Edge Function varre **todos** os `PENDING`
+quando invocada sem `patient_id`.
+
+### Como testar sem enviar de verdade
+
+- **Modo simulado**: sem credenciais Meta, a Edge Function marca os
+  `welcome_logs` como `logged` em vez de `SENT`.
+- **Disparo manual**: `select public.enqueue_welcome_message('<patient_id>');`
+  no SQL Editor, depois `supabase functions invoke send-welcome-message
+  --body '{}'`.
+- **Idempotência (1 por paciente)**: cadastrar/reenfileirar o mesmo paciente
+  não duplica — `UNIQUE (patient_id)` + `ON CONFLICT DO NOTHING`.
+  `enqueue_welcome_message` devolve `0` quando a linha já existia.
+- **Sem telefone, sem linha**: paciente cadastrado sem `phone` não gera
+  `welcome_logs` (não há para onde enviar).
+- Mantenha o **modo homologação** ligado durante os testes — só os números da
+  whitelist ficam `PENDING`; os demais viram `SKIPPED_TEST_MODE`.
+
+---
+
+## Gate de início da janela (0073)
+
+Correção transversal às automações de medição: o filtro de elegibilidade de
+`enqueue_measurement_reminders` (0038) e `enqueue_missed_measurement_alerts`
+(0069) só tinha limite **superior** (`hospital_discharge_date + 10 >=
+current_date`), então um paciente cadastrado com alta **agendada para o
+futuro** já recebia lembrete e alerta de esquecimento antes de ter alta. A
+migration `0073_gate_inicio_janela.sql` acrescenta o limite inferior
+`current_date >= hospital_discharge_date`: a janela de 10 dias só **abre no dia
+da alta**. Nenhuma outra lógica muda.
+
+```bash
+supabase db push        # aplica a 0073 (CREATE OR REPLACE das duas funções)
+```

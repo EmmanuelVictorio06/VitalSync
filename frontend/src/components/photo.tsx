@@ -166,13 +166,16 @@ export function PhotoUploadField({
 export function DrainQuestionField({
   value,
   onChange,
+  /** Padrão fala com o PACIENTE; o lançamento pela equipe passa outro texto. */
+  label = 'Você possui dreno?',
 }: {
   value: boolean | null;
   onChange: (v: boolean) => void;
+  label?: string;
 }) {
   return (
     <div>
-      <span className="block text-sm font-bold mb-2">Você possui dreno?</span>
+      <span className="block text-sm font-bold mb-2">{label}</span>
       <div className="grid grid-cols-2 gap-3">
         {([true, false] as const).map((opt) => {
           const active = value === opt;
