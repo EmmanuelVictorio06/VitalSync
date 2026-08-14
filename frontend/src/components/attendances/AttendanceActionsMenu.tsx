@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { FileText, MessageCircle, MoreVertical, Pencil, Stethoscope } from 'lucide-react';
 import { whatsappLink } from '@vitalsync/shared';
 import type { AttendanceRow } from '../../services/attendanceService';
-import { cn } from '../ui';
+import { ModalOverlay, cn } from '../ui';
 
 const WHATSAPP_MSG = 'Olá! Sou da sua equipe médica no VitalSync e gostaria de acompanhar sua recuperação.';
 const MENU_W = 224;
@@ -70,17 +70,12 @@ function BottomSheet({
   onClose: () => void;
 }) {
   return (
-    <div
-      className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-end justify-center"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Ações do atendimento"
-      onClick={onClose}
+    <ModalOverlay
+      onClose={onClose}
+      className="z-50 bg-foreground/50 backdrop-blur-sm items-end justify-center"
+      ariaLabel="Ações do atendimento"
     >
-      <div
-        className="bg-card border border-border w-full rounded-t-2xl shadow-xl p-2 pb-6 animate-entry"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="bg-card border border-border w-full rounded-t-2xl shadow-xl p-2 pb-6 animate-entry">
         <div className="w-10 h-1 bg-border rounded-full mx-auto my-2" />
         <div role="menu" className="space-y-0.5">
           {entries.map((entry, i) =>
@@ -92,7 +87,7 @@ function BottomSheet({
           )}
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 

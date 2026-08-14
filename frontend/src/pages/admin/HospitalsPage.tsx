@@ -13,7 +13,7 @@ import {
   StatusPill,
   ToggleSwitch,
 } from '../../components/admin';
-import { Button, ConfirmModal, Field, PageContainer, TextInput } from '../../components/ui';
+import { Button, ConfirmModal, Field, ModalOverlay, PageContainer, TextInput } from '../../components/ui';
 import { hospitalService } from '../../services/hospitalService';
 import type { EntityStatus, Hospital } from '../../services/types';
 
@@ -231,8 +231,8 @@ function HospitalFormModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" role="dialog" aria-modal="true" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-lg space-y-4 animate-entry my-8">
+    <ModalOverlay onClose={onClose} className="z-50 bg-foreground/50 backdrop-blur-sm items-center justify-center p-4 overflow-y-auto">
+      <form onSubmit={save} className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-lg space-y-4 animate-entry my-8">
         <h2 className="text-lg font-extrabold tracking-tight">{hospital ? `Editar ${hospital.name}` : 'Novo Hospital'}</h2>
         <TextInput
           label="Nome do hospital"
@@ -263,6 +263,6 @@ function HospitalFormModal({
           </Button>
         </div>
       </form>
-    </div>
+    </ModalOverlay>
   );
 }

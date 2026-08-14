@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { monitoringDay, daysSinceDischarge, startOfToday, CLINIC_TIMEZONE } from './utils.js';
+import { monitoringDay, daysSinceDischarge, startOfToday, CLINIC_TIMEZONE, isDischargeAfterSurgery } from './utils.js';
 
 /** Data civil (meia-noite UTC), no mesmo formato usado pelo código de produção. */
 const day = (y: number, m: number, d: number) => new Date(Date.UTC(y, m - 1, d));
@@ -66,5 +66,68 @@ describe('startOfToday — usa CLINIC_TIMEZONE (America/Sao_Paulo, UTC-3 fixo, s
   it('meio-dia UTC é sempre a manhã do mesmo dia civil em SP', () => {
     const now = new Date('2026-03-15T12:00:00.000Z');
     expect(startOfToday(now)).toEqual(day(2026, 3, 15));
+  });
+});
+
+describe('isDischargeAfterSurgery', () => {
+  it('alta depois da cirurgia é válido', () => {
+    expect(isDischargeAfterSurgery('2026-08-14', '2026-08-20')).toBe(true);
+  });
+
+  it('alta no MESMO DIA da cirurgia é válido (procedimento ambulatorial)', () => {
+    expect(isDischargeAfterSurgery('2026-08-14', '2026-08-14')).toBe(true);
+  });
+
+  it('alta antes da cirurgia é inválido', () => {
+    expect(isDischargeAfterSurgery('2026-08-20', '2026-08-14')).toBe(false);
+  });
+
+  it('virada de mês: alta 1 dia depois, cruzando de agosto pra setembro', () => {
+    expect(isDischargeAfterSurgery('2026-08-31', '2026-09-01')).toBe(true);
+  });
+
+  it('virada de mês invertida: cirurgia em setembro, alta ainda em agosto, é inválido', () => {
+    expect(isDischargeAfterSurgery('2026-09-01', '2026-08-31')).toBe(false);
+  });
+
+  it('virada de ano: alta 1 dia depois, cruzando pro ano seguinte', () => {
+    expect(isDischargeAfterSurgery('2026-12-31', '2027-01-01')).toBe(true);
+  });
+
+  it('virada de ano invertida é inválido', () => {
+    expect(isDischargeAfterSurgery('2027-01-01', '2026-12-31')).toBe(false);
+  });
+
+  it('ano bissexto: cirurgia em 29/02/2024, alta no mesmo dia é válido', () => {
+    expect(isDischargeAfterSurgery('2024-02-29', '2024-02-29')).toBe(true);
+  });
+
+  it('ano bissexto: alta 1º de março depois de cirurgia em 29/02/2024 é válido', () => {
+    expect(isDischargeAfterSurgery('2024-02-29', '2024-03-01')).toBe(true);
+  });
+
+  it('sem cirurgia informada, não invalida (obrigatoriedade é checada à parte)', () => {
+    expect(isDischargeAfterSurgery(undefined, '2026-08-14')).toBe(true);
+    expect(isDischargeAfterSurgery(null, '2026-08-14')).toBe(true);
+    expect(isDischargeAfterSurgery('', '2026-08-14')).toBe(true);
+  });
+
+  it('sem alta informada, não invalida', () => {
+    expect(isDischargeAfterSurgery('2026-08-14', undefined)).toBe(true);
+    expect(isDischargeAfterSurgery('2026-08-14', null)).toBe(true);
+    expect(isDischargeAfterSurgery('2026-08-14', '')).toBe(true);
+  });
+
+  it('nenhuma das duas informada, não invalida', () => {
+    expect(isDischargeAfterSurgery(undefined, undefined)).toBe(true);
+  });
+
+  it('comparação lexicográfica não sofre deslocamento de fuso (não usa new Date)', () => {
+    // Se a implementação usasse `new Date(iso)`, '2026-08-14' viraria meia-noite
+    // UTC, que em America/Sao_Paulo (UTC-3) é 13/08 às 21h — um dia antes. Como
+    // a comparação é puramente por string, o resultado independe do fuso da
+    // máquina que roda o teste.
+    expect(isDischargeAfterSurgery('2026-08-14', '2026-08-14')).toBe(true);
+    expect(isDischargeAfterSurgery('2026-08-14', '2026-08-13')).toBe(false);
   });
 });

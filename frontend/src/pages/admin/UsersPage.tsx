@@ -23,7 +23,7 @@ import {
 import { onlyDigits } from '@vitalsync/shared';
 import { useAuth } from '../../auth/AuthContext';
 import { useToast } from '../../components/Toast';
-import { Button, ConfirmModal, Field, PageContainer, PageHeader, PhoneInput, ProfessionalTag, SelectField, TextInput } from '../../components/ui';
+import { Button, ConfirmModal, CustomSelect, Field, PageContainer, PageHeader, PhoneInput, ProfessionalTag, TextInput } from '../../components/ui';
 import {
   AdminTable,
   EmptyState,
@@ -400,7 +400,7 @@ function UserFormModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
           <TextInput label="Nome completo" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex. Dra. Ana Souza" />
           <TextInput label="E-mail (login)" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="usuario@email.com" />
           <PhoneInput label="WhatsApp" value={whatsapp} onChange={setWhatsapp} />
-          <SelectField label="Papel / perfil" required value={role} onChange={(e) => setRole(e.target.value as UserRole)} options={ROLE_OPTIONS} placeholder="Selecione…" />
+          <CustomSelect label="Papel / perfil" required value={role} onChange={(e) => setRole(e.target.value as UserRole)} options={ROLE_OPTIONS} placeholder="Selecione…" />
           <PasswordInput label="Senha temporária" value={password} onChange={setPassword} hint="Mínimo 6 caracteres." required autoComplete="new-password" />
           <PasswordInput label="Confirmar senha" value={confirm} onChange={setConfirm} error={confirm && confirm !== password ? 'As senhas não coincidem.' : undefined} required autoComplete="new-password" />
           <TextInput label="Especialidade" value={specialty} onChange={(e) => setSpecialty(e.target.value)} placeholder="Opcional" />
@@ -589,7 +589,7 @@ function ChangeUserRoleModal({ user, onClose, onSaved }: { user: UserOverview; o
           <p className="font-semibold">{user.name}</p>
           <p className="text-xs text-muted-foreground">Papel atual: {ROLE_META[user.role].label}</p>
         </div>
-        <SelectField label="Novo papel" value={newRole} onChange={(e) => setNewRole(e.target.value as UserRole)} options={ROLE_OPTIONS} placeholder="Selecione…" />
+        <CustomSelect label="Novo papel" value={newRole} onChange={(e) => setNewRole(e.target.value as UserRole)} options={ROLE_OPTIONS} placeholder="Selecione…" />
 
         {losingSurgeonRole && (
           <div className="rounded-lg border border-warning/30 bg-warning/10 text-warning text-xs font-medium p-3">

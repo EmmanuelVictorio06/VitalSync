@@ -6,7 +6,7 @@ import { useRoleMenus, type NavItem } from './RoleBasedSidebar';
 import { HomologationBadge } from './HomologationBadge';
 import { storageService } from '../services/storageService';
 import { initials } from './profile';
-import { ProfessionalTag, cn } from './ui';
+import { ModalOverlay, ProfessionalTag, cn } from './ui';
 
 const ROLE_LABEL: Record<string, string> = {
   ADM: 'Administrador Geral',
@@ -167,18 +167,8 @@ export function Layout() {
   const title = PAGE_TITLES.find((t) => t.match(pathname))?.title ?? 'VitalSync';
   const { main, admin } = useRoleMenus();
 
-  // Fecha o drawer ao trocar de rota e ao apertar Escape; trava o scroll do fundo.
+  // Fecha o drawer ao trocar de rota. ESC e trava de scroll são do ModalOverlay.
   useEffect(() => setMenuOpen(false), [pathname]);
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMenuOpen(false);
-    window.addEventListener('keydown', onKey);
-    document.body.style.overflow = 'hidden';
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
-    };
-  }, [menuOpen]);
 
   // Atalhos da barra inferior (mobile): principais (Dashboard/Pacientes/Alertas).
   const mobileItems = main.filter((i) => ['/dashboard', '/monitoring', '/alerts'].includes(i.to));
@@ -192,8 +182,11 @@ export function Layout() {
 
       {/* Drawer (mobile/tablet) */}
       {menuOpen && (
-        <div className="lg:hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Menu de navegação">
-          <div className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" onClick={() => setMenuOpen(false)} />
+        <ModalOverlay
+          onClose={() => setMenuOpen(false)}
+          className="lg:hidden z-50 bg-foreground/50 backdrop-blur-sm"
+          ariaLabel="Menu de navegação"
+        >
           <aside className="absolute left-0 top-0 h-full w-72 max-w-[85%] bg-card border-r border-border shadow-xl flex flex-col animate-entry">
             <button
               onClick={() => setMenuOpen(false)}
@@ -204,7 +197,7 @@ export function Layout() {
             </button>
             <SidebarContent main={main} admin={admin} user={user} onLogout={logout} onNavigate={() => setMenuOpen(false)} />
           </aside>
-        </div>
+        </ModalOverlay>
       )}
 
       <div className="flex-1 flex flex-col min-w-0 pb-16 lg:pb-0">

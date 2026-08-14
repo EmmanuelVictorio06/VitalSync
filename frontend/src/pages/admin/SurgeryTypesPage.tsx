@@ -13,7 +13,7 @@ import {
   StatusPill,
   ToggleSwitch,
 } from '../../components/admin';
-import { Button, ConfirmModal, Field, PageContainer, SelectField, TextInput } from '../../components/ui';
+import { Button, ConfirmModal, CustomSelect, Field, ModalOverlay, PageContainer, TextInput } from '../../components/ui';
 import { surgeryTypeService } from '../../services/surgeryTypeService';
 import type { EntityStatus, SurgeryType } from '../../services/types';
 
@@ -107,14 +107,17 @@ export function SurgeryTypesPage() {
         onAction={() => setEditing('new')}
       />
 
-      <div className="bg-card border border-border shadow-sm rounded-xl p-4 flex flex-col md:flex-row gap-3 animate-entry [animation-delay:100ms]">
+      <div className="bg-card border border-border shadow-sm rounded-xl p-4 flex flex-col md:flex-row md:items-center gap-3 animate-entry [animation-delay:100ms]">
         <SearchBox value={search} onChange={setSearch} placeholder="Buscar por nome da cirurgia..." />
-        <select className="input md:!w-56" value={specialty} onChange={(e) => setSpecialty(e.target.value)}>
-          <option value="">Todas as especialidades</option>
-          {specialties.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
+        <div className="md:w-56">
+          <CustomSelect
+            label=""
+            ariaLabel="Filtrar por especialidade"
+            value={specialty}
+            onChange={(e) => setSpecialty(e.target.value)}
+            options={[{ value: '', label: 'Todas as especialidades' }, ...specialties.map((s) => ({ value: s, label: s }))]}
+          />
+        </div>
         <SegmentedFilter
           value={statusFilter}
           onChange={setStatusFilter}
@@ -258,8 +261,8 @@ function SurgeryTypeFormModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" role="dialog" aria-modal="true" onClick={onClose}>
-      <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-lg space-y-4 animate-entry my-8">
+    <ModalOverlay onClose={onClose} className="z-50 bg-foreground/50 backdrop-blur-sm items-center justify-center p-4 overflow-y-auto">
+      <form onSubmit={save} className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-lg space-y-4 animate-entry my-8">
         <h2 className="text-lg font-extrabold tracking-tight">{surgeryType ? `Editar ${surgeryType.name}` : 'Novo Tipo de Cirurgia'}</h2>
         <TextInput
           label="Nome da cirurgia"
@@ -272,7 +275,7 @@ function SurgeryTypeFormModal({
             setNameError('');
           }}
         />
-        <SelectField
+        <CustomSelect
           label="Especialidade médica (opcional)"
           value={form.specialty}
           onChange={(e) => set('specialty', e.target.value)}
@@ -296,6 +299,6 @@ function SurgeryTypeFormModal({
           </Button>
         </div>
       </form>
-    </div>
+    </ModalOverlay>
   );
 }

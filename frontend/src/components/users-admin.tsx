@@ -19,7 +19,7 @@ import {
 import { onlyDigits } from '@vitalsync/shared';
 import { storageService } from '../services/storageService';
 import type { EntityStatus, UserOverview, UserRole } from '../services/types';
-import { Button, CustomSelect, cn } from './ui';
+import { Button, CustomSelect, ModalOverlay, cn } from './ui';
 import { initials } from './profile';
 
 /* ---------------- Metadados dos papéis ---------------- */
@@ -79,8 +79,7 @@ export function UserAvatar({ name, avatarPath, size = 9 }: { name: string; avata
 /* ---------------- Drawer lateral (detalhes) ---------------- */
 export function Drawer({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true">
-      <div className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" onClick={onClose} />
+    <ModalOverlay onClose={onClose} className="z-50 bg-foreground/50 backdrop-blur-sm justify-end" ariaLabel={title}>
       <div className="relative w-full max-w-md bg-card border-l border-border shadow-xl h-full overflow-y-auto animate-entry">
         <div className="sticky top-0 bg-card/95 backdrop-blur border-b border-border px-5 py-4 flex items-center justify-between gap-3">
           <h2 className="text-lg font-extrabold tracking-tight">{title}</h2>
@@ -90,15 +89,15 @@ export function Drawer({ title, onClose, children }: { title: string; onClose: (
         </div>
         <div className="p-5 space-y-6">{children}</div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 
 /* ---------------- Shell de modal centralizado ---------------- */
 export function ModalShell({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   return (
-    <div className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className={cn('bg-card border border-border rounded-xl shadow-lg p-6 w-full space-y-4 animate-entry my-8', wide ? 'max-w-2xl' : 'max-w-lg')} onClick={(e) => e.stopPropagation()}>
+    <ModalOverlay onClose={onClose} className="z-50 bg-foreground/50 backdrop-blur-sm items-start justify-center p-4 overflow-y-auto" ariaLabel={title}>
+      <div className={cn('bg-card border border-border rounded-xl shadow-lg p-6 w-full space-y-4 animate-entry my-8', wide ? 'max-w-2xl' : 'max-w-lg')}>
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-lg font-extrabold tracking-tight">{title}</h2>
           <button onClick={onClose} className="size-8 rounded-md border border-border text-muted-foreground hover:bg-muted flex items-center justify-center shrink-0" aria-label="Fechar">
@@ -107,7 +106,7 @@ export function ModalShell({ title, onClose, children, wide }: { title: string; 
         </div>
         {children}
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 
@@ -376,31 +375,20 @@ export function UserAdvancedFilters({ value, onApply, onClose }: {
   const [draft, setDraft] = useState<UserFiltersState>(value);
   const set = <K extends keyof UserFiltersState>(k: K, v: UserFiltersState[K]) => setDraft((d) => ({ ...d, [k]: v }));
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    document.body.style.overflow = 'hidden';
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
-    };
-  }, [onClose]);
+  // ESC e trava de scroll são do ModalOverlay.
 
   function clear() {
     setDraft((d) => ({ ...d, role: 'ALL', status: 'ALL', team: 'ALL', lastAccess: 'ALL', registration: 'ALL' }));
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Filtros avançados"
-      onClick={onClose}
+    <ModalOverlay
+      onClose={onClose}
+      className="z-50 bg-foreground/50 backdrop-blur-sm items-end sm:items-center justify-center sm:p-4"
+      ariaLabel="Filtros avançados"
     >
       <div
         className="bg-card border border-border w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[88vh] flex flex-col animate-entry"
-        onClick={(e) => e.stopPropagation()}
       >
         <header className="flex items-center gap-3 px-5 py-4 border-b border-border">
           <h2 className="font-extrabold tracking-tight flex-1">Filtros avançados</h2>
@@ -427,7 +415,7 @@ export function UserAdvancedFilters({ value, onApply, onClose }: {
           <Button onClick={() => { onApply(draft); onClose(); }}>Aplicar filtros</Button>
         </footer>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 

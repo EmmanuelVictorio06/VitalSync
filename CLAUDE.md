@@ -9,7 +9,7 @@ VitalSync (também chamado **CuraPath**) — monitoramento domiciliar pós-opera
 Este monorepo contém **dois backends**. É a fonte nº 1 de confusão:
 
 - **Supabase (produção/atual)** — o que o frontend realmente usa. Postgres + RLS + Edge Functions (Deno), Auth do Supabase, Storage. Deploy do front na **Vercel**. Todo trabalho novo de dados/segurança acontece aqui: `supabase/migrations/` e `supabase/functions/`.
-- **Fastify + Prisma (`backend/`, legado)** — a arquitetura Clean descrita no `README.md`. Ainda é **compilada pela CI** (`.github/workflows/ci.yml` roda `npm run build`, que inclui o backend) e por isso não pode quebrar o build, mas o frontend **não** o consome em produção. Só `frontend/src/components/photo.tsx` e `frontend/src/lib/dashboard-data.ts` ainda importam `lib/api.ts` (o cliente HTTP que fala com `VITE_API_URL`/localhost:3333). Trate `backend/`, `lib/api.ts`, `lib/admin-api.ts` e `lib/teams-api.ts` (repositórios **MOCK** em memória) como legado — não invista neles a menos que seja pedido explicitamente.
+- **Fastify + Prisma (`backend/`, legado)** — arquitetura Clean (`domain/`/`application/`/`infrastructure/` dentro de `backend/src/`). Ainda é **compilada pela CI** (`.github/workflows/ci.yml` roda `npm run build`, que inclui o backend) e por isso não pode quebrar o build, mas o frontend **não** o consome em produção. Só `frontend/src/components/photo.tsx` e `frontend/src/lib/dashboard-data.ts` ainda importam `lib/api.ts` (o cliente HTTP que fala com `VITE_API_URL`/localhost:3333). Trate `backend/`, `lib/api.ts`, `lib/admin-api.ts` e `lib/teams-api.ts` (repositórios **MOCK** em memória) como legado — não invista neles a menos que seja pedido explicitamente.
 
 Ao mexer em regras de negócio de dados, **a mudança quase sempre é em `supabase/` (SQL/RLS/Edge Function) + no service do frontend**, não em `backend/`.
 
@@ -24,10 +24,12 @@ Camada de serviços em `frontend/src/services/*Service.ts`. Dois padrões:
 
 ## Regras e mapeamentos de fonte única (não duplicar)
 
-- **Regras clínicas** → `packages/shared/src/clinical/thresholds.ts` (faixas de validação de entrada + limiares verde/amarelo/vermelho) e `status.ts`. Ponto de manutenção **único**: backend, frontend e gráficos leem daqui. Campos com `PENDING_MEDICAL_VALIDATION = true` são provisórios (Pressão Arterial e FC aguardam confirmação médica — ver `docs/PONTOS_PENDENTES.md`). Não invente limiares finais.
+- **Regras clínicas** → `packages/shared/src/clinical/thresholds.ts` (faixas de validação de entrada + limiares verde/amarelo/vermelho) e `status.ts`. Ponto de manutenção **único** para: validação de entrada, gráficos e as regras **não** table-driven (`STEPS_RULES`, `BINARY_RULES`, `WATER_INTAKE_RULE`, critérios combinados de vermelho). Campos com `PENDING_MEDICAL_VALIDATION = true` são provisórios (ver `docs/PONTOS_PENDENTES.md`). Não invente limiares finais.
+- **Faixas verde/amarelo/vermelho das 8 métricas simples** (temperature, spo2, bloodPressureSystolic, bloodPressureDiastolic, heartRate, diuresis, pain, dyspnea) → tabela `clinical_threshold_settings` (0075), **editável pelo ADMIN sem deploy** em Configurações → Regras Clínicas. Quem classifica é o banco: `eval_clinical_status` → `classify_by_bands` lê a tabela (fallback em `clinical_threshold_defaults`). `ALERT_THRESHOLDS` no TS é o **default de seed + fallback da tela**, não a fonte viva — mudar um número lá **não** muda o status em banco já semeado. Escrita só via RPC `admin_set_clinical_threshold` (is_admin + validação de cobertura sem buraco + `audit_logs`); nunca `update` direto. Por depender da tabela, `eval_clinical_status` é `stable` (não mais `immutable`).
 - **Papéis** → `frontend/src/lib/roles.ts`. O banco usa `profiles.role` (`ADMIN`/`MEDICAL_SURGEON`/`ASSOCIATED_DOCTOR`/`SUPPORT`/`TEAM_MANAGER`/`NURSING_PROFESSIONAL`); o app usa o enum `Role` de `@vitalsync/shared` (`ADM`/`SURGEON`/`ASSOCIATE`/`SUPPORT`/`MANAGER`/`NURSE`). Converta com `dbRoleToAppRole`; rótulos PT-BR em `APP_ROLE_LABEL_PT`. Não recriar esse de-para (era duplicado em `AuthContext`, `MyProfilePage`, `profile` e `exportService` antes de ser centralizado). `DB_ROLE_TO_APP_ROLE` e `APP_ROLE_LABEL_PT` são `Record<...>` completos: adicionar um papel novo ao enum quebra o build até o de-para ser atualizado — isso é proposital.
 - **Parâmetros operacionais** → tabela `app_settings` (`section` text PK + `data` jsonb; seções em uso: `security`, `nursing`), lida no SQL por `nursing_setting_num/bool` (0063). Janelas, limites e feature flags vivem aqui para mudarem **sem deploy** — não hardcode valores desses no TS nem no SQL.
 - **Pacote `@vitalsync/shared`** (`packages/shared`) é neutro de framework (tipos, utils, clínico) e é dependência dos três workspaces — **precisa ser compilado antes** de backend/frontend. Todos os scripts `dev`/`build` já fazem `build:shared` primeiro.
+- **Dropdowns** → `CustomSelect` (`frontend/src/components/ui.tsx`) é o padrão do app: listbox estilizado (não `<select>` nativo, que no mobile abre o menu cinza do SO). `ProfessionalCombobox` é a variante para listas de profissionais (tem busca; espera `{ id, name, tag, email?, roleLabel? }`). `SelectField` (`<select>` nativo) está **obsoleto** — só existe por compatibilidade, não usar em código novo.
 
 ## Ciclo de vida de um alerta clínico (espalhado por várias migrations)
 
@@ -97,7 +99,7 @@ npm run db:up / db:down     # Postgres via docker-compose (porta host 5544, não
 npm run db:migrate / db:seed / db:reset
 ```
 
-Supabase (banco de produção): migrations aplicadas com `supabase db push`; Edge Functions com `supabase functions deploy <nome>`. Segredos via `supabase secrets set ...` (CPF_PEPPER, CPF_ENC_KEY, WHATSAPP_*). Reset local completo em `supabase/_scripts/0000_reset.sql`. Funções atuais em `supabase/functions/`: `create-patient`, `update-patient`, `submit-vital-record`, `process-vital-record`, `send-whatsapp-alert`, `send-measurement-reminder`, `send-missed-measurement-alert`, `whatsapp-webhook`, `validate-patient-access`, `admin-create-user`, `accept-invite`, `export-data`, `upload-patient-photo`.
+Supabase (banco de produção): migrations aplicadas com `supabase db push`; Edge Functions com `supabase functions deploy <nome>`. Segredos via `supabase secrets set ...` (CPF_PEPPER, CPF_ENC_KEY, WHATSAPP_*). Reset local completo em `supabase/_scripts/0000_reset.sql`. Funções atuais em `supabase/functions/`: `create-patient`, `update-patient`, `submit-vital-record`, `process-vital-record`, `send-whatsapp-alert`, `send-measurement-reminder`, `send-missed-measurement-alert`, `send-welcome-message`, `whatsapp-webhook`, `validate-patient-access`, `admin-create-user`, `accept-invite`, `export-data`, `upload-patient-photo`.
 
 ## Gotchas de migrations Supabase (histórico real de quebras)
 
@@ -115,7 +117,7 @@ Há **dois `.env.example` distintos, não confunda**: o da **raiz** é do backen
 
 ## Documentação de apoio
 
-`README.md` descreve a arquitetura Clean do backend legado (útil para conceitos, não para o fluxo atual). `docs/`:
+`README.md` está vazio — não conte com ele. `docs/`:
 
 - `CONFIG_SUPABASE.md` — setup do ambiente.
 - `ACESSO_PUBLICO_PACIENTE.md` — fluxo do link do paciente.

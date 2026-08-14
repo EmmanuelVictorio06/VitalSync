@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Copy, MessageCircle, UserPlus } from 'lucide-react';
-import { calculateAge, whatsappLink } from '@vitalsync/shared';
+import { calculateAge, isDischargeAfterSurgery, whatsappLink } from '@vitalsync/shared';
 import { Role, useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
 import { ToggleSwitch } from '../components/admin';
-import { Button, CustomSelect, Field, PageContainer, PageHeader, PhoneInput, RichTextField, TextInput } from '../components/ui';
+import { Button, CustomSelect, DateField, Field, PageContainer, PageHeader, PhoneInput, RichTextField, TextInput } from '../components/ui';
 import { featureFlags } from '../config/featureFlags';
 import { patientVitalsLink } from '../lib/publicUrl';
 import { parseComorbidities } from '../lib/comorbidities';
@@ -43,6 +43,10 @@ const empty: FormState = {
   name: '', cpf: '', birthDate: '', phone: '', surgeryTypeId: '', surgeryDate: '', dischargeDate: '', hospitalId: '', teamId: '', isTest: false, medicalRecordSummary: '',
   sex: '', weightKg: '', heightCm: '', comorbidities: '', lengthOfStayDays: '', alternativePhone: '', tcleAcceptedAt: '',
 };
+
+// Mensagem única (submit + feedback imediato no campo) — hospital_discharge_date
+// é o marco zero do monitoramento, então essa ordem precisa estar certa.
+const DISCHARGE_BEFORE_SURGERY_ERROR = 'A data da alta hospitalar não pode ser anterior à data da cirurgia.';
 
 export function PatientRegisterPage() {
   const toast = useToast();
@@ -99,6 +103,13 @@ export function PatientRegisterPage() {
     return Number.isNaN(d.getTime()) ? '' : `${calculateAge(d)} anos`;
   }, [form.birthDate]);
 
+  // Feedback imediato: assim que as duas datas estiverem preenchidas e fora de
+  // ordem, marca o campo antes mesmo do usuário tentar enviar o formulário.
+  const dischargeDateError = useMemo(
+    () => (isDischargeAfterSurgery(form.surgeryDate, form.dischargeDate) ? undefined : DISCHARGE_BEFORE_SURGERY_ERROR),
+    [form.surgeryDate, form.dischargeDate],
+  );
+
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((p) => ({ ...p, [key]: value }));
   }
@@ -106,6 +117,26 @@ export function PatientRegisterPage() {
   async function submit() {
     if (!validateCpf(form.cpf)) {
       toast.error('CPF inválido. Verifique os dígitos e tente novamente.');
+      return;
+    }
+    // DateField não é um input de data nativo, então o `required` do campo é
+    // só visual (asterisco) — sem essa checagem explícita, o form deixaria
+    // passar com data obrigatória vazia (o navegador não bloqueia mais o
+    // submit sozinho, como bloqueava com o input nativo).
+    if (!form.birthDate) {
+      toast.error('Informe a data de nascimento.');
+      return;
+    }
+    if (!form.surgeryDate) {
+      toast.error('Informe a data da cirurgia.');
+      return;
+    }
+    if (!form.dischargeDate) {
+      toast.error('Informe a data da alta hospitalar.');
+      return;
+    }
+    if (!isDischargeAfterSurgery(form.surgeryDate, form.dischargeDate)) {
+      toast.error(DISCHARGE_BEFORE_SURGERY_ERROR);
       return;
     }
     setBusy(true);
@@ -182,7 +213,7 @@ export function PatientRegisterPage() {
               required
             />
             <PhoneInput label="Telefone (WhatsApp)" value={form.phone} onChange={(v) => set('phone', v)} required />
-            <TextInput label="Data de nascimento" type="date" value={form.birthDate} onChange={(e) => set('birthDate', e.target.value)} required />
+            <DateField label="Data de nascimento" value={form.birthDate} onChange={(e) => set('birthDate', e.target.value)} required />
             <Field label="Idade" hint="Calculada automaticamente.">
               <input className="input bg-muted/60" value={age} readOnly placeholder="—" />
             </Field>
@@ -199,8 +230,8 @@ export function PatientRegisterPage() {
           <div className="grid md:grid-cols-2 gap-4">
             <CustomSelect label="Tipo de cirurgia" value={form.surgeryTypeId} onChange={(e) => set('surgeryTypeId', e.target.value)} options={surgeryTypes.map((s) => ({ value: s.id, label: s.name }))} required />
             <CustomSelect label="Hospital" value={form.hospitalId} onChange={(e) => set('hospitalId', e.target.value)} options={hospitals.map((h) => ({ value: h.id, label: h.name }))} required />
-            <TextInput label="Data da cirurgia" type="date" value={form.surgeryDate} onChange={(e) => set('surgeryDate', e.target.value)} required />
-            <TextInput label="Data da alta hospitalar" type="date" hint="Inicia a contagem dos 10 dias de monitoramento." value={form.dischargeDate} onChange={(e) => set('dischargeDate', e.target.value)} required />
+            <DateField label="Data da cirurgia" value={form.surgeryDate} onChange={(e) => set('surgeryDate', e.target.value)} required />
+            <DateField label="Data da alta hospitalar" hint="Inicia a contagem dos 10 dias de monitoramento." value={form.dischargeDate} onChange={(e) => set('dischargeDate', e.target.value)} error={dischargeDateError} required />
           </div>
           <div className="mt-4">
             <RichTextField
@@ -224,7 +255,7 @@ export function PatientRegisterPage() {
             <TextInput label="Peso (kg)" inputMode="decimal" placeholder="Ex. 72,5" value={form.weightKg} onChange={(e) => set('weightKg', e.target.value)} />
             <TextInput label="Altura (cm)" inputMode="numeric" placeholder="Ex. 170" value={form.heightCm} onChange={(e) => set('heightCm', e.target.value)} />
             <TextInput label="Tempo de internação (dias)" inputMode="numeric" value={form.lengthOfStayDays} onChange={(e) => set('lengthOfStayDays', e.target.value)} />
-            <TextInput label="TCLE assinado em" type="date" hint="Data de assinatura do Termo de Consentimento. O termo precisa conter a cláusula de contato ativo (ver docs/AVISO_CONTATO_ATIVO.md)." value={form.tcleAcceptedAt} onChange={(e) => set('tcleAcceptedAt', e.target.value)} />
+            <DateField label="TCLE assinado em" hint="Data de assinatura do Termo de Consentimento. O termo precisa conter a cláusula de contato ativo (ver docs/AVISO_CONTATO_ATIVO.md)." value={form.tcleAcceptedAt} onChange={(e) => set('tcleAcceptedAt', e.target.value)} />
           </div>
           <div className="mt-4">
             <RichTextField

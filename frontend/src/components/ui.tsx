@@ -1,6 +1,7 @@
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -16,8 +17,11 @@ import {
   AlignLeft,
   AlignRight,
   Bold,
+  CalendarDays,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Italic,
   List as ListIcon,
   Redo2,
@@ -28,6 +32,21 @@ import {
   Undo2,
 } from 'lucide-react';
 import { ClinicalStatus, formatPhoneBR, onlyDigits } from '@vitalsync/shared';
+import {
+  MONTH_NAMES_PT,
+  WEEKDAY_LABELS_PT,
+  addMonths,
+  buildMonthGrid,
+  daysInMonth,
+  formatIsoAsTyped,
+  isWithinRange,
+  maskDateInput,
+  parseIsoDate,
+  parseTypedDate,
+  shiftDay,
+  toIsoDate,
+  todayIso,
+} from '../lib/dateField';
 import { plainTextToHtml, sanitizeRichText } from '../lib/richText';
 
 /** Junta classes condicionalmente (equivalente leve do `cn` da referência). */
@@ -168,10 +187,17 @@ export function Field({
   children: ReactNode;
 }) {
   return (
-    <div className="block">
-      <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
-        {label} {required && <span className="text-alert">*</span>}
-      </span>
+    // `min-w-0`: como item de grid/flex o padrão é `min-width: auto`, que impede
+    // encolher abaixo do conteúdo — um valor longo sem espaços (URL, e-mail ou
+    // um prontuário colado sem quebras) empurrava a coluna e estourava o modal.
+    <div className="block min-w-0">
+      {/* Sem label (campo "mudo" — ex.: filtro sem rótulo visível), não renderiza
+          o span: evita ~16px de espaço morto empurrando o controle para baixo. */}
+      {label && (
+        <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
+          {label} {required && <span className="text-alert">*</span>}
+        </span>
+      )}
       {children}
       {hint && !error && <span className="block text-xs text-muted-foreground mt-1">{hint}</span>}
       {error && <span className="block text-xs font-semibold text-alert mt-1">{error}</span>}
@@ -440,7 +466,7 @@ function RichTextEditor({
   return (
     <div
       className={cn(
-        'rounded-lg border border-border bg-card overflow-hidden transition-[border-color,box-shadow]',
+        'rounded-lg border border-border bg-card overflow-hidden min-w-0 transition-[border-color,box-shadow]',
         'focus-within:border-primary focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--primary)_20%,transparent)]',
         invalid && 'border-alert',
       )}
@@ -531,7 +557,12 @@ function RichTextEditor({
         onMouseUp={updateActiveState}
         onFocus={updateActiveState}
         className={cn(
-          'rich-text-input w-full bg-transparent px-3 py-2.5 text-sm outline-none overflow-y-auto break-words',
+          // `wrap-anywhere` (overflow-wrap: anywhere) em vez de `break-words`
+          // (break-word): os dois quebram a linha, mas só `anywhere` também
+          // reduz a LARGURA MÍNIMA do elemento. Com `break-word` uma palavra
+          // gigante sem espaços continuava ditando o min-content e empurrando
+          // os ancestrais — era o que estourava o modal de editar paciente.
+          'rich-text-input w-full bg-transparent px-3 py-2.5 text-sm outline-none overflow-y-auto wrap-anywhere',
           '[&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-0.5',
           minHeightClassName,
         )}
@@ -598,7 +629,12 @@ export function PhoneInput({
   );
 }
 
-/* ---------------- Select (dropdown reutilizável) ---------------- */
+/* ---------------- Select (dropdown reutilizável) ----------------
+   OBSOLETO: o padrão do projeto passou a ser o CustomSelect (abaixo), que
+   estiliza o próprio menu em vez de depender do <select> nativo do SO — no
+   mobile o menu nativo aparece cinza escuro e fora do design (ver comentário
+   do CustomSelect). Não use SelectField em telas novas; ele permanece aqui só
+   por compatibilidade, caso ainda exista algum consumidor não migrado. */
 interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label: string;
   hint?: string;
@@ -646,6 +682,7 @@ export function CustomSelect({
   value,
   onChange,
   disabled,
+  ariaLabel,
 }: {
   label: string;
   hint?: string;
@@ -653,16 +690,17 @@ export function CustomSelect({
   options: CustomSelectOption[];
   placeholder?: string;
   required?: boolean;
+  /** Rótulo para leitor de tela quando `label` estiver vazio (sem label visível). */
+  ariaLabel?: string;
   value: string;
   onChange: (e: { target: { value: string } }) => void;
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
-  const [dropUp, setDropUp] = useState(false);
-  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
   const wrapRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const listId = useId();
 
   const selected = useMemo(() => options.find((o) => o.value === value) ?? null, [options, value]);
@@ -689,34 +727,68 @@ export function CustomSelect({
   // acompanhar o botão (ex.: modal rolável). Portal evita clipping por containers
   // com overflow-auto/hidden (caso do modal "Filtros avançados") e z-index alto
   // garante que fique acima do rodapé do modal.
-  useEffect(() => {
+  //
+  // IMPORTANTE: a posição é escrita direto no DOM (menu.style.*), nunca via
+  // state do React. Um setState aqui refaz o render de todo o CustomSelect —
+  // inclusive remapear a lista de opções — a cada evento de scroll; é isso que
+  // sentia como "atraso"/arrasto do menu ao rolar, mesmo com rAF no listener.
+  // Manipulação direta do nó tira o React do caminho crítico: o menu segue o
+  // botão no mesmo frame do scroll, sem passar por reconciliação.
+  //
+  // A ANIMAÇÃO de entrada segue a mesma lógica: aplicada com classList.add UMA
+  // única vez (primeira medição), nunca reescrita nos reposicionamentos
+  // seguintes — trocar a classe reiniciaria a animação a cada scroll.
+  // useLayoutEffect (não useEffect) garante que a primeira posição já esteja
+  // certa antes do navegador pintar o menu — sem flash no canto errado.
+  useLayoutEffect(() => {
     if (!open) return;
     const btn = btnRef.current;
-    if (!btn) return;
+    const menu = menuRef.current;
+    if (!btn || !menu) return;
 
     const MAX_H = 240; // max-h-60 (15rem) do <ul>
     const GAP = 4; // mt-1 / mb-1
+    let animationApplied = false;
 
     const place = () => {
       const r = btn.getBoundingClientRect();
       const below = window.innerHeight - r.bottom - GAP;
       const above = r.top - GAP;
       const up = below < MAX_H && above > below;
-      setDropUp(up);
-      setMenuStyle({
-        position: 'fixed',
-        left: r.left,
-        width: r.width,
-        ...(up ? { bottom: window.innerHeight - r.top - GAP } : { top: r.bottom + GAP }),
-      });
+
+      menu.style.left = `${r.left}px`;
+      menu.style.width = `${r.width}px`;
+      if (up) {
+        menu.style.bottom = `${window.innerHeight - r.top - GAP}px`;
+        menu.style.top = 'auto';
+      } else {
+        menu.style.top = `${r.bottom + GAP}px`;
+        menu.style.bottom = 'auto';
+      }
+
+      if (!animationApplied) {
+        menu.classList.add(up ? 'animate-menu-up' : 'animate-menu-in');
+        animationApplied = true;
+      }
     };
 
     place();
-    window.addEventListener('resize', place);
-    window.addEventListener('scroll', place, true);
+
+    // rAF em vez de debounce: acompanha o scroll no ritmo do navegador, sem
+    // atraso de tempo fixo (um debounce aqui é exatamente o que pareceria
+    // "atrasado" de novo).
+    let raf = 0;
+    const onReposition = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(place);
+    };
+
+    window.addEventListener('resize', onReposition);
+    window.addEventListener('scroll', onReposition, true);
     return () => {
-      window.removeEventListener('resize', place);
-      window.removeEventListener('scroll', place, true);
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', onReposition);
+      window.removeEventListener('scroll', onReposition, true);
     };
   }, [open]);
 
@@ -776,6 +848,7 @@ export function CustomSelect({
           aria-haspopup="listbox"
           aria-expanded={open}
           aria-controls={listId}
+          aria-label={!label && ariaLabel ? ariaLabel : undefined}
           className={cn(
             'input flex items-center justify-between gap-2 text-left',
             error && 'invalid',
@@ -789,12 +862,12 @@ export function CustomSelect({
         {open &&
           createPortal(
             <div
+              ref={menuRef}
               data-cs-listbox
-              className={cn(
-                'z-[1000] rounded-lg border border-border bg-card shadow-lg overflow-hidden',
-                dropUp ? 'animate-dropup' : 'animate-entry',
-              )}
-              style={menuStyle}
+              // position/left/width/top/bottom e a classe de animação são
+              // escritos direto no nó pelo efeito de posicionamento acima —
+              // por isso não aparecem aqui (nem como style, nem na className).
+              className="fixed z-[1000] rounded-lg border border-border bg-card shadow-lg overflow-hidden"
             >
               <ul id={listId} role="listbox" className="max-h-60 overflow-y-auto py-1">
                 {options.length === 0 ? (
@@ -830,6 +903,684 @@ export function CustomSelect({
   );
 }
 
+/* ---------------- Date field (calendário próprio, não nativo) ----------------
+   Mesmo problema do CustomSelect (acima): o calendário do input de data nativo
+   (type=date) é renderizado pelo NAVEGADOR/SO — muda de aparência entre Chrome,
+   Firefox, Safari, Android e iOS, e não pode ser estilizado. Aqui, como lá, o
+   calendário é peça própria (botão + popover portado pro body), seguindo o
+   design system.
+
+   Contrato de dados: `value`/`onChange` sempre em 'YYYY-MM-DD' (o mesmo formato
+   que o input nativo produzia) — quem consome não muda nada. `onChange`
+   recebe `{ target: { value } }`, igual ao CustomSelect, então
+   `(e) => set('campo', e.target.value)` continua funcionando.
+
+   `required` aqui é só visual (asterisco no label, via Field) — o campo vira
+   <input type="text">/<button>, então perde a validação nativa do navegador.
+   Quem usa com campo obrigatório PRECISA validar no submit (ver
+   PatientRegisterPage.submit) e mostrar erro com toast, como já é feito para
+   os demais campos obrigatórios do formulário. */
+const DATE_POPOVER_WIDTH = 300;
+const DATE_POPOVER_MAX_H = 380; // estimativa (cabeçalho + grade + rodapé) p/ decidir abrir pra cima
+
+export interface DateFieldChangeEvent {
+  target: { value: string };
+}
+
+function capitalizePt(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+export function DateField({
+  label,
+  hint,
+  error,
+  required,
+  disabled,
+  value,
+  onChange,
+  min,
+  max,
+  ariaLabel,
+}: {
+  label: string;
+  hint?: string;
+  error?: string;
+  required?: boolean;
+  disabled?: boolean;
+  /** 'YYYY-MM-DD' ou ''. */
+  value: string;
+  onChange: (e: DateFieldChangeEvent) => void;
+  /** Limites opcionais de seleção/navegação, em 'YYYY-MM-DD'. */
+  min?: string;
+  max?: string;
+  /** Rótulo para leitor de tela quando `label` estiver vazio. */
+  ariaLabel?: string;
+}) {
+  const [draft, setDraft] = useState(() => formatIsoAsTyped(value));
+  const [localError, setLocalError] = useState<string | undefined>(undefined);
+  const [open, setOpen] = useState(false);
+  const [view, setView] = useState<'days' | 'months' | 'years'>('days');
+  const [viewYear, setViewYear] = useState(() => (parseIsoDate(value) ?? parseIsoDate(todayIso())!).ano);
+  const [viewMonth, setViewMonth] = useState(() => (parseIsoDate(value) ?? parseIsoDate(todayIso())!).mes);
+  const [focusedIso, setFocusedIso] = useState(() => (parseIsoDate(value) ? value : todayIso()));
+
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const dayRefs = useRef(new Map<string, HTMLButtonElement>());
+  const yearRefs = useRef(new Map<number, HTMLButtonElement>());
+  const popoverId = useId();
+
+  // Sincroniza o texto exibido quando `value` muda por fora (seleção no
+  // calendário, "Hoje"/"Limpar", reset do formulário, carga assíncrona de um
+  // paciente existente) — nunca no meio de uma digitação em curso, porque só
+  // roda quando `value` de fato muda.
+  useEffect(() => {
+    setDraft(formatIsoAsTyped(value));
+    setLocalError(undefined);
+  }, [value]);
+
+  useEffect(() => {
+    if (!open) setView('days');
+  }, [open]);
+
+  // Fecha ao clicar fora — mesmo padrão do CustomSelect (popover portado pro
+  // body, então compara contra o wrapper do campo e contra o próprio popover).
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e: MouseEvent) => {
+      const t = e.target as Node | null;
+      if (!t) return;
+      if (wrapRef.current?.contains(t)) return;
+      if (t instanceof Element && t.closest?.('[data-df-popover]')) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [open]);
+
+  // Posicionamento do popover: idêntico em espírito ao do CustomSelect (ver
+  // comentário lá) — escrita direta no DOM via ref, nunca via state, pra não
+  // reconciliar a grade inteira a cada scroll (era a causa do "atraso"/arrasto
+  // já corrigido lá). Única diferença: a largura do popover é FIXA
+  // (DATE_POPOVER_WIDTH), não a largura do campo — um calendário de 7 colunas
+  // não cabe numa largura arbitrária de input, então a posição horizontal é
+  // grudada no campo mas com clamp pra nunca vazar a viewport.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const trigger = wrapRef.current;
+    const menu = menuRef.current;
+    if (!trigger || !menu) return;
+
+    const GAP = 4;
+    const MARGIN = 8; // distância mínima até a borda da viewport
+    let animationApplied = false;
+
+    const place = () => {
+      const r = trigger.getBoundingClientRect();
+      const below = window.innerHeight - r.bottom - GAP;
+      const above = r.top - GAP;
+      const up = below < DATE_POPOVER_MAX_H && above > below;
+
+      // Preferência de alinhamento horizontal, em ordem:
+      // 1) borda DIREITA do popover encostada na borda direita do campo — é o
+      //    padrão visual pedido, evita o vão grande que sobrava alinhando pela
+      //    esquerda num popover mais estreito que o campo;
+      // 2) se isso empurrar o popover pra fora da tela à esquerda (campo perto
+      //    da borda esquerda da viewport), cai pra alinhar pela borda ESQUERDA
+      //    do campo — mesmo comportamento de antes;
+      // 3) se nem isso couber (campo quase do tamanho da tela), o clamp final
+      //    garante que o popover nunca vaza a viewport em nenhum dos lados.
+      let left = r.right - DATE_POPOVER_WIDTH;
+      if (left < MARGIN) left = r.left;
+      left = Math.min(Math.max(left, MARGIN), Math.max(MARGIN, window.innerWidth - DATE_POPOVER_WIDTH - MARGIN));
+      menu.style.left = `${left}px`;
+      menu.style.width = `${DATE_POPOVER_WIDTH}px`;
+      if (up) {
+        menu.style.bottom = `${window.innerHeight - r.top - GAP}px`;
+        menu.style.top = 'auto';
+      } else {
+        menu.style.top = `${r.bottom + GAP}px`;
+        menu.style.bottom = 'auto';
+      }
+
+      if (!animationApplied) {
+        menu.classList.add(up ? 'animate-menu-up' : 'animate-menu-in');
+        animationApplied = true;
+      }
+    };
+
+    place();
+
+    let raf = 0;
+    const onReposition = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(place);
+    };
+
+    window.addEventListener('resize', onReposition);
+    window.addEventListener('scroll', onReposition, true);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', onReposition);
+      window.removeEventListener('scroll', onReposition, true);
+    };
+  }, [open]);
+
+  // Mantém o mês/ano exibidos em sincronia com o dia focado pelo teclado (ex.:
+  // seta pra direita no dia 31 atravessa pro mês seguinte) e devolve o foco de
+  // verdade (DOM) pro botão do dia correspondente depois que a grade re-renderiza.
+  useEffect(() => {
+    if (!open || view !== 'days') return;
+    const parts = parseIsoDate(focusedIso);
+    if (!parts) return;
+    if (parts.ano !== viewYear || parts.mes !== viewMonth) {
+      setViewYear(parts.ano);
+      setViewMonth(parts.mes);
+    }
+  }, [focusedIso, open, view, viewYear, viewMonth]);
+
+  useEffect(() => {
+    if (!open || view !== 'days') return;
+    dayRefs.current.get(focusedIso)?.focus();
+  }, [focusedIso, viewYear, viewMonth, open, view]);
+
+  useEffect(() => {
+    if (view !== 'years') return;
+    yearRefs.current.get(viewYear)?.scrollIntoView({ block: 'center' });
+  }, [view, viewYear]);
+
+  function openCalendar() {
+    if (disabled) return;
+    const base = parseIsoDate(value) ? value : todayIso();
+    const parts = parseIsoDate(base)!;
+    setViewYear(parts.ano);
+    setViewMonth(parts.mes);
+    setFocusedIso(base);
+    setView('days');
+    setOpen(true);
+  }
+
+  function closeCalendar(refocus = true) {
+    setOpen(false);
+    if (refocus) inputRef.current?.focus();
+  }
+
+  function selectDay(iso: string) {
+    if (!isWithinRange(iso, min, max)) return;
+    onChange({ target: { value: iso } });
+    closeCalendar();
+  }
+
+  function gotoMonth(delta: number) {
+    const { ano, mes } = addMonths(viewYear, viewMonth, delta);
+    setViewYear(ano);
+    setViewMonth(mes);
+    const p = parseIsoDate(focusedIso);
+    const day = Math.min(p?.dia ?? 1, daysInMonth(ano, mes));
+    setFocusedIso(toIsoDate(ano, mes, day));
+  }
+
+  function commitTyped(masked: string) {
+    if (masked.length === 0) {
+      setLocalError(undefined);
+      onChange({ target: { value: '' } });
+      return;
+    }
+    if (masked.length !== 10) return; // ainda digitando — não valida nem emite
+    const iso = parseTypedDate(masked);
+    if (!iso) {
+      setLocalError('Data inválida.');
+      return;
+    }
+    if (!isWithinRange(iso, min, max)) {
+      setLocalError('Data fora do intervalo permitido.');
+      return;
+    }
+    setLocalError(undefined);
+    onChange({ target: { value: iso } });
+  }
+
+  function handleInputChange(raw: string) {
+    const masked = maskDateInput(raw);
+    setDraft(masked);
+    if (masked.length !== 10) setLocalError(undefined);
+    commitTyped(masked);
+  }
+
+  function handleInputBlur() {
+    if (draft.length > 0 && draft.length < 10) setLocalError('Data incompleta.');
+  }
+
+  function handleInputKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'ArrowDown' && !open) {
+      e.preventDefault();
+      openCalendar();
+    } else if (e.key === 'Escape' && open) {
+      e.preventDefault();
+      closeCalendar();
+    }
+  }
+
+  function handleIconKeyDown(e: React.KeyboardEvent<HTMLButtonElement>) {
+    if (e.key === 'ArrowDown' && !open) {
+      e.preventDefault();
+      openCalendar();
+    } else if (e.key === 'Escape' && open) {
+      e.preventDefault();
+      closeCalendar();
+    }
+  }
+
+  function handleDayKeyDown(e: React.KeyboardEvent<HTMLButtonElement>, iso: string) {
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      setFocusedIso(shiftDay(iso, 1));
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      setFocusedIso(shiftDay(iso, -1));
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setFocusedIso(shiftDay(iso, 7));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setFocusedIso(shiftDay(iso, -7));
+    } else if (e.key === 'PageDown' || e.key === 'PageUp') {
+      e.preventDefault();
+      const p = parseIsoDate(iso)!;
+      const nm = addMonths(p.ano, p.mes, e.key === 'PageDown' ? 1 : -1);
+      const day = Math.min(p.dia, daysInMonth(nm.ano, nm.mes));
+      setFocusedIso(toIsoDate(nm.ano, nm.mes, day));
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      selectDay(iso);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeCalendar();
+    }
+  }
+
+  const years = useMemo(() => {
+    const currentRealYear = new Date().getFullYear();
+    const arr: number[] = [];
+    for (let y = currentRealYear - 120; y <= currentRealYear + 10; y++) arr.push(y);
+    return arr;
+  }, []);
+
+  const today = todayIso();
+  const effectiveError = error ?? localError;
+
+  return (
+    <Field label={label} hint={hint} error={effectiveError} required={required}>
+      <div className="relative" ref={wrapRef}>
+        <input
+          ref={inputRef}
+          type="text"
+          inputMode="numeric"
+          placeholder="dd/mm/aaaa"
+          disabled={disabled}
+          value={draft}
+          onChange={(e) => handleInputChange(e.target.value)}
+          onBlur={handleInputBlur}
+          onKeyDown={handleInputKeyDown}
+          aria-label={!label && ariaLabel ? ariaLabel : undefined}
+          className={cn('input pr-10', effectiveError && 'invalid', disabled && 'opacity-55 cursor-not-allowed')}
+        />
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => (open ? closeCalendar(false) : openCalendar())}
+          onKeyDown={handleIconKeyDown}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-controls={popoverId}
+          aria-label="Abrir calendário"
+          className="absolute inset-y-0 right-0 px-3 flex items-center text-muted-foreground hover:text-foreground disabled:pointer-events-none disabled:opacity-55"
+        >
+          <CalendarDays className="size-4" />
+        </button>
+
+        {open &&
+          createPortal(
+            <div
+              ref={menuRef}
+              id={popoverId}
+              data-df-popover
+              role="dialog"
+              aria-modal="false"
+              aria-label={label || ariaLabel || 'Calendário'}
+              className="fixed z-[1000] rounded-lg border border-border bg-card shadow-lg overflow-hidden max-h-[calc(100vh-32px)] overflow-y-auto"
+            >
+              {view === 'days' && (
+                <>
+                  <div className="flex items-center justify-between px-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => gotoMonth(-1)}
+                      aria-label="Mês anterior"
+                      className="size-11 rounded-lg flex items-center justify-center hover:bg-muted/60 text-muted-foreground shrink-0"
+                    >
+                      <ChevronLeft className="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setView('years')}
+                      className="text-sm font-semibold hover:text-primary px-2 truncate"
+                    >
+                      {capitalizePt(MONTH_NAMES_PT[viewMonth - 1] ?? '')} de {viewYear}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => gotoMonth(1)}
+                      aria-label="Próximo mês"
+                      className="size-11 rounded-lg flex items-center justify-center hover:bg-muted/60 text-muted-foreground shrink-0"
+                    >
+                      <ChevronRight className="size-4" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-7 px-2 text-center text-[11px] font-bold text-muted-foreground uppercase">
+                    {WEEKDAY_LABELS_PT.map((d, i) => (
+                      <span key={i} className="py-1">
+                        {d}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div role="grid" aria-label="Dias do mês" className="px-2 pb-2">
+                    {buildMonthGrid(viewYear, viewMonth).map((week, wi) => (
+                      <div role="row" key={wi} className="grid grid-cols-7 gap-0.5">
+                        {week.map((cell) => {
+                          const selected = cell.iso === value;
+                          const isToday = cell.iso === today;
+                          const inRange = isWithinRange(cell.iso, min, max);
+                          return (
+                            <button
+                              key={cell.iso}
+                              ref={(el) => {
+                                if (el) dayRefs.current.set(cell.iso, el);
+                                else dayRefs.current.delete(cell.iso);
+                              }}
+                              type="button"
+                              role="gridcell"
+                              aria-selected={selected}
+                              tabIndex={cell.iso === focusedIso ? 0 : -1}
+                              disabled={!inRange}
+                              onClick={() => selectDay(cell.iso)}
+                              onKeyDown={(e) => handleDayKeyDown(e, cell.iso)}
+                              onFocus={() => setFocusedIso(cell.iso)}
+                              className={cn(
+                                'size-11 rounded-lg text-sm flex items-center justify-center transition-colors',
+                                cell.outside ? 'text-muted-foreground/50' : 'text-foreground',
+                                !selected && inRange && 'hover:bg-muted/60',
+                                isToday && !selected && 'border border-primary font-bold',
+                                selected && 'bg-primary text-primary-foreground font-bold',
+                                !inRange && 'opacity-35 cursor-not-allowed',
+                              )}
+                            >
+                              {cell.day}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 px-2 pb-2 pt-1 border-t border-border">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        onChange({ target: { value: '' } });
+                        closeCalendar();
+                      }}
+                    >
+                      Limpar
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        onChange({ target: { value: today } });
+                        closeCalendar();
+                      }}
+                    >
+                      Hoje
+                    </Button>
+                  </div>
+                </>
+              )}
+
+              {view === 'months' && (
+                <>
+                  <div className="flex items-center gap-2 px-2 pt-2 pb-1">
+                    <button
+                      type="button"
+                      onClick={() => setView('days')}
+                      aria-label="Voltar"
+                      className="size-11 rounded-lg flex items-center justify-center hover:bg-muted/60 text-muted-foreground shrink-0"
+                    >
+                      <ChevronLeft className="size-4" />
+                    </button>
+                    <span className="text-sm font-semibold">{viewYear}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 p-2">
+                    {MONTH_NAMES_PT.map((name, i) => {
+                      const m = i + 1;
+                      const active = m === viewMonth;
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => {
+                            setViewMonth(m);
+                            const p = parseIsoDate(focusedIso);
+                            const day = Math.min(p?.dia ?? 1, daysInMonth(viewYear, m));
+                            setFocusedIso(toIsoDate(viewYear, m, day));
+                            setView('days');
+                          }}
+                          className={cn(
+                            'h-11 rounded-lg text-sm font-medium flex items-center justify-center transition-colors',
+                            active ? 'bg-primary/10 text-primary font-semibold' : 'hover:bg-muted/60',
+                          )}
+                        >
+                          {capitalizePt(name.slice(0, 3))}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              {view === 'years' && (
+                <>
+                  <div className="flex items-center gap-2 px-2 pt-2 pb-1">
+                    <button
+                      type="button"
+                      onClick={() => setView('days')}
+                      aria-label="Voltar"
+                      className="size-11 rounded-lg flex items-center justify-center hover:bg-muted/60 text-muted-foreground shrink-0"
+                    >
+                      <ChevronLeft className="size-4" />
+                    </button>
+                    <span className="text-sm font-semibold">Selecione o ano</span>
+                  </div>
+                  <div className="max-h-60 overflow-y-auto py-1" role="listbox" aria-label="Ano">
+                    {years.map((y) => {
+                      const active = y === viewYear;
+                      return (
+                        <button
+                          key={y}
+                          ref={(el) => {
+                            if (el) yearRefs.current.set(y, el);
+                            else yearRefs.current.delete(y);
+                          }}
+                          type="button"
+                          role="option"
+                          aria-selected={active}
+                          onClick={() => {
+                            setViewYear(y);
+                            setView('months');
+                          }}
+                          className={cn(
+                            'w-full text-left px-3 min-h-11 flex items-center gap-2 transition-colors',
+                            active ? 'bg-primary/10 text-primary font-semibold' : 'hover:bg-muted/60',
+                          )}
+                        >
+                          <span className="text-sm flex-1">{y}</span>
+                          {active && <Check className="size-4 text-primary shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>,
+            document.body,
+          )}
+      </div>
+    </Field>
+  );
+}
+
+/* ---------------- Overlay compartilhado de modais/drawers ----------------
+
+   TODO modal, drawer, sheet e lightbox do app monta o scrim por aqui. O que o
+   wrapper resolve de uma vez só (antes cada tela repetia a `div` na mão e
+   nenhuma tinha estes comportamentos):
+
+   1. PORTAL para o <body>. Obrigatório, não é preferência de estilo: qualquer
+      ancestral com `transform` vira containing block de `position: fixed`, e o
+      scrim para de cobrir a viewport — passa a cobrir só aquele bloco, o que
+      "lava" o conteúdo e descentraliza o modal. Vários containers do app usam
+      `animate-entry`, cuja animação tem `fill-mode: both` e deixa um
+      `transform: matrix(...)` residual; foi assim que o bug apareceu na aba
+      Configurações → Regras Clínicas.
+   2. `w-screen` (100vw) junto do `inset-0`: com o scroll travado a barra de
+      rolagem some, e um `right: 0` pararia ~15px antes da borda, deixando uma
+      faixa clara sem escurecer.
+   3. TRAVA DE SCROLL no elemento que REALMENTE rola. Aqui o `html` tem
+      `overflow-x: clip`, então é ele (não o `body`) o scroller. A folga da
+      barra é MEDIDA depois de travar, nunca presumida — descontá-la às cegas
+      encolhe o conteúdo, que é justamente o "pulo" que ela deveria evitar.
+      Aninhamento funciona: cada camada salva e restaura o valor anterior.
+   4. ESC e clique no fundo fecham (ambos desligáveis).
+   5. Foco inicial opcional: o primeiro `[data-autofocus]` de dentro do modal.
+
+   O `className` recebe z-index, cor/blur do scrim e alinhamento do painel —
+   assim cada tela mantém o visual que já tinha e só o comportamento é comum.
+*/
+/**
+ * Pilha de overlays abertos. O ESC é um listener de `document`, então com dois
+ * modais abertos (drawer + lightbox, drawer + confirmação) TODOS ouviriam a
+ * tecla e fechariam juntos. Só o topo da pilha responde.
+ */
+const overlayStack: symbol[] = [];
+
+/**
+ * Estado da trava de scroll, guardado FORA do componente e liberado só quando a
+ * pilha esvazia.
+ *
+ * Não dá para cada camada salvar/restaurar o valor anterior por conta própria:
+ * quando um modal e o seu filho (prontuário + "Descartar alterações?") somem no
+ * MESMO commit, o React roda a limpeza do pai antes da do filho — o pai
+ * destravava e o filho, logo depois, restaurava o `hidden` que tinha herdado,
+ * deixando a página presa. Contando as camadas, a ordem deixa de importar.
+ */
+let scrollLock: { scroller: HTMLElement; overflow: string; padding: string } | null = null;
+
+function travarScroll() {
+  if (scrollLock) return; // já travado por uma camada de fora
+  const { body } = document;
+  const scroller = (document.scrollingElement ?? document.documentElement) as HTMLElement;
+  const larguraAntes = scroller.clientWidth;
+  scrollLock = { scroller, overflow: scroller.style.overflow, padding: body.style.paddingRight };
+  scroller.style.overflow = 'hidden';
+  // A folga da barra é MEDIDA depois de travar, nunca presumida: aqui o `html`
+  // tem `overflow-x: clip` e é ele o scroller, então descontar a largura da
+  // barra às cegas encolheria o conteúdo — o "pulo" que se quer evitar.
+  const folga = scroller.clientWidth - larguraAntes;
+  if (folga > 0) body.style.paddingRight = `${folga}px`;
+}
+
+function destravarScroll() {
+  if (overlayStack.length > 0 || !scrollLock) return; // ainda há modal aberto
+  scrollLock.scroller.style.overflow = scrollLock.overflow;
+  document.body.style.paddingRight = scrollLock.padding;
+  scrollLock = null;
+}
+
+export function ModalOverlay({
+  onClose,
+  className,
+  closeOnBackdrop = true,
+  closeOnEsc = true,
+  ariaLabel,
+  ariaLabelledBy,
+  children,
+}: {
+  /** Fecha o modal — usado pelo ESC e pelo clique no fundo. */
+  onClose: () => void;
+  /** Classes do scrim: z-index, cor/blur e alinhamento/padding do painel. */
+  className?: string;
+  closeOnBackdrop?: boolean;
+  closeOnEsc?: boolean;
+  ariaLabel?: string;
+  ariaLabelledBy?: string;
+  children: ReactNode;
+}) {
+  const scrimRef = useRef<HTMLDivElement>(null);
+  // onClose costuma vir como arrow inline: guardar em ref mantém o efeito
+  // rodando UMA vez só (senão ele re-focaria o campo a cada tecla digitada).
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  const escRef = useRef(closeOnEsc);
+  escRef.current = closeOnEsc;
+
+  useEffect(() => {
+    const id = Symbol('modal-overlay');
+    overlayStack.push(id);
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || !escRef.current) return;
+      if (overlayStack[overlayStack.length - 1] !== id) return; // só o modal do topo
+      closeRef.current();
+    };
+    document.addEventListener('keydown', onKeyDown);
+
+    travarScroll();
+
+    scrimRef.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus();
+
+    return () => {
+      const i = overlayStack.lastIndexOf(id);
+      if (i >= 0) overlayStack.splice(i, 1);
+      document.removeEventListener('keydown', onKeyDown);
+      destravarScroll();
+    };
+  }, []);
+
+  return createPortal(
+    <div
+      ref={scrimRef}
+      className={cn('fixed inset-0 w-screen flex', className)}
+      role="dialog"
+      aria-modal="true"
+      aria-label={ariaLabel}
+      aria-labelledby={ariaLabelledBy}
+      // Compara com o currentTarget: só o clique no PRÓPRIO scrim fecha, então
+      // o painel não precisa mais de `stopPropagation` para se defender.
+      onClick={closeOnBackdrop ? (e) => { if (e.target === e.currentTarget) closeRef.current(); } : undefined}
+    >
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
 /* ---------------- Confirm modal (ação destrutiva) ---------------- */
 export function ConfirmModal({
   title,
@@ -853,23 +1604,26 @@ export function ConfirmModal({
   onConfirmInputChange?: (v: string) => void;
 }) {
   const enabled = !requireText || confirmInput?.trim().toUpperCase() === requireText.toUpperCase();
+
+  // Foco inicial (`data-autofocus`): o campo de confirmação quando existe — ele
+  // vem antes no DOM —, senão o botão primário.
   return (
-    <div
-      className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
-      role="dialog"
-      aria-modal="true"
-      onClick={onCancel}
+    <ModalOverlay
+      onClose={onCancel}
+      className="z-50 bg-foreground/50 backdrop-blur-sm items-center justify-center p-4 overflow-y-auto"
     >
-      <div
-        className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-md my-auto max-h-[90vh] overflow-y-auto animate-entry"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-md my-auto max-h-[90vh] overflow-y-auto animate-entry">
         <h2 className="text-lg font-extrabold tracking-tight">{title}</h2>
         <p className="text-sm text-muted-foreground mt-1.5">{message}</p>
         {requireText && (
           <div className="mt-4">
             <Field label={`Digite "${requireText}" para confirmar`}>
-              <input className="input" value={confirmInput ?? ''} onChange={(e) => onConfirmInputChange?.(e.target.value)} />
+              <input
+                className="input"
+                data-autofocus
+                value={confirmInput ?? ''}
+                onChange={(e) => onConfirmInputChange?.(e.target.value)}
+              />
             </Field>
           </div>
         )}
@@ -877,12 +1631,12 @@ export function ConfirmModal({
           <Button variant="ghost" onClick={onCancel}>
             Cancelar
           </Button>
-          <Button variant="danger" onClick={onConfirm} disabled={!enabled} loading={busy}>
+          <Button variant="danger" onClick={onConfirm} disabled={!enabled} loading={busy} data-autofocus>
             {confirmLabel}
           </Button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 

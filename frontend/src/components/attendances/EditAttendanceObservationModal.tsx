@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { AttendanceRow } from '../../services/attendanceService';
-import { Button, Field } from '../ui';
+import { Button, Field, ModalOverlay } from '../ui';
 
 export function EditAttendanceObservationModal({
   row,
@@ -31,16 +31,11 @@ export function EditAttendanceObservationModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[60] bg-foreground/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
-      role="dialog"
-      aria-modal="true"
-      onClick={onCancel}
+    <ModalOverlay
+      onClose={onCancel}
+      className="z-[60] bg-foreground/50 backdrop-blur-sm items-center justify-center p-4 overflow-y-auto"
     >
-      <div
-        className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-md my-auto max-h-[90vh] overflow-y-auto animate-entry"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-md my-auto max-h-[90vh] overflow-y-auto animate-entry">
         <h2 className="text-lg font-extrabold tracking-tight mb-1">Editar observação</h2>
         <p className="text-sm text-muted-foreground">
           Atualize a conduta ou observação registrada neste atendimento finalizado.
@@ -64,6 +59,6 @@ export function EditAttendanceObservationModal({
           </Button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }

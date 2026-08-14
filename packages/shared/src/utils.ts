@@ -70,6 +70,28 @@ export function formatCivilDate(value: Date | string, locale = 'pt-BR'): string 
   return d.toLocaleDateString(locale, { timeZone: 'UTC' });
 }
 
+/**
+ * true se a alta hospitalar é compatível com a data da cirurgia (mesmo dia —
+ * procedimento ambulatorial — ou depois). Datas ausentes não invalidam; a
+ * obrigatoriedade de cada campo é checada à parte, em cada tela/função que usa
+ * esta regra.
+ *
+ * Comparação por STRING 'YYYY-MM-DD' (lexicograficamente ordenável), nunca por
+ * `new Date(iso)`: isso seria interpretado como meia-noite UTC e, em fusos
+ * negativos (ex.: America/Sao_Paulo), desloca a data em um dia — o mesmo
+ * cuidado já tomado em `formatCivilDate` e no `DateField`.
+ *
+ * `hospital_discharge_date` é o marco zero do monitoramento (D+1..D+10) — uma
+ * data invertida aqui produz janela de monitoramento errada silenciosamente.
+ */
+export function isDischargeAfterSurgery(
+  surgeryIso?: string | null,
+  dischargeIso?: string | null,
+): boolean {
+  if (!surgeryIso || !dischargeIso) return true;
+  return dischargeIso >= surgeryIso;
+}
+
 /** Remove tudo que não for dígito (para WhatsApp/telefone). */
 export function onlyDigits(value: string): string {
   return value.replace(/\D+/g, '');

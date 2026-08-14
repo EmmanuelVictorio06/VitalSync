@@ -41,7 +41,7 @@ import {
   type DayPoint,
 } from '../components/charts';
 import { PatientMeasurementPhotoSection } from '../components/photo';
-import { Button, Loading, PageContainer, StatusBadge, cn, statusBorder } from '../components/ui';
+import { Button, CustomSelect, Loading, PageContainer, StatusBadge, cn, statusBorder } from '../components/ui';
 import { patientDashboardService } from '../services/patientDashboardService';
 import { permissionService } from '../services/permissionService';
 import { getMissedPeriodsToday } from '../lib/staffEntry';
@@ -278,18 +278,16 @@ export function PatientDashboardPage() {
               </p>
             ) : p.currentAlertId ? (
               <div className="flex w-full min-w-0 items-center gap-2 text-xs font-medium lg:w-auto">
-                <select
-                  className="max-w-full min-w-0 flex-1 rounded-md border border-border bg-card px-2 py-2 text-xs outline-none focus:border-primary"
-                  value={attendant}
-                  onChange={(e) => setAttendant(e.target.value)}
-                >
-                  <option value="">Atendido por…</option>
-                  {data.teamMembers.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="max-w-full min-w-0 flex-1">
+                  <CustomSelect
+                    label=""
+                    ariaLabel="Atendido por"
+                    placeholder="Atendido por…"
+                    value={attendant}
+                    onChange={(e) => setAttendant(e.target.value)}
+                    options={data.teamMembers.map((m) => ({ value: m.id, label: m.name }))}
+                  />
+                </div>
                 <Button size="sm" onClick={markAttended} loading={marking} disabled={!attendant} className="shrink-0">
                   Marcar
                 </Button>

@@ -10,7 +10,10 @@
 //   3. Valida o CPF (formato + dígitos verificadores).
 //   4. Calcula cpf_hash (HMAC) e cpf_encrypted (AES-GCM).
 //   5. Garante unicidade do CPF entre pacientes ativos.
-//   6. Insere o paciente e devolve { id, secure_token } — sem CPF.
+//   6. Valida que a alta hospitalar não é anterior à cirurgia (mesmo dia é
+//      válido) — hospital_discharge_date é o marco zero do monitoramento;
+//      servidor é a autoridade final, o frontend só dá feedback de UX.
+//   7. Insere o paciente e devolve { id, secure_token } — sem CPF.
 //
 // Body: { name, birth_date?, phone?, surgery_type_id, surgery_date?,
 //         hospital_discharge_date?, hospital_id, team_id, is_test?, cpf }
@@ -19,6 +22,18 @@ import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { encryptCpf, hashCpf, normalizeCpf, validateCpf } from '../_shared/cpf.ts';
+
+// Espelha `isDischargeAfterSurgery` de packages/shared/src/utils.ts —
+// Edge/Deno não importa o pacote npm; manter em sincronia. Comparação por
+// STRING 'YYYY-MM-DD' (lexicograficamente ordenável), nunca `new Date(iso)`:
+// seria interpretado como meia-noite UTC e desloca a data em fusos negativos
+// (ex.: America/Sao_Paulo).
+const DISCHARGE_BEFORE_SURGERY_ERROR =
+  'A data da alta hospitalar não pode ser anterior à data da cirurgia.';
+function isDischargeAfterSurgery(surgeryIso?: string | null, dischargeIso?: string | null): boolean {
+  if (!surgeryIso || !dischargeIso) return true;
+  return dischargeIso >= surgeryIso;
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -90,7 +105,12 @@ serve(async (req) => {
       .maybeSingle();
     if (dup) return json({ error: 'Já existe um paciente cadastrado com este CPF.' }, 409);
 
-    // 6. Inserção (service_role). Só campos esperados — nunca o CPF puro.
+    // 6. Ordem das datas clínicas.
+    if (!isDischargeAfterSurgery(body.surgery_date, body.hospital_discharge_date)) {
+      return json({ error: DISCHARGE_BEFORE_SURGERY_ERROR }, 400);
+    }
+
+    // 7. Inserção (service_role). Só campos esperados — nunca o CPF puro.
     const insert = {
       name: body.name,
       birth_date: body.birth_date ?? null,
