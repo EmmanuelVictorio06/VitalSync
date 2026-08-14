@@ -3,7 +3,7 @@ import { Camera, ChevronLeft, ChevronRight, ImageIcon, Loader2, Moon, RefreshCw,
 import { Period, WOUND_PHOTO, isAcceptedWoundPhotoType } from '@vitalsync/shared';
 import { fetchProtectedImage } from '../lib/api';
 import type { VitalRecord } from '../lib/dto';
-import { cn } from './ui';
+import { ModalOverlay, cn } from './ui';
 
 /** `accept` do input — restringe a seleção a imagens aceitas (JPG/PNG/WEBP). */
 const ACCEPT = WOUND_PHOTO.acceptedMimeTypes.join(',');
@@ -321,20 +321,15 @@ export function ViewImageModal({
   fileName?: string | null;
   onClose: () => void;
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
+  // O ESC é tratado pelo ModalOverlay (que sabe qual modal está no topo da
+  // pilha) — o listener local daqui virou duplicata e foi removido.
   return (
-    <div
-      className="fixed inset-0 z-50 bg-foreground/70 backdrop-blur-sm flex items-center justify-center p-4"
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
+    <ModalOverlay
+      onClose={onClose}
+      className="z-50 bg-foreground/70 backdrop-blur-sm items-center justify-center p-4"
+      ariaLabel="Foto ampliada"
     >
-      <div className="relative max-w-3xl w-full animate-entry" onClick={(e) => e.stopPropagation()}>
+      <div className="relative max-w-3xl w-full animate-entry">
         <button
           type="button"
           onClick={onClose}
@@ -350,7 +345,7 @@ export function ViewImageModal({
         />
         {fileName && <p className="text-center text-xs text-white/80 mt-3 truncate">{fileName}</p>}
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 

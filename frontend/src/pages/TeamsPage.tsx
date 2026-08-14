@@ -20,7 +20,7 @@ import { onlyDigits } from '@vitalsync/shared';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
-import { Button, ConfirmModal, PageContainer, PageHeader, ProfessionalCombobox, ProfessionalTag, StatusBadge, TextInput } from '../components/ui';
+import { Button, ConfirmModal, ModalOverlay, PageContainer, PageHeader, ProfessionalCombobox, ProfessionalTag, StatusBadge, TextInput } from '../components/ui';
 import { EmptyState, ErrorState, LoadingState } from '../components/admin';
 import {
   AccessDenied,
@@ -1089,8 +1089,8 @@ function ModalShell({
 }) {
   // max-h + rolagem interna: o modal nunca estoura a viewport no mobile.
   return (
-    <div className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className={`bg-card border border-border rounded-xl shadow-lg p-4 sm:p-6 w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} max-h-[90vh] overflow-y-auto space-y-4 animate-entry`} onClick={(e) => e.stopPropagation()}>
+    <ModalOverlay onClose={onClose} className="z-50 bg-foreground/50 backdrop-blur-sm items-center justify-center p-4" ariaLabel={title}>
+      <div className={`bg-card border border-border rounded-xl shadow-lg p-4 sm:p-6 w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} max-h-[90vh] overflow-y-auto space-y-4 animate-entry`}>
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-lg font-extrabold tracking-tight min-w-0 break-words">{title}</h2>
           <button onClick={onClose} className="size-8 rounded-md border border-border text-muted-foreground hover:bg-muted flex items-center justify-center shrink-0" aria-label="Fechar">
@@ -1099,6 +1099,6 @@ function ModalShell({
         </div>
         {children}
       </div>
-    </div>
+    </ModalOverlay>
   );
 }

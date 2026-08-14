@@ -12,7 +12,7 @@ import {
   MessageCircle, ShieldAlert, ShieldCheck, Stethoscope, Users, X,
 } from 'lucide-react';
 import { formatCivilDate, formatPhoneBR } from '@vitalsync/shared';
-import { Button, ProfessionalTag, StatusBadge, cn } from './ui';
+import { Button, ModalOverlay, ProfessionalTag, StatusBadge, cn } from './ui';
 import { TeamCarousel } from './TeamCarousel';
 import { getPriorityPatients, postOpDay, type TeamDetail, type TeamMemberView, type TeamPatientView } from '../services/teamViewService';
 
@@ -317,28 +317,14 @@ function TeamRosterDrawer({
 }) {
   const all = [...members, ...managers];
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    document.body.style.overflow = 'hidden';
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
-    };
-  }, [onClose]);
-
+  // ESC e trava de scroll são do ModalOverlay.
   return (
-    <div
-      className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-end sm:items-stretch sm:justify-end"
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Integrantes da Equipe nº ${String(summaryNumber).padStart(2, '0')}`}
-      onClick={onClose}
+    <ModalOverlay
+      onClose={onClose}
+      className="z-50 bg-foreground/50 backdrop-blur-sm items-end sm:items-stretch sm:justify-end"
+      ariaLabel={`Integrantes da Equipe nº ${String(summaryNumber).padStart(2, '0')}`}
     >
-      <div
-        className="bg-card border border-border w-full sm:max-w-md rounded-t-2xl sm:rounded-none shadow-xl max-h-[88vh] sm:max-h-none sm:h-full flex flex-col animate-entry"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="bg-card border border-border w-full sm:max-w-md rounded-t-2xl sm:rounded-none shadow-xl max-h-[88vh] sm:max-h-none sm:h-full flex flex-col animate-entry">
         <header className="flex items-center gap-3 px-5 py-4 border-b border-border">
           <div className="flex-1 min-w-0">
             <h2 className="font-extrabold tracking-tight">Integrantes da Equipe</h2>
@@ -352,7 +338,7 @@ function TeamRosterDrawer({
           {all.map((m) => <DoctorRow key={m.id} m={m} isMe={m.id === currentUserId} />)}
         </ul>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 
