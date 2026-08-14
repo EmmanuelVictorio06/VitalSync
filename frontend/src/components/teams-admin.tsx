@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { formatPhoneBR, onlyDigits } from '@vitalsync/shared';
 import type { TeamDetail } from '../services/teamViewService';
-import { Button, ModalOverlay, PhoneInput, TextInput, cn } from './ui';
+import { Button, CustomSelect, ModalOverlay, PhoneInput, TextInput, cn } from './ui';
 
 /* ---------------- Card de resumo (topo da tela) ---------------- */
 export function SummaryCard({
@@ -446,14 +446,7 @@ export function TeamActiveFilterChips({ filters, surgeonOptions, associateOption
 function TeamFilterSelect({ label, value, onChange, options }: {
   label: string; value: string; onChange: (v: string) => void; options: Array<{ value: string; label: string }>;
 }) {
-  return (
-    <label className="block">
-      <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">{label}</span>
-      <select className="input py-2 text-sm" value={value} onChange={(e) => onChange(e.target.value)}>
-        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-    </label>
-  );
+  return <CustomSelect label={label} value={value} onChange={(e) => onChange(e.target.value)} options={options} />;
 }
 
 export function TeamAdvancedFilters({ value, surgeonOptions, associateOptions, onApply, onClose }: {

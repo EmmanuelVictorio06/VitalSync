@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, CalendarClock, Loader2 } from 'lucide-react';
 import { useToast } from './Toast';
-import { Button, RichTextField, SelectField } from './ui';
+import { Button, CustomSelect, RichTextField } from './ui';
 import { richTextToPlainText, sanitizeRichText } from '../lib/richText';
 import {
   followupService,
@@ -108,25 +108,25 @@ export function PatientFollowupSection({ patientId }: { patientId: string }) {
 
       <form onSubmit={submit} className="space-y-3">
         <div className="grid sm:grid-cols-2 gap-3">
-          <SelectField
+          <CustomSelect
             label="Aceitação da dieta"
             value={dietAcceptance}
             onChange={(e) => setDietAcceptance(e.target.value as DietAcceptance | '')}
             options={(Object.keys(DIET_LABEL) as DietAcceptance[]).map((k) => ({ value: k, label: DIET_LABEL[k] }))}
           />
-          <SelectField
+          <CustomSelect
             label="Uso correto das medicações"
             value={medicationsCorrect}
             onChange={(e) => setMedicationsCorrect(e.target.value as typeof medicationsCorrect)}
             options={BOOL_OPTIONS}
           />
-          <SelectField
+          <CustomSelect
             label="Sintomas de TVP (dor de panturrilha ou edema assimétrico)"
             value={dvtSymptoms}
             onChange={(e) => setDvtSymptoms(e.target.value as typeof dvtSymptoms)}
             options={BOOL_OPTIONS}
           />
-          <SelectField
+          <CustomSelect
             label="Ferida operatória sem alterações"
             value={woundOk}
             onChange={(e) => setWoundOk(e.target.value as typeof woundOk)}
