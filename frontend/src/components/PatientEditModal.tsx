@@ -20,7 +20,7 @@ import { Loader2 } from 'lucide-react';
 import { onlyDigits } from '@vitalsync/shared';
 import { useToast } from './Toast';
 import { PatientCpfField } from './PatientCpfField';
-import { Button, PhoneInput, RichTextField, SelectField, TextInput } from './ui';
+import { Button, ModalOverlay, PhoneInput, RichTextField, SelectField, TextInput } from './ui';
 import { validateCpf } from '../lib/cpfUtils';
 import { parseComorbidities } from '../lib/comorbidities';
 import { richTextToPlainText, sanitizeRichText } from '../lib/richText';
@@ -187,16 +187,12 @@ export function PatientEditModal({ patientId, onClose, onSaved }: PatientEditMod
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto"
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
+    <ModalOverlay
+      onClose={onClose}
+      className="z-50 bg-foreground/50 backdrop-blur-sm items-start justify-center p-4 overflow-y-auto"
+      ariaLabel="Editar paciente"
     >
-      <div
-        className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-2xl space-y-5 animate-entry my-8"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-2xl space-y-5 animate-entry my-8">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-extrabold tracking-tight">Editar paciente</h2>
@@ -365,6 +361,6 @@ export function PatientEditModal({ patientId, onClose, onSaved }: PatientEditMod
           </form>
         )}
       </div>
-    </div>
+    </ModalOverlay>
   );
 }

@@ -9,7 +9,7 @@ import Cropper from 'react-easy-crop';
 import 'react-easy-crop/react-easy-crop.css';
 import { X, ZoomIn, ZoomOut } from 'lucide-react';
 import type { Area } from 'react-easy-crop';
-import { cn } from './ui';
+import { ModalOverlay, cn } from './ui';
 
 export const CROP_OUTPUT_SIZE = 512;
 
@@ -127,14 +127,14 @@ export function AvatarCropModal({ imageFile, onCancel, onConfirm, busy }: Avatar
   }, [imageUrl, croppedAreaPixels, onConfirm]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Recortar foto de perfil"
-      onClick={(e) => {
-        if (e.currentTarget === e.target && !busy) onCancel();
-      }}
+    <ModalOverlay
+      onClose={onCancel}
+      className="z-50 items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      ariaLabel="Recortar foto de perfil"
+      // Enquanto o recorte está sendo aplicado, fundo e ESC não fecham (mesma
+      // regra que a versão anterior já tinha no clique).
+      closeOnBackdrop={!busy}
+      closeOnEsc={!busy}
     >
       {/* Overlay suavemente borrado */}
       <div className="absolute inset-0 bg-slate-900/10 backdrop-blur-sm" />
@@ -144,7 +144,6 @@ export function AvatarCropModal({ imageFile, onCancel, onConfirm, busy }: Avatar
           'relative w-full max-w-lg bg-card/95 backdrop-blur border border-border rounded-2xl shadow-xl',
           'flex flex-col max-h-[90vh] overflow-hidden animate-entry',
         )}
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border shrink-0">
@@ -248,6 +247,6 @@ export function AvatarCropModal({ imageFile, onCancel, onConfirm, busy }: Avatar
           </div>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }

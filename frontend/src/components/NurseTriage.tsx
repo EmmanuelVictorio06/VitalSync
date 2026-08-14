@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from './Toast';
-import { Button, StatusBadge, cn } from './ui';
+import { Button, ModalOverlay, StatusBadge, cn } from './ui';
 import {
   classifyQueueItem,
   offerCountdown,
@@ -161,7 +161,15 @@ function EscalateModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" role="dialog" aria-modal>
+    <ModalOverlay
+      onClose={onClose}
+      className="z-50 bg-black/40 items-center justify-center p-4"
+      ariaLabel="Escalar para o médico"
+      // Nunca fechou no clique fora (evita perder a justificativa digitada) —
+      // mantido. O ESC continua valendo, e há botão Cancelar.
+      closeOnBackdrop={false}
+      closeOnEsc={!busy}
+    >
       <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-lg p-5 space-y-4">
         <div>
           <h3 className="text-lg font-extrabold tracking-tight">Escalar para o médico</h3>
@@ -200,7 +208,7 @@ function EscalateModal({
           </Button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 
