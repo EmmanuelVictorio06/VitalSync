@@ -8,7 +8,8 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, CalendarClock, Loader2 } from 'lucide-react';
 import { useToast } from './Toast';
-import { Button, SelectField, TextareaField } from './ui';
+import { Button, RichTextField, SelectField } from './ui';
+import { richTextToPlainText, sanitizeRichText } from '../lib/richText';
 import {
   followupService,
   isFollowupCritical,
@@ -68,14 +69,15 @@ export function PatientFollowupSection({ patientId }: { patientId: string }) {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!result.trim()) {
+    const plain = richTextToPlainText(result).trim();
+    if (!plain) {
       toast.error('Descreva o resultado do atendimento.');
       return;
     }
     setSaving(true);
     try {
       await followupService.create(patientId, {
-        result,
+        result: sanitizeRichText(result),
         diet_acceptance: dietAcceptance || null,
         medications_correct: medicationsCorrect === '' ? null : medicationsCorrect === 'true',
         dvt_symptoms: dvtSymptoms === '' ? null : dvtSymptoms === 'true',
@@ -139,12 +141,13 @@ export function PatientFollowupSection({ patientId }: { patientId: string }) {
           </div>
         )}
 
-        <TextareaField
+        <RichTextField
           label="Resultado do atendimento"
           hint="Registre o contato feito com o paciente a cada 48h e o que foi observado."
-          rows={3}
+          toolbar="full"
+          minHeightClassName="min-h-[120px]"
           value={result}
-          onChange={(e) => setResult(e.target.value)}
+          onChange={(html) => setResult(html)}
         />
         <div className="flex justify-end">
           <Button type="submit" size="sm" loading={saving}>
@@ -178,7 +181,10 @@ export function PatientFollowupSection({ patientId }: { patientId: string }) {
                 <div><dt className="text-muted-foreground">Sintomas de TVP</dt><dd className="font-semibold">{yesNo(r.dvt_symptoms)}</dd></div>
                 <div><dt className="text-muted-foreground">Ferida ok</dt><dd className="font-semibold">{yesNo(r.wound_ok)}</dd></div>
               </dl>
-              <p className="text-sm text-foreground mt-2 whitespace-pre-wrap">{r.result}</p>
+              <div
+                className="text-sm text-foreground mt-2 whitespace-pre-wrap break-words [&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-0.5"
+                dangerouslySetInnerHTML={{ __html: sanitizeRichText(r.result) }}
+              />
             </li>
           ))}
         </ul>

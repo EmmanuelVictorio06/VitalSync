@@ -71,7 +71,7 @@ export const followupService = {
     const { error } = await supabase.from('patient_followups').insert({
       patient_id: patientId,
       performed_by: performedBy,
-      result: input.result.trim(),
+      result: input.result,
       diet_acceptance: input.diet_acceptance ?? null,
       medications_correct: input.medications_correct ?? null,
       dvt_symptoms: input.dvt_symptoms ?? null,

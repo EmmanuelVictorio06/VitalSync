@@ -25,6 +25,13 @@ export const permissionService = {
     return canManageTeamsByRole(user?.role);
   },
 
+  /** Editar dados do paciente e o resumo de prontuário: Admin e Gerente de
+   *  Equipe (o Gerente só enxerga pacientes das equipes sob sua gestão — a
+   *  Edge Function `update-patient` revalida o vínculo). */
+  canEditPatient(user: AuthUser | null | undefined): boolean {
+    return user?.role === Role.ADM || user?.role === Role.MANAGER;
+  },
+
   /**
    * "Meu Perfil": disponível a qualquer usuário autenticado do painel (ADMIN,
    * cirurgião e associado). O paciente não tem login — não chega aqui.
