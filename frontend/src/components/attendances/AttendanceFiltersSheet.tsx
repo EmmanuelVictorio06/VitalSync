@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
-import { Button, cn } from '../ui';
+import { Button, CustomSelect, cn } from '../ui';
 import type { AttendanceFiltersState } from './types';
 import { SIGNAL_OPTIONS } from './types';
 import { countAdvancedFilters } from './utils';
@@ -16,20 +16,7 @@ function Sel({
   onChange: (v: string) => void;
   options: Array<{ value: string; label: string }>;
 }) {
-  return (
-    <label className="block">
-      <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-        {label}
-      </span>
-      <select className="input py-2 text-sm w-full" value={value} onChange={(e) => onChange(e.target.value)}>
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
+  return <CustomSelect label={label} value={value} onChange={(e) => onChange(e.target.value)} options={options} />;
 }
 
 export function AttendanceFiltersSheet({

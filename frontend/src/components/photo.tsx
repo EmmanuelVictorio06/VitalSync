@@ -1,8 +1,34 @@
-import { useEffect, useRef, useState } from 'react';
-import { Camera, ChevronLeft, ChevronRight, ImageIcon, Loader2, Moon, RefreshCw, Sun, Trash2, X, ZoomIn } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Camera,
+  ChevronLeft,
+  ChevronRight,
+  ImageIcon,
+  Loader2,
+  Maximize2,
+  Moon,
+  RefreshCw,
+  Sun,
+  Trash2,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react';
 import { Period, WOUND_PHOTO, isAcceptedWoundPhotoType } from '@vitalsync/shared';
 import { fetchProtectedImage } from '../lib/api';
 import type { VitalRecord } from '../lib/dto';
+import {
+  ARROW_PAN_STEP,
+  CLICK_DRAG_THRESHOLD,
+  MAX_SCALE,
+  MIN_SCALE,
+  ZOOM_STEP_FACTOR,
+  createInitialZoomState,
+  panBy,
+  toggleDoubleClickZoom,
+  zoomAtPoint,
+  type ZoomState,
+} from '../lib/imageZoom';
 import { cn } from './ui';
 
 /** `accept` do input — restringe a seleção a imagens aceitas (JPG/PNG/WEBP). */
@@ -310,7 +336,145 @@ export function useProtectedImage(path: string | null) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  ViewImageModal — modal com a imagem ampliada                       */
+/*  useImageZoom — estado e gestos de zoom/pan do ViewImageModal       */
+/* ------------------------------------------------------------------ */
+function useImageZoom(stageRef: React.RefObject<HTMLDivElement | null>) {
+  const [zoom, setZoom] = useState<ZoomState>(createInitialZoomState);
+  const [isDragging, setIsDragging] = useState(false);
+  const sizeRef = useRef({ width: 0, height: 0 });
+  const dragRef = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const measure = () => {
+      sizeRef.current = { width: el.clientWidth, height: el.clientHeight };
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [stageRef]);
+
+  // A imagem em 100% preenche exatamente o stage (ver className do <img>), então
+  // o "conteúdo" em escala 1 tem o mesmo tamanho do viewport visível.
+  const withSize = useCallback((fn: (w: number, h: number) => ZoomState) => {
+    const { width, height } = sizeRef.current;
+    if (width === 0 || height === 0) return;
+    setZoom((prev) => {
+      const next = fn(width, height);
+      return next ?? prev;
+    });
+  }, []);
+
+  const zoomByFactor = useCallback(
+    (factor: number, pointX?: number, pointY?: number) => {
+      withSize((w, h) => zoomAtPoint(zoomRef.current, factor, pointX ?? w / 2, pointY ?? h / 2, w, h, w, h));
+    },
+    [withSize],
+  );
+
+  // Mantém a leitura mais recente do zoom disponível para callbacks sem
+  // precisar recriar handlers a cada mudança de estado.
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+
+  const zoomIn = useCallback(() => zoomByFactor(ZOOM_STEP_FACTOR), [zoomByFactor]);
+  const zoomOut = useCallback(() => zoomByFactor(1 / ZOOM_STEP_FACTOR), [zoomByFactor]);
+  const reset = useCallback(() => setZoom(createInitialZoomState()), []);
+
+  // Listener nativo (não-passivo): o onWheel do React é registrado como passivo
+  // no root, então e.preventDefault() ali é silenciosamente ignorado e a página
+  // por trás do modal rola junto. Só assim o scroll fica restrito ao zoom
+  // quando o cursor está sobre a imagem.
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const factor = e.deltaY < 0 ? ZOOM_STEP_FACTOR : 1 / ZOOM_STEP_FACTOR;
+      zoomByFactor(factor, e.clientX - rect.left, e.clientY - rect.top);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [stageRef, zoomByFactor]);
+
+  const handleDoubleClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      withSize((w, h) => toggleDoubleClickZoom(zoomRef.current, e.clientX - rect.left, e.clientY - rect.top, w, h, w, h));
+    },
+    [withSize],
+  );
+
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    if (zoomRef.current.scale <= MIN_SCALE) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragRef.current = { x: e.clientX, y: e.clientY };
+    setIsDragging(true);
+  }, []);
+
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const last = dragRef.current;
+      if (!last) return;
+      const dx = e.clientX - last.x;
+      const dy = e.clientY - last.y;
+      dragRef.current = { x: e.clientX, y: e.clientY };
+      withSize((w, h) => panBy(zoomRef.current, dx, dy, w, h, w, h));
+    },
+    [withSize],
+  );
+
+  const endDrag = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return;
+    dragRef.current = null;
+    setIsDragging(false);
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+  }, []);
+
+  // Atalhos de teclado: +/− amplia/reduz, 0 redefine, setas movem quando ampliado.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        zoomByFactor(ZOOM_STEP_FACTOR);
+      } else if (e.key === '-' || e.key === '_') {
+        e.preventDefault();
+        zoomByFactor(1 / ZOOM_STEP_FACTOR);
+      } else if (e.key === '0') {
+        e.preventDefault();
+        reset();
+      } else if (zoomRef.current.scale > MIN_SCALE && e.key.startsWith('Arrow')) {
+        e.preventDefault();
+        const dx = e.key === 'ArrowLeft' ? ARROW_PAN_STEP : e.key === 'ArrowRight' ? -ARROW_PAN_STEP : 0;
+        const dy = e.key === 'ArrowUp' ? ARROW_PAN_STEP : e.key === 'ArrowDown' ? -ARROW_PAN_STEP : 0;
+        if (dx !== 0 || dy !== 0) withSize((w, h) => panBy(zoomRef.current, dx, dy, w, h, w, h));
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [zoomByFactor, reset, withSize]);
+
+  return {
+    zoom,
+    isDragging,
+    zoomIn,
+    zoomOut,
+    reset,
+    handleDoubleClick,
+    handlePointerDown,
+    handlePointerMove,
+    endDrag,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*  ViewImageModal — modal com a imagem ampliada (zoom/pan por mouse   */
+/*  e teclado no desktop; pinça nativa preservada no mobile)           */
 /* ------------------------------------------------------------------ */
 export function ViewImageModal({
   src,
@@ -327,27 +491,108 @@ export function ViewImageModal({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  const stageRef = useRef<HTMLDivElement>(null);
+  const { zoom, isDragging, zoomIn, zoomOut, reset, handleDoubleClick, handlePointerDown, handlePointerMove, endDrag } =
+    useImageZoom(stageRef);
+
+  // Distingue clique (fecha o modal) de arraste que termina sobre o fundo
+  // (não pode fechar) — compara a posição do pointerdown com a do pointerup.
+  const backdropDownRef = useRef<{ x: number; y: number } | null>(null);
+  function handleBackdropPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    backdropDownRef.current = { x: e.clientX, y: e.clientY };
+  }
+  function handleBackdropPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    const start = backdropDownRef.current;
+    backdropDownRef.current = null;
+    if (!start || e.target !== e.currentTarget) return;
+    const dist = Math.hypot(e.clientX - start.x, e.clientY - start.y);
+    if (dist < CLICK_DRAG_THRESHOLD) onClose();
+  }
+
+  const zoomPercent = Math.round(zoom.scale * 100);
+  const canZoomIn = zoom.scale < MAX_SCALE - 1e-6;
+  const canZoomOut = zoom.scale > MIN_SCALE + 1e-6;
+
   return (
     <div
       className="fixed inset-0 z-50 bg-foreground/70 backdrop-blur-sm flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
-      onClick={onClose}
+      onPointerDown={handleBackdropPointerDown}
+      onPointerUp={handleBackdropPointerUp}
     >
-      <div className="relative max-w-3xl w-full animate-entry" onClick={(e) => e.stopPropagation()}>
+      <div className="relative max-w-3xl w-full animate-entry">
         <button
           type="button"
           onClick={onClose}
-          className="absolute -top-3 -right-3 size-9 rounded-full bg-card border border-border shadow-lg flex items-center justify-center hover:bg-muted"
+          className="absolute -top-3 -right-3 z-10 size-9 rounded-full bg-card border border-border shadow-lg flex items-center justify-center hover:bg-muted"
           aria-label="Fechar"
+          title="Fechar"
         >
           <X className="size-5" />
         </button>
-        <img
-          src={src}
-          alt={fileName ?? 'Foto da ferida operatória ou do dreno'}
-          className="w-full max-h-[80vh] object-contain rounded-xl bg-black/40"
-        />
+
+        <div
+          ref={stageRef}
+          className="relative overflow-hidden rounded-xl"
+          onDoubleClick={handleDoubleClick}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+        >
+          <img
+            src={src}
+            alt={fileName ?? 'Foto da ferida operatória ou do dreno'}
+            draggable={false}
+            className="w-full max-h-[80vh] object-contain rounded-xl bg-black/40 select-none"
+            style={{
+              transform: `translate(${zoom.offsetX}px, ${zoom.offsetY}px) scale(${zoom.scale})`,
+              transformOrigin: 'center center',
+              cursor: zoom.scale > MIN_SCALE ? (isDragging ? 'grabbing' : 'grab') : 'default',
+              willChange: isDragging ? 'transform' : undefined,
+            }}
+          />
+        </div>
+
+        {/* Barra de controles de zoom — fora da imagem para nunca tampar a foto;
+            mesmo vocabulário visual do botão de fechar. */}
+        <div className="mt-3 flex items-center justify-center gap-1 w-fit mx-auto rounded-full bg-card border border-border shadow-lg px-1.5 py-1.5">
+          <button
+            type="button"
+            onClick={zoomOut}
+            disabled={!canZoomOut}
+            aria-label="Reduzir"
+            title="Reduzir"
+            className="size-11 sm:size-9 rounded-full flex items-center justify-center hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+          >
+            <ZoomOut className="size-5 sm:size-4" />
+          </button>
+          <span className="min-w-12 text-center text-xs font-semibold tabular-nums text-muted-foreground select-none">
+            {zoomPercent}%
+          </span>
+          <button
+            type="button"
+            onClick={zoomIn}
+            disabled={!canZoomIn}
+            aria-label="Ampliar"
+            title="Ampliar"
+            className="size-11 sm:size-9 rounded-full flex items-center justify-center hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+          >
+            <ZoomIn className="size-5 sm:size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={reset}
+            disabled={zoom.scale === MIN_SCALE}
+            aria-label="Redefinir zoom"
+            title="Redefinir zoom"
+            className="size-11 sm:size-9 rounded-full flex items-center justify-center hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+          >
+            <Maximize2 className="size-5 sm:size-4" />
+          </button>
+        </div>
+
         {fileName && <p className="text-center text-xs text-white/80 mt-3 truncate">{fileName}</p>}
       </div>
     </div>

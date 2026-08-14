@@ -17,10 +17,10 @@
  */
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { onlyDigits } from '@vitalsync/shared';
+import { isDischargeAfterSurgery, onlyDigits } from '@vitalsync/shared';
 import { useToast } from './Toast';
 import { PatientCpfField } from './PatientCpfField';
-import { Button, PhoneInput, RichTextField, SelectField, TextInput } from './ui';
+import { Button, CustomSelect, DateField, PhoneInput, RichTextField, TextInput } from './ui';
 import { validateCpf } from '../lib/cpfUtils';
 import { parseComorbidities } from '../lib/comorbidities';
 import { richTextToPlainText, sanitizeRichText } from '../lib/richText';
@@ -58,6 +58,10 @@ const emptyForm: FormState = {
   studyGroup: 'INTERVENTION',
 };
 
+// Mensagem única (submit + feedback imediato no campo) — IDÊNTICA à usada em
+// PatientRegisterPage. hospital_discharge_date é o marco zero do monitoramento.
+const DISCHARGE_BEFORE_SURGERY_ERROR = 'A data da alta hospitalar não pode ser anterior à data da cirurgia.';
+
 export interface PatientEditModalProps {
   patientId: string;
   onClose: () => void;
@@ -74,6 +78,12 @@ export function PatientEditModal({ patientId, onClose, onSaved }: PatientEditMod
   const [teams, setTeams] = useState<MedicalTeam[]>([]);
   // Erro externo de CPF (ex.: "já cadastrado") — repassado ao PatientCpfField.
   const [cpfError, setCpfError] = useState<string | null>(null);
+
+  // Feedback imediato: assim que as duas datas estiverem preenchidas e fora de
+  // ordem, marca o campo antes mesmo do usuário tentar salvar.
+  const dischargeDateError = isDischargeAfterSurgery(form.surgeryDate, form.dischargeDate)
+    ? undefined
+    : DISCHARGE_BEFORE_SURGERY_ERROR;
 
   useEffect(() => {
     let active = true;
@@ -134,6 +144,9 @@ export function PatientEditModal({ patientId, onClose, onSaved }: PatientEditMod
     if (!form.surgeryTypeId) return 'Selecione o tipo de cirurgia.';
     if (!form.hospitalId) return 'Selecione o hospital.';
     if (!form.teamId) return 'Selecione a equipe médica.';
+    if (!isDischargeAfterSurgery(form.surgeryDate, form.dischargeDate)) {
+      return DISCHARGE_BEFORE_SURGERY_ERROR;
+    }
     return null;
   }
 
@@ -243,9 +256,8 @@ export function PatientEditModal({ patientId, onClose, onSaved }: PatientEditMod
                   hint="Deixe em branco para manter o CPF atual."
                   externalError={cpfError}
                 />
-                <TextInput
+                <DateField
                   label="Data de nascimento"
-                  type="date"
                   value={form.birthDate}
                   onChange={(e) => set('birthDate', e.target.value)}
                 />
@@ -264,34 +276,33 @@ export function PatientEditModal({ patientId, onClose, onSaved }: PatientEditMod
                 Procedimento
               </legend>
               <div className="grid md:grid-cols-2 gap-4">
-                <SelectField
+                <CustomSelect
                   label="Tipo de cirurgia"
                   required
                   value={form.surgeryTypeId}
                   onChange={(e) => set('surgeryTypeId', e.target.value)}
                   options={surgeryTypes.map((s) => ({ value: s.id, label: s.name }))}
                 />
-                <SelectField
+                <CustomSelect
                   label="Hospital"
                   required
                   value={form.hospitalId}
                   onChange={(e) => set('hospitalId', e.target.value)}
                   options={hospitals.map((h) => ({ value: h.id, label: h.name }))}
                 />
-                <TextInput
+                <DateField
                   label="Data da cirurgia"
-                  type="date"
                   value={form.surgeryDate}
                   onChange={(e) => set('surgeryDate', e.target.value)}
                 />
-                <TextInput
+                <DateField
                   label="Data da alta hospitalar"
-                  type="date"
                   hint="Inicia a contagem dos 10 dias de monitoramento."
                   value={form.dischargeDate}
                   onChange={(e) => set('dischargeDate', e.target.value)}
+                  error={dischargeDateError}
                 />
-                <SelectField
+                <CustomSelect
                   label="Equipe médica"
                   required
                   value={form.teamId}
@@ -317,7 +328,7 @@ export function PatientEditModal({ patientId, onClose, onSaved }: PatientEditMod
                 Variáveis Clínicas do Estudo
               </legend>
               <div className="grid md:grid-cols-2 gap-4">
-                <SelectField
+                <CustomSelect
                   label="Sexo"
                   value={form.sex}
                   onChange={(e) => set('sex', e.target.value as FormState['sex'])}
@@ -326,14 +337,13 @@ export function PatientEditModal({ patientId, onClose, onSaved }: PatientEditMod
                 <TextInput label="Peso (kg)" inputMode="decimal" value={form.weightKg} onChange={(e) => set('weightKg', e.target.value)} />
                 <TextInput label="Altura (cm)" inputMode="numeric" value={form.heightCm} onChange={(e) => set('heightCm', e.target.value)} />
                 <TextInput label="Tempo de internação (dias)" inputMode="numeric" value={form.lengthOfStayDays} onChange={(e) => set('lengthOfStayDays', e.target.value)} />
-                <TextInput
+                <DateField
                   label="TCLE assinado em"
-                  type="date"
                   hint="Data de assinatura do Termo de Consentimento."
                   value={form.tcleAcceptedAt}
                   onChange={(e) => set('tcleAcceptedAt', e.target.value)}
                 />
-                <SelectField
+                <CustomSelect
                   label="Coorte do estudo"
                   hint="Pacientes cadastrados pelo app são sempre Intervenção; só reclassifique para análise administrativa."
                   value={form.studyGroup}

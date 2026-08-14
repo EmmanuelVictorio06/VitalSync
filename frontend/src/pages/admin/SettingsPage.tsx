@@ -18,7 +18,7 @@ import {
   ToggleSwitch,
 } from '../../components/admin';
 import { FailedNotificationsPanel } from '../../components/FailedNotificationsPanel';
-import { Button, ConfirmModal, Field, PageContainer, SelectField, TextInput, cn } from '../../components/ui';
+import { Button, ConfirmModal, CustomSelect, DateField, Field, PageContainer, TextInput, cn } from '../../components/ui';
 import { settingsService } from '../../services/settingsService';
 import { homologationService, type HomologationStats } from '../../services/homologationService';
 import {
@@ -130,7 +130,7 @@ function GeneralTab() {
             value={String(form.monitoringDays)}
             onChange={(e) => set('monitoringDays', Number(e.target.value))}
           />
-          <SelectField
+          <CustomSelect
             label="Fuso horário do sistema"
             value={form.timezone}
             onChange={(e) => set('timezone', e.target.value)}
@@ -141,7 +141,7 @@ function GeneralTab() {
             ]}
             placeholder="Selecione"
           />
-          <SelectField
+          <CustomSelect
             label="Idioma padrão"
             value={form.language}
             onChange={(e) => set('language', e.target.value)}
@@ -388,7 +388,7 @@ function WhatsAppTab() {
         description="Adapter desacoplado: o provedor pode ser trocado sem alterar o restante do sistema. Pacientes estáveis (verde) não geram alerta automático; alertas amarelos e vermelhos notificam todos os médicos da equipe do paciente."
       >
         <div className="grid sm:grid-cols-2 gap-4">
-          <SelectField
+          <CustomSelect
             label="Provedor de WhatsApp"
             value={settings.provider}
             onChange={(e) => set('provider', e.target.value as WhatsAppSettings['provider'])}
@@ -737,15 +737,15 @@ function AuditTab() {
       <SettingsSection title="Filtros de auditoria" description="Registros importantes do sistema, do mais recente ao mais antigo.">
         <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <TextInput label="Usuário" placeholder="Nome" value={filters.user ?? ''} onChange={(e) => set('user', e.target.value)} />
-          <SelectField
+          <CustomSelect
             label="Tipo de ação"
             value={filters.action ?? ''}
             onChange={(e) => set('action', e.target.value as AuditAction | '')}
             options={Object.entries(AUDIT_ACTION_LABEL).map(([value, label]) => ({ value, label }))}
             placeholder="Todas"
           />
-          <TextInput label="Data inicial" type="date" value={filters.fromDate ?? ''} onChange={(e) => set('fromDate', e.target.value)} />
-          <TextInput label="Data final" type="date" value={filters.toDate ?? ''} onChange={(e) => set('toDate', e.target.value)} />
+          <DateField label="Data inicial" value={filters.fromDate ?? ''} onChange={(e) => set('fromDate', e.target.value)} />
+          <DateField label="Data final" value={filters.toDate ?? ''} onChange={(e) => set('toDate', e.target.value)} />
           <TextInput label="Entidade afetada" placeholder="Ex. Paciente" value={filters.entity ?? ''} onChange={(e) => set('entity', e.target.value)} />
         </div>
       </SettingsSection>

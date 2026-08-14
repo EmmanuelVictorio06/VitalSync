@@ -43,7 +43,7 @@ import {
   fmtDateTime as attFmtDateTime,
   triggerValue as attTriggerValue,
 } from './attendances/utils';
-import { Button, Field, Loading, StatusBadge, cn } from './ui';
+import { Button, CustomSelect, Field, Loading, ProfessionalCombobox, StatusBadge, cn } from './ui';
 
 /* ============================ Helpers ============================ */
 
@@ -246,14 +246,7 @@ const SIGNAL_OPTIONS = ['Temperatura', 'Saturação', 'Pressão', 'Frequência C
 function Sel({ label, value, onChange, options }: {
   label: string; value: string; onChange: (v: string) => void; options: Array<{ value: string; label: string }>;
 }) {
-  return (
-    <label className="block">
-      <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">{label}</span>
-      <select className="input py-2 text-sm" value={value} onChange={(e) => onChange(e.target.value)}>
-        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-    </label>
-  );
+  return <CustomSelect label={label} value={value} onChange={(e) => onChange(e.target.value)} options={options} />;
 }
 
 /** Conta os filtros avançados ativos (para o badge do botão "Filtros"). */
@@ -943,14 +936,16 @@ export function MarkAttendedModal({ alert, onConfirm, onCancel }: {
     <ModalShell title="Marcar como atendido" onCancel={onCancel}>
       <p className="text-sm text-muted-foreground">Confirme o atendimento clínico deste alerta. A data e a hora são registradas automaticamente.</p>
       <div className="mt-4 space-y-3">
-        <Field label="Profissional responsável" hint="Quem realizou o atendimento.">
-          <select className="input" value={professionalId} onChange={(e) => setProfessionalId(e.target.value)}>
-            <option value="">Eu mesmo (usuário atual)</option>
-            {pros.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}{p.role === 'MAIN_SURGEON' ? ' · Cirurgião' : ''}</option>
-            ))}
-          </select>
-        </Field>
+        <ProfessionalCombobox
+          label="Profissional responsável"
+          hint="Quem realizou o atendimento."
+          value={professionalId}
+          onChange={setProfessionalId}
+          options={[
+            { id: '', name: 'Eu mesmo (usuário atual)', tag: null },
+            ...pros.map((p) => ({ id: p.id, name: p.name, tag: null, roleLabel: p.role === 'MAIN_SURGEON' ? 'Cirurgião' : undefined })),
+          ]}
+        />
         <Field label="Observação do atendimento" required error={error ?? undefined}>
           <textarea
             className="input min-h-24 resize-none"

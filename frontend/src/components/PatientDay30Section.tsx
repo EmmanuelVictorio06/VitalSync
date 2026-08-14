@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, CalendarCheck, Loader2 } from 'lucide-react';
 import { useToast } from './Toast';
-import { Button, RichTextField, SelectField, TextareaField } from './ui';
+import { Button, CustomSelect, RichTextField, TextareaField } from './ui';
 import { richTextToPlainText, sanitizeRichText } from '../lib/richText';
 import {
   day30Service,
@@ -122,10 +122,10 @@ export function PatientDay30Section({ patientId }: { patientId: string }) {
 
       <form onSubmit={submit} className="space-y-3">
         <div className="grid sm:grid-cols-2 gap-3">
-          <SelectField label="Procurou pronto atendimento?" value={soughtEr} onChange={(e) => setSoughtEr(e.target.value as BoolField)} options={BOOL_OPTIONS} />
-          <SelectField label="Foi reinternado?" value={readmitted} onChange={(e) => setReadmitted(e.target.value as BoolField)} options={BOOL_OPTIONS} />
-          <SelectField label="Avaliação médica não programada?" value={unplannedVisit} onChange={(e) => setUnplannedVisit(e.target.value as BoolField)} options={BOOL_OPTIONS} />
-          <SelectField label="Persistência de sintomas?" value={persistentSymptoms} onChange={(e) => setPersistentSymptoms(e.target.value as BoolField)} options={BOOL_OPTIONS} />
+          <CustomSelect label="Procurou pronto atendimento?" value={soughtEr} onChange={(e) => setSoughtEr(e.target.value as BoolField)} options={BOOL_OPTIONS} />
+          <CustomSelect label="Foi reinternado?" value={readmitted} onChange={(e) => setReadmitted(e.target.value as BoolField)} options={BOOL_OPTIONS} />
+          <CustomSelect label="Avaliação médica não programada?" value={unplannedVisit} onChange={(e) => setUnplannedVisit(e.target.value as BoolField)} options={BOOL_OPTIONS} />
+          <CustomSelect label="Persistência de sintomas?" value={persistentSymptoms} onChange={(e) => setPersistentSymptoms(e.target.value as BoolField)} options={BOOL_OPTIONS} />
         </div>
 
         {willHaveOutcome && (
@@ -148,10 +148,10 @@ export function PatientDay30Section({ patientId }: { patientId: string }) {
             Satisfação (escala 1 a 5 — 1 = muito insatisfeito, 5 = muito satisfeito)
           </p>
           <div className="grid sm:grid-cols-2 gap-3">
-            <SelectField label="Segurança" value={satSafety} onChange={(e) => setSatSafety(e.target.value)} options={SATISFACTION_OPTIONS} />
-            <SelectField label="Facilidade de uso" value={satEase} onChange={(e) => setSatEase(e.target.value)} options={SATISFACTION_OPTIONS} />
-            <SelectField label="Comunicação com a equipe" value={satCommunication} onChange={(e) => setSatCommunication(e.target.value)} options={SATISFACTION_OPTIONS} />
-            <SelectField label="Satisfação geral" value={satOverall} onChange={(e) => setSatOverall(e.target.value)} options={SATISFACTION_OPTIONS} />
+            <CustomSelect label="Segurança" value={satSafety} onChange={(e) => setSatSafety(e.target.value)} options={SATISFACTION_OPTIONS} />
+            <CustomSelect label="Facilidade de uso" value={satEase} onChange={(e) => setSatEase(e.target.value)} options={SATISFACTION_OPTIONS} />
+            <CustomSelect label="Comunicação com a equipe" value={satCommunication} onChange={(e) => setSatCommunication(e.target.value)} options={SATISFACTION_OPTIONS} />
+            <CustomSelect label="Satisfação geral" value={satOverall} onChange={(e) => setSatOverall(e.target.value)} options={SATISFACTION_OPTIONS} />
           </div>
           <div className="mt-3">
             <TextareaField label="Comentário aberto" rows={2} value={satComment} onChange={(e) => setSatComment(e.target.value)} />

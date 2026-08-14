@@ -13,12 +13,17 @@
 //      is_team_manager_of() (migration 0030), reimplementado aqui porque a
 //      função roda com service_role (sem o JWT do usuário no contexto, então
 //      auth.uid() não está disponível para chamar o helper de RLS).
-//   3. Carrega o paciente (service_role) para conhecer a equipe e validar.
+//   3. Carrega o paciente (service_role) para conhecer a equipe e validar —
+//      inclui surgery_date/hospital_discharge_date ATUAIS, pra validar a
+//      ordem das datas mesmo quando só uma das duas vem no payload.
 //   4. Se `cpf` vier preenchido: valida, recalcula cpf_hash/cpf_encrypted e
 //      checa unicidade entre pacientes ativos (excluindo o próprio).
 //      Se vier vazio/omitido: preserva o CPF existente.
 //   5. Só ADMIN pode trocar a equipe (team_id); cirurgião só edita demais campos.
-//   6. Faz UPDATE (service_role) só dos campos informados e devolve o paciente
+//   6. Valida que a alta hospitalar RESULTANTE não fica anterior à cirurgia
+//      RESULTANTE (mesmo dia é válido) — considera o valor atual do banco
+//      quando o campo não vem no payload. Servidor é a autoridade final.
+//   7. Faz UPDATE (service_role) só dos campos informados e devolve o paciente
 //      atualizado — sem CPF.
 //
 // Body: { id, name?, birth_date?, phone?, surgery_type_id?, surgery_date?,
@@ -28,6 +33,18 @@ import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { encryptCpf, hashCpf, normalizeCpf, validateCpf } from '../_shared/cpf.ts';
+
+// Espelha `isDischargeAfterSurgery` de packages/shared/src/utils.ts —
+// Edge/Deno não importa o pacote npm; manter em sincronia. Comparação por
+// STRING 'YYYY-MM-DD' (lexicograficamente ordenável), nunca `new Date(iso)`:
+// seria interpretado como meia-noite UTC e desloca a data em fusos negativos
+// (ex.: America/Sao_Paulo).
+const DISCHARGE_BEFORE_SURGERY_ERROR =
+  'A data da alta hospitalar não pode ser anterior à data da cirurgia.';
+function isDischargeAfterSurgery(surgeryIso?: string | null, dischargeIso?: string | null): boolean {
+  if (!surgeryIso || !dischargeIso) return true;
+  return dischargeIso >= surgeryIso;
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -60,10 +77,11 @@ serve(async (req) => {
     const role = profile?.role;
     const isAdmin = role === 'ADMIN';
 
-    // 3. Carrega o paciente atual (service_role) — precisa do team_id atual.
+    // 3. Carrega o paciente atual (service_role) — precisa do team_id atual e
+    //    das datas atuais (pra validar a ordem quando só uma delas é editada).
     const { data: current, error: loadErr } = await admin
       .from('patients')
-      .select('id, team_id, deleted_at')
+      .select('id, team_id, deleted_at, surgery_date, hospital_discharge_date')
       .eq('id', patientId)
       .maybeSingle();
     if (loadErr) return json({ error: loadErr.message }, 400);
@@ -116,6 +134,21 @@ serve(async (req) => {
     if (body.hospital_discharge_date !== undefined) {
       update.hospital_discharge_date = body.hospital_discharge_date || null;
     }
+
+    // Ordem das datas clínicas: considera o valor RESULTANTE (o que vem no
+    // payload, ou o que já está salvo quando o campo não é editado) — cobre o
+    // caso de editar só a cirurgia (ou só a alta) e ainda assim invalidar a
+    // combinação com o que já existe no banco.
+    const resultantSurgeryDate =
+      body.surgery_date !== undefined ? (body.surgery_date || null) : current.surgery_date;
+    const resultantDischargeDate =
+      body.hospital_discharge_date !== undefined
+        ? (body.hospital_discharge_date || null)
+        : current.hospital_discharge_date;
+    if (!isDischargeAfterSurgery(resultantSurgeryDate, resultantDischargeDate)) {
+      return json({ error: DISCHARGE_BEFORE_SURGERY_ERROR }, 400);
+    }
+
     if (body.hospital_id !== undefined) update.hospital_id = body.hospital_id || null;
     if (body.medical_record_summary !== undefined) {
       update.medical_record_summary = body.medical_record_summary || null;
