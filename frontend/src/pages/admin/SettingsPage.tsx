@@ -1,14 +1,25 @@
-import { useEffect, useState } from 'react';
-import { CheckCircle2, FlaskConical, Send, ShieldAlert, Trash2, XCircle } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import {
-  ALERT_THRESHOLDS,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  FlaskConical,
+  Pencil,
+  Plus,
+  Send,
+  ShieldAlert,
+  Trash2,
+  XCircle,
+} from 'lucide-react';
+import {
   BINARY_RULES,
   ClinicalStatus,
+  Role,
   STEPS_RULES,
   listPendingMedicalValidations,
   type RangeRule,
-  type VitalThreshold,
 } from '@vitalsync/shared';
+import { useAuth } from '../../auth/AuthContext';
 import { useToast } from '../../components/Toast';
 import {
   AdminPageHeader,
@@ -20,6 +31,11 @@ import {
 import { FailedNotificationsPanel } from '../../components/FailedNotificationsPanel';
 import { Button, ConfirmModal, CustomSelect, DateField, Field, PageContainer, TextInput, cn } from '../../components/ui';
 import { settingsService } from '../../services/settingsService';
+import {
+  DEFAULT_CLINICAL_ROWS,
+  clinicalRulesService,
+  type ClinicalThresholdRow,
+} from '../../services/clinicalRulesService';
 import { homologationService, type HomologationStats } from '../../services/homologationService';
 import {
   AUDIT_ACTION_LABEL,
@@ -170,7 +186,17 @@ function GeneralTab() {
 
 /* =====================================================================
    ABA 2 — REGRAS CLÍNICAS E ALERTAS
-   Lê os limiares REAIS de @vitalsync/shared (ponto único de manutenção).
+
+   Lê as faixas VIVAS do banco (`get_clinical_thresholds`, migration 0075) —
+   exatamente o que `eval_clinical_status` usa para calcular o status. O ADMIN
+   edita aqui e passa a valer sem deploy.
+
+   `ALERT_THRESHOLDS` (@vitalsync/shared) continua sendo o default que semeou o
+   banco, o fallback desta tela e a fonte da validação de entrada/gráficos.
+
+   FORA DE ESCOPO da edição (seguem em código, exibidas como somente-leitura):
+   passos, vômito, sangramento, ingestão hídrica e os critérios COMBINADOS de
+   vermelho — mudá-los é mudar a estrutura da regra, não um número.
    ===================================================================== */
 
 const STATUS_LABEL: Record<ClinicalStatus, { label: string; dot: string }> = {
@@ -197,15 +223,24 @@ function PendingBadge() {
   );
 }
 
+/** Nota fixa das regras que NÃO são faixa numérica simples (seguem em código). */
+const CODE_DEFINED_NOTE = 'Definido em código (@vitalsync/shared) — não é uma faixa numérica simples e por isso não é editável por esta tela.';
+
 function ClinicalRuleCard({
   title,
   pending,
   note,
+  codeDefined,
+  action,
+  footer,
   children,
 }: {
   title: string;
   pending?: boolean;
   note?: string;
+  codeDefined?: boolean;
+  action?: React.ReactNode;
+  footer?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -214,21 +249,29 @@ function ClinicalRuleCard({
         <h4 className="font-bold">{title}</h4>
         <div className="flex items-center gap-2">
           {pending && <PendingBadge />}
-          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-stable/10 text-stable border border-stable/20">
-            Ativa
-          </span>
+          {codeDefined ? (
+            <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-muted text-muted-foreground border border-border">
+              Definido em código
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-stable/10 text-stable border border-stable/20">
+              Ativa
+            </span>
+          )}
+          {action}
         </div>
       </div>
       {children}
       {note && <p className="text-xs text-muted-foreground border-t border-border pt-3">Observação: {note}</p>}
+      {footer}
     </div>
   );
 }
 
-function RuleRows({ threshold }: { threshold: VitalThreshold }) {
+function RuleRows({ rules }: { rules: RangeRule[] }) {
   return (
     <ul className="space-y-1.5">
-      {threshold.rules.map((r, i) => (
+      {rules.map((r, i) => (
         <li key={i} className="flex items-center justify-between text-sm">
           <span className="flex items-center gap-2">
             <span className={cn('size-2 rounded-full', STATUS_LABEL[r.status].dot)} />
@@ -241,12 +284,244 @@ function RuleRows({ threshold }: { threshold: VitalThreshold }) {
   );
 }
 
+/* ---------------- Edição das faixas (só ADMIN) ---------------- */
+
+/** Faixa em edição: min/max como texto para aceitar vírgula e campo vazio. */
+interface DraftRule {
+  status: ClinicalStatus;
+  min: string;
+  max: string;
+}
+
+const toDraft = (rules: RangeRule[]): DraftRule[] =>
+  rules.map((r) => ({
+    status: r.status,
+    min: r.min == null ? '' : String(r.min).replace('.', ','),
+    max: r.max == null ? '' : String(r.max).replace('.', ','),
+  }));
+
+/** '' → undefined (sem limite); número inválido → null (erro). */
+function parseLimit(raw: string): number | undefined | null {
+  const s = raw.trim();
+  if (s === '') return undefined;
+  const n = Number(s.replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+}
+
+function draftToRules(draft: DraftRule[]): RangeRule[] {
+  return draft.map((d, i) => {
+    const min = parseLimit(d.min);
+    const max = parseLimit(d.max);
+    if (min === null || max === null) throw new Error(`A faixa ${i + 1} tem um número inválido.`);
+    const rule: RangeRule = { status: d.status };
+    if (min !== undefined) rule.min = min;
+    if (max !== undefined) rule.max = max;
+    return rule;
+  });
+}
+
+const describeRules = (rules: RangeRule[]) =>
+  rules.map((r) => `${STATUS_LABEL[r.status].label} ${formatRule(r)}`).join(' · ');
+
+function ClinicalRuleEditor({
+  row,
+  onCancel,
+  onSaved,
+}: {
+  row: ClinicalThresholdRow;
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const toast = useToast();
+  const [draft, setDraft] = useState<DraftRule[]>(() => toDraft(row.rules));
+  const [confirming, setConfirming] = useState<RangeRule[] | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  function patch(i: number, field: keyof DraftRule, value: string) {
+    setDraft((d) => d.map((r, idx) => (idx === i ? { ...r, [field]: value } : r)));
+  }
+
+  function move(i: number, delta: number) {
+    setDraft((d) => {
+      const target = i + delta;
+      const atI = d[i];
+      const atTarget = d[target];
+      if (!atI || !atTarget) return d;
+      const next = [...d];
+      next[i] = atTarget;
+      next[target] = atI;
+      return next;
+    });
+  }
+
+  function review() {
+    try {
+      setConfirming(draftToRules(draft));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Faixa inválida.');
+    }
+  }
+
+  async function save() {
+    if (!confirming) return;
+    setBusy(true);
+    try {
+      await clinicalRulesService.save(row.metricKey, confirming);
+      toast.success(`Regra de "${row.label}" atualizada. Vale para as próximas medições.`);
+      setConfirming(null);
+      onSaved();
+    } catch (err) {
+      // A RPC já devolve a mensagem de validação em PT-BR (buraco na faixa,
+      // status faltando, faixa inalcançável, não é admin…).
+      toast.error(err instanceof Error ? err.message : 'Não foi possível salvar a regra.');
+      setConfirming(null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] text-muted-foreground">
+        Limites <strong>inclusivos</strong>; a primeira faixa que casar com o valor vence — por isso a ordem importa.
+        Deixe o campo vazio para “sem limite”. As faixas precisam cobrir todos os valores possíveis, sem buraco.
+      </p>
+
+      <div className="space-y-2">
+        <div className="grid grid-cols-[1fr_5rem_5rem_auto] gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+          <span>Status</span>
+          <span>Mínimo</span>
+          <span>Máximo</span>
+          <span className="sr-only">Ações</span>
+        </div>
+        {draft.map((r, i) => (
+          <div key={i} className="grid grid-cols-[1fr_5rem_5rem_auto] gap-2 items-center">
+            <select
+              className="input py-1.5 text-sm"
+              value={r.status}
+              onChange={(e) => patch(i, 'status', e.target.value)}
+              aria-label={`Status da faixa ${i + 1}`}
+            >
+              {Object.values(ClinicalStatus).map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_LABEL[s].label}
+                </option>
+              ))}
+            </select>
+            <input
+              className="input py-1.5 text-sm font-mono"
+              inputMode="decimal"
+              placeholder="—"
+              value={r.min}
+              onChange={(e) => patch(i, 'min', e.target.value)}
+              aria-label={`Mínimo da faixa ${i + 1}`}
+            />
+            <input
+              className="input py-1.5 text-sm font-mono"
+              inputMode="decimal"
+              placeholder="—"
+              value={r.max}
+              onChange={(e) => patch(i, 'max', e.target.value)}
+              aria-label={`Máximo da faixa ${i + 1}`}
+            />
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => move(i, -1)}
+                disabled={i === 0}
+                className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-30"
+                aria-label={`Mover faixa ${i + 1} para cima`}
+              >
+                <ChevronUp className="size-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => move(i, 1)}
+                disabled={i === draft.length - 1}
+                className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-30"
+                aria-label={`Mover faixa ${i + 1} para baixo`}
+              >
+                <ChevronDown className="size-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setDraft((d) => d.filter((_, idx) => idx !== i))}
+                disabled={draft.length <= 1}
+                className="p-1 rounded-md text-alert hover:bg-alert/10 disabled:opacity-30"
+                aria-label={`Remover faixa ${i + 1}`}
+              >
+                <Trash2 className="size-4" />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setDraft((d) => [...d, { status: ClinicalStatus.YELLOW, min: '', max: '' }])}
+        >
+          <Plus className="size-4" /> Adicionar faixa
+        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" size="sm" onClick={onCancel}>
+            Cancelar
+          </Button>
+          <Button size="sm" onClick={review}>
+            Salvar
+          </Button>
+        </div>
+      </div>
+
+      {confirming && (
+        <ConfirmModal
+          title={`Alterar a regra de ${row.label}?`}
+          message={`A nova regra passa a valer imediatamente no cálculo de status das PRÓXIMAS medições (alertas já gerados não mudam). Nova faixa: ${describeRules(confirming)}.`}
+          confirmLabel="Salvar regra"
+          busy={busy}
+          onCancel={() => setConfirming(null)}
+          onConfirm={save}
+        />
+      )}
+    </div>
+  );
+}
+
 function ClinicalTab() {
-  const thresholds = Object.values(ALERT_THRESHOLDS) as VitalThreshold[];
-  // Fonte única: a mesma lista que `thresholds.ts` expõe. Antes esta função
-  // existia sem NENHUM consumidor — a pendência clínica ficava só no arquivo
-  // docs/PONTOS_PENDENTES.md, invisível para quem opera o sistema.
-  const pendencias = listPendingMedicalValidations();
+  const { hasRole } = useAuth();
+  const isAdmin = hasRole(Role.ADM);
+  const [rows, setRows] = useState<ClinicalThresholdRow[] | null>(null);
+  const [offline, setOffline] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      setRows(await clinicalRulesService.list());
+      setOffline(false);
+    } catch {
+      // Sem banco, mostra os defaults do código em somente-leitura em vez de
+      // deixar a aba vazia — mas avisa que não é a fonte viva.
+      setRows(DEFAULT_CLINICAL_ROWS);
+      setOffline(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  if (!rows) return <LoadingState label="Carregando regras clínicas…" />;
+
+  // Pendências: as de ENTRADA continuam vindo do código (faixas de validação do
+  // formulário); as de FAIXA DE ALERTA agora vêm de `pending_validation` do banco.
+  const pendencias = [
+    ...listPendingMedicalValidations().filter((p) => p.startsWith('Entrada')),
+    ...rows
+      .filter((r) => r.pendingValidation)
+      .map((r) => `Alerta [${r.metricKey}]: ${r.pendingNote ?? 'pendente'}`),
+  ];
 
   return (
     <div className="space-y-6">
@@ -255,12 +530,20 @@ function ClinicalTab() {
         <div>
           <p className="font-semibold">Os limites clínicos devem ser definidos ou validados por profissional de saúde responsável.</p>
           <p className="text-muted-foreground mt-1 text-xs">
-            Os valores abaixo vêm do ponto único de manutenção (<code className="font-mono">@vitalsync/shared</code>). Regras
-            marcadas como pendentes usam faixas provisórias e poderão ser editadas pelo Administrador autorizado quando o
-            endpoint de configurações clínicas estiver disponível.
+            As faixas abaixo são as que o sistema realmente usa para classificar cada medição. O Administrador pode
+            editá-las aqui, e a mudança vale imediatamente — sem alteração de código. Toda edição fica registrada na
+            aba Auditoria. Regras que não são faixa numérica simples (passos, vômito, sangramento e os critérios
+            combinados) seguem definidas em código.
           </p>
         </div>
       </div>
+
+      {offline && (
+        <div className="bg-card border border-alert/30 rounded-xl p-4 text-xs text-muted-foreground">
+          Não foi possível carregar as regras do banco. Os valores exibidos são os padrões do código
+          (<code className="font-mono">@vitalsync/shared</code>) e a edição está indisponível.
+        </div>
+      )}
 
       {pendencias.length > 0 && (
         <div className="bg-card border border-alert/30 rounded-xl p-4">
@@ -286,16 +569,43 @@ function ClinicalTab() {
       )}
 
       <div className="grid md:grid-cols-2 gap-4">
-        {thresholds.map((t) => (
-          <ClinicalRuleCard key={t.label} title={t.label} pending={t.PENDING_MEDICAL_VALIDATION} note={t.pendingNote}>
-            <RuleRows threshold={t} />
+        {rows.map((r) => (
+          <ClinicalRuleCard
+            key={r.metricKey}
+            title={r.label}
+            pending={r.pendingValidation}
+            note={r.pendingNote ?? undefined}
+            action={
+              isAdmin && !offline && editing !== r.metricKey ? (
+                <Button variant="ghost" size="sm" onClick={() => setEditing(r.metricKey)}>
+                  <Pencil className="size-3.5" /> Editar
+                </Button>
+              ) : undefined
+            }
+            footer={
+              r.updatedByName && r.updatedAt ? (
+                <p className="text-[11px] text-muted-foreground border-t border-border pt-3">
+                  Última alteração por {r.updatedByName} em {new Date(r.updatedAt).toLocaleString('pt-BR')}.
+                </p>
+              ) : undefined
+            }
+          >
+            {editing === r.metricKey ? (
+              <ClinicalRuleEditor
+                row={r}
+                onCancel={() => setEditing(null)}
+                onSaved={() => {
+                  setEditing(null);
+                  void load();
+                }}
+              />
+            ) : (
+              <RuleRows rules={r.rules} />
+            )}
           </ClinicalRuleCard>
         ))}
 
-        <ClinicalRuleCard
-          title={STEPS_RULES.label}
-          note="Não há mais vermelho isolado de passos — a queda vira alerta só quando combinada com FC>110 ou aumento de dor ≥3 pontos."
-        >
+        <ClinicalRuleCard title={STEPS_RULES.label} codeDefined note={CODE_DEFINED_NOTE}>
           <ul className="space-y-1.5 text-sm">
             <li className="flex items-center justify-between">
               <span className="flex items-center gap-2"><span className="size-2 rounded-full bg-stable" /> Normal</span>
@@ -312,11 +622,11 @@ function ClinicalTab() {
           </ul>
         </ClinicalRuleCard>
 
-        <ClinicalRuleCard title="Vômitos">
+        <ClinicalRuleCard title="Vômitos" codeDefined note={CODE_DEFINED_NOTE}>
           <BinaryRows yes={BINARY_RULES.vomit.yesStatus} no={BINARY_RULES.vomit.noStatus} />
         </ClinicalRuleCard>
 
-        <ClinicalRuleCard title="Sangramento">
+        <ClinicalRuleCard title="Sangramento" codeDefined note={CODE_DEFINED_NOTE}>
           <BinaryRows yes={BINARY_RULES.bleeding.yesStatus} no={BINARY_RULES.bleeding.noStatus} />
         </ClinicalRuleCard>
       </div>

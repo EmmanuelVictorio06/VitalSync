@@ -187,7 +187,10 @@ export function Field({
   children: ReactNode;
 }) {
   return (
-    <div className="block">
+    // `min-w-0`: como item de grid/flex o padrão é `min-width: auto`, que impede
+    // encolher abaixo do conteúdo — um valor longo sem espaços (URL, e-mail ou
+    // um prontuário colado sem quebras) empurrava a coluna e estourava o modal.
+    <div className="block min-w-0">
       {/* Sem label (campo "mudo" — ex.: filtro sem rótulo visível), não renderiza
           o span: evita ~16px de espaço morto empurrando o controle para baixo. */}
       {label && (
@@ -463,7 +466,7 @@ function RichTextEditor({
   return (
     <div
       className={cn(
-        'rounded-lg border border-border bg-card overflow-hidden transition-[border-color,box-shadow]',
+        'rounded-lg border border-border bg-card overflow-hidden min-w-0 transition-[border-color,box-shadow]',
         'focus-within:border-primary focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--primary)_20%,transparent)]',
         invalid && 'border-alert',
       )}
@@ -554,7 +557,12 @@ function RichTextEditor({
         onMouseUp={updateActiveState}
         onFocus={updateActiveState}
         className={cn(
-          'rich-text-input w-full bg-transparent px-3 py-2.5 text-sm outline-none overflow-y-auto break-words',
+          // `wrap-anywhere` (overflow-wrap: anywhere) em vez de `break-words`
+          // (break-word): os dois quebram a linha, mas só `anywhere` também
+          // reduz a LARGURA MÍNIMA do elemento. Com `break-word` uma palavra
+          // gigante sem espaços continuava ditando o min-content e empurrando
+          // os ancestrais — era o que estourava o modal de editar paciente.
+          'rich-text-input w-full bg-transparent px-3 py-2.5 text-sm outline-none overflow-y-auto wrap-anywhere',
           '[&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-0.5',
           minHeightClassName,
         )}
@@ -1438,6 +1446,141 @@ export function DateField({
   );
 }
 
+/* ---------------- Overlay compartilhado de modais/drawers ----------------
+
+   TODO modal, drawer, sheet e lightbox do app monta o scrim por aqui. O que o
+   wrapper resolve de uma vez só (antes cada tela repetia a `div` na mão e
+   nenhuma tinha estes comportamentos):
+
+   1. PORTAL para o <body>. Obrigatório, não é preferência de estilo: qualquer
+      ancestral com `transform` vira containing block de `position: fixed`, e o
+      scrim para de cobrir a viewport — passa a cobrir só aquele bloco, o que
+      "lava" o conteúdo e descentraliza o modal. Vários containers do app usam
+      `animate-entry`, cuja animação tem `fill-mode: both` e deixa um
+      `transform: matrix(...)` residual; foi assim que o bug apareceu na aba
+      Configurações → Regras Clínicas.
+   2. `w-screen` (100vw) junto do `inset-0`: com o scroll travado a barra de
+      rolagem some, e um `right: 0` pararia ~15px antes da borda, deixando uma
+      faixa clara sem escurecer.
+   3. TRAVA DE SCROLL no elemento que REALMENTE rola. Aqui o `html` tem
+      `overflow-x: clip`, então é ele (não o `body`) o scroller. A folga da
+      barra é MEDIDA depois de travar, nunca presumida — descontá-la às cegas
+      encolhe o conteúdo, que é justamente o "pulo" que ela deveria evitar.
+      Aninhamento funciona: cada camada salva e restaura o valor anterior.
+   4. ESC e clique no fundo fecham (ambos desligáveis).
+   5. Foco inicial opcional: o primeiro `[data-autofocus]` de dentro do modal.
+
+   O `className` recebe z-index, cor/blur do scrim e alinhamento do painel —
+   assim cada tela mantém o visual que já tinha e só o comportamento é comum.
+*/
+/**
+ * Pilha de overlays abertos. O ESC é um listener de `document`, então com dois
+ * modais abertos (drawer + lightbox, drawer + confirmação) TODOS ouviriam a
+ * tecla e fechariam juntos. Só o topo da pilha responde.
+ */
+const overlayStack: symbol[] = [];
+
+/**
+ * Estado da trava de scroll, guardado FORA do componente e liberado só quando a
+ * pilha esvazia.
+ *
+ * Não dá para cada camada salvar/restaurar o valor anterior por conta própria:
+ * quando um modal e o seu filho (prontuário + "Descartar alterações?") somem no
+ * MESMO commit, o React roda a limpeza do pai antes da do filho — o pai
+ * destravava e o filho, logo depois, restaurava o `hidden` que tinha herdado,
+ * deixando a página presa. Contando as camadas, a ordem deixa de importar.
+ */
+let scrollLock: { scroller: HTMLElement; overflow: string; padding: string } | null = null;
+
+function travarScroll() {
+  if (scrollLock) return; // já travado por uma camada de fora
+  const { body } = document;
+  const scroller = (document.scrollingElement ?? document.documentElement) as HTMLElement;
+  const larguraAntes = scroller.clientWidth;
+  scrollLock = { scroller, overflow: scroller.style.overflow, padding: body.style.paddingRight };
+  scroller.style.overflow = 'hidden';
+  // A folga da barra é MEDIDA depois de travar, nunca presumida: aqui o `html`
+  // tem `overflow-x: clip` e é ele o scroller, então descontar a largura da
+  // barra às cegas encolheria o conteúdo — o "pulo" que se quer evitar.
+  const folga = scroller.clientWidth - larguraAntes;
+  if (folga > 0) body.style.paddingRight = `${folga}px`;
+}
+
+function destravarScroll() {
+  if (overlayStack.length > 0 || !scrollLock) return; // ainda há modal aberto
+  scrollLock.scroller.style.overflow = scrollLock.overflow;
+  document.body.style.paddingRight = scrollLock.padding;
+  scrollLock = null;
+}
+
+export function ModalOverlay({
+  onClose,
+  className,
+  closeOnBackdrop = true,
+  closeOnEsc = true,
+  ariaLabel,
+  ariaLabelledBy,
+  children,
+}: {
+  /** Fecha o modal — usado pelo ESC e pelo clique no fundo. */
+  onClose: () => void;
+  /** Classes do scrim: z-index, cor/blur e alinhamento/padding do painel. */
+  className?: string;
+  closeOnBackdrop?: boolean;
+  closeOnEsc?: boolean;
+  ariaLabel?: string;
+  ariaLabelledBy?: string;
+  children: ReactNode;
+}) {
+  const scrimRef = useRef<HTMLDivElement>(null);
+  // onClose costuma vir como arrow inline: guardar em ref mantém o efeito
+  // rodando UMA vez só (senão ele re-focaria o campo a cada tecla digitada).
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  const escRef = useRef(closeOnEsc);
+  escRef.current = closeOnEsc;
+
+  useEffect(() => {
+    const id = Symbol('modal-overlay');
+    overlayStack.push(id);
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || !escRef.current) return;
+      if (overlayStack[overlayStack.length - 1] !== id) return; // só o modal do topo
+      closeRef.current();
+    };
+    document.addEventListener('keydown', onKeyDown);
+
+    travarScroll();
+
+    scrimRef.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus();
+
+    return () => {
+      const i = overlayStack.lastIndexOf(id);
+      if (i >= 0) overlayStack.splice(i, 1);
+      document.removeEventListener('keydown', onKeyDown);
+      destravarScroll();
+    };
+  }, []);
+
+  return createPortal(
+    <div
+      ref={scrimRef}
+      className={cn('fixed inset-0 w-screen flex', className)}
+      role="dialog"
+      aria-modal="true"
+      aria-label={ariaLabel}
+      aria-labelledby={ariaLabelledBy}
+      // Compara com o currentTarget: só o clique no PRÓPRIO scrim fecha, então
+      // o painel não precisa mais de `stopPropagation` para se defender.
+      onClick={closeOnBackdrop ? (e) => { if (e.target === e.currentTarget) closeRef.current(); } : undefined}
+    >
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
 /* ---------------- Confirm modal (ação destrutiva) ---------------- */
 export function ConfirmModal({
   title,
@@ -1461,23 +1604,26 @@ export function ConfirmModal({
   onConfirmInputChange?: (v: string) => void;
 }) {
   const enabled = !requireText || confirmInput?.trim().toUpperCase() === requireText.toUpperCase();
+
+  // Foco inicial (`data-autofocus`): o campo de confirmação quando existe — ele
+  // vem antes no DOM —, senão o botão primário.
   return (
-    <div
-      className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
-      role="dialog"
-      aria-modal="true"
-      onClick={onCancel}
+    <ModalOverlay
+      onClose={onCancel}
+      className="z-50 bg-foreground/50 backdrop-blur-sm items-center justify-center p-4 overflow-y-auto"
     >
-      <div
-        className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-md my-auto max-h-[90vh] overflow-y-auto animate-entry"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-md my-auto max-h-[90vh] overflow-y-auto animate-entry">
         <h2 className="text-lg font-extrabold tracking-tight">{title}</h2>
         <p className="text-sm text-muted-foreground mt-1.5">{message}</p>
         {requireText && (
           <div className="mt-4">
             <Field label={`Digite "${requireText}" para confirmar`}>
-              <input className="input" value={confirmInput ?? ''} onChange={(e) => onConfirmInputChange?.(e.target.value)} />
+              <input
+                className="input"
+                data-autofocus
+                value={confirmInput ?? ''}
+                onChange={(e) => onConfirmInputChange?.(e.target.value)}
+              />
             </Field>
           </div>
         )}
@@ -1485,12 +1631,12 @@ export function ConfirmModal({
           <Button variant="ghost" onClick={onCancel}>
             Cancelar
           </Button>
-          <Button variant="danger" onClick={onConfirm} disabled={!enabled} loading={busy}>
+          <Button variant="danger" onClick={onConfirm} disabled={!enabled} loading={busy} data-autofocus>
             {confirmLabel}
           </Button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 

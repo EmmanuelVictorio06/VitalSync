@@ -12,6 +12,22 @@
  * destas constantes. Isso atende ao requisito de "regras clínicas facilmente
  * alteráveis" e ao princípio de baixo acoplamento.
  *
+ * ⚠️ ATENÇÃO — DESDE A MIGRATION 0075 as 8 métricas de FAIXA SIMPLES de
+ * `ALERT_THRESHOLDS` (temperature, spo2, bloodPressureSystolic,
+ * bloodPressureDiastolic, heartRate, diuresis, pain, dyspnea) também existem na
+ * tabela `public.clinical_threshold_settings`, editável pelo ADMIN em runtime
+ * (Configurações → Regras Clínicas). Quem CLASSIFICA de verdade é o banco:
+ * `eval_clinical_status` → `classify_by_bands` lê a tabela. Os valores abaixo
+ * são o DEFAULT que semeou a tabela e o FALLBACK — mudá-los aqui NÃO altera o
+ * status de quem já tem banco semeado (a migration usa `on conflict do
+ * nothing`). Para mudar a regra vigente, edite pela tela ou chame
+ * `admin_set_clinical_threshold`; use este arquivo para o default de instalações
+ * novas, para a validação de entrada e para os gráficos.
+ *
+ * Seguem SÓ aqui (não editáveis por tela, porque não são faixa numérica de uma
+ * variável): STEPS_RULES, BINARY_RULES, WATER_INTAKE_RULE e os critérios
+ * COMBINADOS de vermelho (em `status.ts` e no corpo de `eval_clinical_status`).
+ *
  * ⚠️ PENDENTE DE VALIDAÇÃO MÉDICA
  * Os campos marcados com `PENDING_MEDICAL_VALIDATION = true` usam valores
  * PROVISÓRIOS porque o documento indica "*Letícia irá confirmar os valores".

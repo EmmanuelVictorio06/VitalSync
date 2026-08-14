@@ -22,7 +22,7 @@ import { attendanceService } from '../../services/attendanceService';
 import { storageService } from '../../services/storageService';
 import { DSection, DGrid, MeasurementGrid, PatientInfoGrid } from '../clinical/DetailBlocks';
 import { slaLabel } from '../../lib/sla';
-import { Button, cn, Loading } from '../ui';
+import { Button, ModalOverlay, cn, Loading } from '../ui';
 import { AttendanceClinicalBadge } from './AttendanceClinicalBadge';
 import { AttendanceOriginBadge } from './AttendanceOriginBadge';
 import { AttendanceStatusBadge } from './AttendanceStatusBadge';
@@ -66,17 +66,12 @@ export function AttendanceDetailsDrawer({
   }, [row, r?.wound_photo_path, r?.drain_photo_path]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex justify-end"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Detalhes do atendimento"
-      onClick={onClose}
+    <ModalOverlay
+      onClose={onClose}
+      className="z-50 bg-foreground/50 backdrop-blur-sm justify-end"
+      ariaLabel="Detalhes do atendimento"
     >
-      <div
-        className="bg-background w-full max-w-lg h-full overflow-y-auto shadow-xl animate-entry"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="bg-background w-full max-w-lg h-full overflow-y-auto shadow-xl animate-entry">
         <header className="sticky top-0 bg-card border-b border-border px-5 py-4 flex items-center gap-3 z-10">
           <span className="size-9 rounded-lg flex items-center justify-center bg-primary/10 text-primary">
             <TypeIcon className="size-5" />
@@ -212,14 +207,21 @@ export function AttendanceDetailsDrawer({
       </div>
 
       {zoom && (
-        <div
-          className="fixed inset-0 z-[70] bg-foreground/80 flex items-center justify-center p-4"
-          onClick={(e) => { e.stopPropagation(); setZoom(null); }}
+        <ModalOverlay
+          onClose={() => setZoom(null)}
+          className="z-[70] bg-foreground/80 items-center justify-center p-4"
+          ariaLabel="Foto ampliada"
         >
-          <img src={zoom} alt="Foto ampliada" className="max-h-[90vh] max-w-full rounded-lg" />
-        </div>
+          {/* Clicar na própria foto também fecha, como antes da migração. */}
+          <img
+            src={zoom}
+            alt="Foto ampliada"
+            className="max-h-[90vh] max-w-full rounded-lg"
+            onClick={() => setZoom(null)}
+          />
+        </ModalOverlay>
       )}
-    </div>
+    </ModalOverlay>
   );
 }
 

@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { formatPhoneBR, onlyDigits } from '@vitalsync/shared';
 import type { TeamDetail } from '../services/teamViewService';
-import { Button, CustomSelect, PhoneInput, TextInput, cn } from './ui';
+import { Button, CustomSelect, ModalOverlay, PhoneInput, TextInput, cn } from './ui';
 
 /* ---------------- Card de resumo (topo da tela) ---------------- */
 export function SummaryCard({
@@ -459,32 +459,19 @@ export function TeamAdvancedFilters({ value, surgeonOptions, associateOptions, o
   const [draft, setDraft] = useState<TeamFiltersState>(value);
   const set = <K extends keyof TeamFiltersState>(k: K, v: TeamFiltersState[K]) => setDraft((d) => ({ ...d, [k]: v }));
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    document.body.style.overflow = 'hidden';
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
-    };
-  }, [onClose]);
+  // ESC e trava de scroll são do ModalOverlay.
 
   function clear() {
     setDraft((d) => ({ ...d, status: 'ALL', patients: 'ALL', alerts: 'ALL', surgeon: 'ALL', associate: 'ALL', patientCount: 'ALL' }));
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Filtros avançados"
-      onClick={onClose}
+    <ModalOverlay
+      onClose={onClose}
+      className="z-50 bg-foreground/50 backdrop-blur-sm items-end sm:items-center justify-center sm:p-4"
+      ariaLabel="Filtros avançados"
     >
-      <div
-        className="bg-card border border-border w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[88vh] flex flex-col animate-entry"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="bg-card border border-border w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[88vh] flex flex-col animate-entry">
         <header className="flex items-center gap-3 px-5 py-4 border-b border-border">
           <h2 className="font-extrabold tracking-tight flex-1">Filtros avançados</h2>
           <button onClick={onClose} className="size-8 rounded-lg hover:bg-muted flex items-center justify-center" aria-label="Fechar">
@@ -512,7 +499,7 @@ export function TeamAdvancedFilters({ value, surgeonOptions, associateOptions, o
           <Button onClick={() => { onApply(draft); onClose(); }}>Aplicar filtros</Button>
         </footer>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 

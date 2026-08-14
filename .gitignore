@@ -40,5 +40,8 @@ coverage/
 supabase/.temp
 supabase/.branches
 
+# Snippets do SQL Editor do Supabase (rascunho local, não versionar)
+supabase/snippets/
+
 .vercel
 .env*

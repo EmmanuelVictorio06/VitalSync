@@ -43,7 +43,7 @@ import {
   fmtDateTime as attFmtDateTime,
   triggerValue as attTriggerValue,
 } from './attendances/utils';
-import { Button, CustomSelect, Field, Loading, ProfessionalCombobox, StatusBadge, cn } from './ui';
+import { Button, CustomSelect, Field, Loading, ModalOverlay, ProfessionalCombobox, StatusBadge, cn } from './ui';
 
 /* ============================ Helpers ============================ */
 
@@ -306,32 +306,19 @@ export function AlertFiltersSheet({ value, onApply, onClose, isAdmin, teamOption
   const set = <K extends keyof AlertFiltersState>(k: K, v: AlertFiltersState[K]) => setDraft((d) => ({ ...d, [k]: v }));
   const activeCount = countAdvancedFilters(draft);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    document.body.style.overflow = 'hidden';
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
-    };
-  }, [onClose]);
+  // ESC e trava de scroll são do ModalOverlay.
 
   function clear() {
     setDraft((d) => ({ ...d, severity: 'ALL', attendance: 'ACTIVE', period: 'ALL', signal: 'ALL', measurement: 'ALL', team: 'ALL' }));
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Filtros avançados"
-      onClick={onClose}
+    <ModalOverlay
+      onClose={onClose}
+      className="z-50 bg-foreground/50 backdrop-blur-sm items-end sm:items-center justify-center sm:p-4"
+      ariaLabel="Filtros avançados"
     >
-      <div
-        className="bg-card border border-border w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[88vh] flex flex-col animate-entry"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="bg-card border border-border w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[88vh] flex flex-col animate-entry">
         <header className="flex items-center gap-3 px-5 py-4 border-b border-border">
           <h2 className="font-extrabold tracking-tight flex-1">
             Filtros avançados{activeCount > 0 ? ` · ${activeCount}` : ''}
@@ -363,7 +350,7 @@ export function AlertFiltersSheet({ value, onApply, onClose, isAdmin, teamOption
           <Button onClick={() => { onApply(draft); onClose(); }}>Aplicar filtros</Button>
         </footer>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 
@@ -560,11 +547,8 @@ export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, 
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex justify-end" role="dialog" aria-modal="true" onClick={onClose}>
-      <div
-        className="bg-background w-full max-w-lg h-full overflow-y-auto shadow-xl animate-entry"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ModalOverlay onClose={onClose} className="z-50 bg-foreground/50 backdrop-blur-sm justify-end">
+      <div className="bg-background w-full max-w-lg h-full overflow-y-auto shadow-xl animate-entry">
         {/* Cabeçalho */}
         <header className="sticky top-0 bg-card border-b border-border px-5 py-4 flex items-center gap-3 z-10">
           <span className={cn('size-9 rounded-lg flex items-center justify-center', alert.status === 'RED' ? 'bg-alert/10 text-alert' : 'bg-warning/10 text-warning')}>
@@ -766,7 +750,7 @@ export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, 
           )}
         </footer>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 
@@ -1013,12 +997,12 @@ export function IgnoreAlertModal({ onConfirm, onCancel }: {
 
 function ModalShell({ title, onCancel, children }: { title: string; onCancel: () => void; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-[60] bg-foreground/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" role="dialog" aria-modal="true" onClick={onCancel}>
-      <div className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-md my-auto max-h-[90vh] overflow-y-auto animate-entry" onClick={(e) => e.stopPropagation()}>
+    <ModalOverlay onClose={onCancel} className="z-[60] bg-foreground/50 backdrop-blur-sm items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-md my-auto max-h-[90vh] overflow-y-auto animate-entry">
         <h2 className="text-lg font-extrabold tracking-tight mb-1">{title}</h2>
         {children}
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 

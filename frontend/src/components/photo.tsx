@@ -19,7 +19,6 @@ import { fetchProtectedImage } from '../lib/api';
 import type { VitalRecord } from '../lib/dto';
 import {
   ARROW_PAN_STEP,
-  CLICK_DRAG_THRESHOLD,
   MAX_SCALE,
   MIN_SCALE,
   ZOOM_STEP_FACTOR,
@@ -29,7 +28,7 @@ import {
   zoomAtPoint,
   type ZoomState,
 } from '../lib/imageZoom';
-import { cn } from './ui';
+import { ModalOverlay, cn } from './ui';
 
 /** `accept` do input — restringe a seleção a imagens aceitas (JPG/PNG/WEBP). */
 const ACCEPT = WOUND_PHOTO.acceptedMimeTypes.join(',');
@@ -485,41 +484,21 @@ export function ViewImageModal({
   fileName?: string | null;
   onClose: () => void;
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
   const stageRef = useRef<HTMLDivElement>(null);
   const { zoom, isDragging, zoomIn, zoomOut, reset, handleDoubleClick, handlePointerDown, handlePointerMove, endDrag } =
     useImageZoom(stageRef);
-
-  // Distingue clique (fecha o modal) de arraste que termina sobre o fundo
-  // (não pode fechar) — compara a posição do pointerdown com a do pointerup.
-  const backdropDownRef = useRef<{ x: number; y: number } | null>(null);
-  function handleBackdropPointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    backdropDownRef.current = { x: e.clientX, y: e.clientY };
-  }
-  function handleBackdropPointerUp(e: React.PointerEvent<HTMLDivElement>) {
-    const start = backdropDownRef.current;
-    backdropDownRef.current = null;
-    if (!start || e.target !== e.currentTarget) return;
-    const dist = Math.hypot(e.clientX - start.x, e.clientY - start.y);
-    if (dist < CLICK_DRAG_THRESHOLD) onClose();
-  }
 
   const zoomPercent = Math.round(zoom.scale * 100);
   const canZoomIn = zoom.scale < MAX_SCALE - 1e-6;
   const canZoomOut = zoom.scale > MIN_SCALE + 1e-6;
 
+  // O ESC é tratado pelo ModalOverlay (que sabe qual modal está no topo da
+  // pilha) — o listener local daqui virou duplicata e foi removido.
   return (
-    <div
-      className="fixed inset-0 z-50 bg-foreground/70 backdrop-blur-sm flex items-center justify-center p-4"
-      role="dialog"
-      aria-modal="true"
-      onPointerDown={handleBackdropPointerDown}
-      onPointerUp={handleBackdropPointerUp}
+    <ModalOverlay
+      onClose={onClose}
+      className="z-50 bg-foreground/70 backdrop-blur-sm items-center justify-center p-4"
+      ariaLabel="Foto ampliada"
     >
       <div className="relative max-w-3xl w-full animate-entry">
         <button
@@ -595,7 +574,7 @@ export function ViewImageModal({
 
         {fileName && <p className="text-center text-xs text-white/80 mt-3 truncate">{fileName}</p>}
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 

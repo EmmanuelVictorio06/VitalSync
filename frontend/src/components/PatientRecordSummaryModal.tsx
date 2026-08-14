@@ -16,7 +16,7 @@ import { Pencil } from 'lucide-react';
 import { richTextToPlainText, sanitizeRichText } from '../lib/richText';
 import { patientService } from '../services/patientService';
 import { useToast } from './Toast';
-import { Button, ConfirmModal, RichTextField, cn } from './ui';
+import { Button, ConfirmModal, ModalOverlay, RichTextField, cn } from './ui';
 
 type Mode = 'view' | 'edit';
 type PendingAction = 'discard' | 'close' | null;
@@ -55,15 +55,7 @@ export function PatientRecordSummaryModal({
     if (mode === 'view') setViewHtml(html);
   }, [html, mode]);
 
-  // Trava o scroll do body enquanto o overlay está aberto, sem "pulo" ao restaurar.
-  useEffect(() => {
-    const original = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = original;
-    };
-  }, []);
-
+  // A trava de scroll agora é do ModalOverlay (o body não é o scroller aqui).
   // Move o foco para o dialog ao abrir e devolve ao gatilho ao fechar.
   useEffect(() => {
     const previouslyFocused = document.activeElement as HTMLElement | null;
@@ -134,17 +126,15 @@ export function PatientRecordSummaryModal({
   const isEmpty = richTextToPlainText(viewHtml).trim() === '';
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto"
-      role="dialog"
-      aria-modal="true"
-      onClick={requestClose}
+    <ModalOverlay
+      onClose={requestClose}
+      className="z-50 bg-foreground/50 backdrop-blur-sm items-start justify-center p-4 overflow-y-auto"
+      ariaLabel="Prontuário do paciente"
     >
       <div
         ref={panelRef}
         tabIndex={-1}
         className="bg-card border border-border rounded-xl shadow-lg w-full max-w-full md:max-w-4xl max-h-[90vh] flex flex-col animate-entry my-8 outline-none"
-        onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 p-5 md:p-6 border-b border-border shrink-0">
           <div className="min-w-0">
@@ -214,6 +204,6 @@ export function PatientRecordSummaryModal({
           onCancel={() => setPendingAction(null)}
         />
       )}
-    </div>
+    </ModalOverlay>
   );
 }
