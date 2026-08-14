@@ -8,7 +8,8 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, CalendarCheck, Loader2 } from 'lucide-react';
 import { useToast } from './Toast';
-import { Button, SelectField, TextareaField } from './ui';
+import { Button, RichTextField, SelectField, TextareaField } from './ui';
+import { richTextToPlainText, sanitizeRichText } from '../lib/richText';
 import {
   day30Service,
   hasDay30Outcome,
@@ -83,7 +84,7 @@ export function PatientDay30Section({ patientId }: { patientId: string }) {
       readmitted: toBool(readmitted),
       unplanned_visit: toBool(unplannedVisit),
       persistent_symptoms: toBool(persistentSymptoms),
-      outcomes_notes: outcomesNotes.trim() || null,
+      outcomes_notes: richTextToPlainText(outcomesNotes).trim() ? sanitizeRichText(outcomesNotes) : null,
       satisfaction_safety: satSafety ? Number(satSafety) : null,
       satisfaction_ease: satEase ? Number(satEase) : null,
       satisfaction_communication: satCommunication ? Number(satCommunication) : null,
@@ -134,7 +135,13 @@ export function PatientDay30Section({ patientId }: { patientId: string }) {
           </div>
         )}
 
-        <TextareaField label="Observações sobre os desfechos" rows={2} value={outcomesNotes} onChange={(e) => setOutcomesNotes(e.target.value)} />
+        <RichTextField
+          label="Observações sobre os desfechos"
+          toolbar="full"
+          minHeightClassName="min-h-[100px]"
+          value={outcomesNotes}
+          onChange={(html) => setOutcomesNotes(html)}
+        />
 
         <div className="pt-2 border-t border-border">
           <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
@@ -183,7 +190,12 @@ export function PatientDay30Section({ patientId }: { patientId: string }) {
                 <div><dt className="text-muted-foreground">Avaliação não prog.</dt><dd className="font-semibold">{yesNo(r.unplanned_visit)}</dd></div>
                 <div><dt className="text-muted-foreground">Sintomas persistentes</dt><dd className="font-semibold">{yesNo(r.persistent_symptoms)}</dd></div>
               </dl>
-              {r.outcomes_notes && <p className="text-sm text-foreground mt-2 whitespace-pre-wrap">{r.outcomes_notes}</p>}
+              {r.outcomes_notes && (
+                <div
+                  className="text-sm text-foreground mt-2 whitespace-pre-wrap break-words [&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-0.5"
+                  dangerouslySetInnerHTML={{ __html: sanitizeRichText(r.outcomes_notes) }}
+                />
+              )}
               <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-1 mt-2 text-xs">
                 <div><dt className="text-muted-foreground">Segurança</dt><dd className="font-semibold">{r.satisfaction_safety ?? '—'}/5</dd></div>
                 <div><dt className="text-muted-foreground">Facilidade</dt><dd className="font-semibold">{r.satisfaction_ease ?? '—'}/5</dd></div>

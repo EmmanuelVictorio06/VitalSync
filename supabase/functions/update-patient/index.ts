@@ -7,7 +7,12 @@
 //
 // Fluxo:
 //   1. Autentica o chamador pelo JWT (Authorization: Bearer ...).
-//   2. Autoriza: ADMIN, ou cirurgião responsável da equipe ATUAL do paciente.
+//   2. Autoriza: ADMIN, cirurgião responsável da equipe ATUAL do paciente, ou
+//      Gerente de Equipe com vínculo ATIVO (team_manager_surgeons) para o
+//      cirurgião responsável dessa equipe — mesmo critério de
+//      is_team_manager_of() (migration 0030), reimplementado aqui porque a
+//      função roda com service_role (sem o JWT do usuário no contexto, então
+//      auth.uid() não está disponível para chamar o helper de RLS).
 //   3. Carrega o paciente (service_role) para conhecer a equipe e validar.
 //   4. Se `cpf` vier preenchido: valida, recalcula cpf_hash/cpf_encrypted e
 //      checa unicidade entre pacientes ativos (excluindo o próprio).
@@ -64,7 +69,8 @@ serve(async (req) => {
     if (loadErr) return json({ error: loadErr.message }, 400);
     if (!current) return json({ error: 'Paciente não encontrado.' }, 404);
 
-    // Autorização: ADMIN ou cirurgião responsável da equipe atual.
+    // Autorização: ADMIN, cirurgião responsável da equipe atual, ou Gerente de
+    // Equipe com vínculo ativo para esse cirurgião responsável.
     let allowed = isAdmin;
     if (!allowed && role === 'MAIN_SURGEON') {
       const { data: team } = await admin
@@ -73,6 +79,23 @@ serve(async (req) => {
         .eq('id', current.team_id)
         .maybeSingle();
       allowed = team?.main_surgeon_id === caller.id;
+    }
+    if (!allowed && role === 'TEAM_MANAGER') {
+      const { data: team } = await admin
+        .from('medical_teams')
+        .select('main_surgeon_id')
+        .eq('id', current.team_id)
+        .maybeSingle();
+      if (team?.main_surgeon_id) {
+        const { data: link } = await admin
+          .from('team_manager_surgeons')
+          .select('id')
+          .eq('team_manager_id', caller.id)
+          .eq('surgeon_id', team.main_surgeon_id)
+          .eq('is_active', true)
+          .maybeSingle();
+        allowed = !!link;
+      }
     }
     if (!allowed) {
       return json({ error: 'Sem permissão para editar este paciente.' }, 403);

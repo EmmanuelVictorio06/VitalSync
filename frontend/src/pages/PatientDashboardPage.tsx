@@ -69,7 +69,7 @@ export function PatientDashboardPage() {
   const [editing, setEditing] = useState(false);
   const [recordViewer, setRecordViewer] = useState<{ mode: 'view' | 'edit' } | null>(null);
 
-  const canEditPatient = permissionService.isAdmin(user);
+  const canEditPatient = permissionService.canEditPatient(user);
 
   async function load() {
     if (!id) return;
