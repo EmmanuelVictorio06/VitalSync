@@ -1,0 +1,111 @@
+name: Backup do banco
+
+# Backup diário do Postgres do Supabase. Substitui a execução manual do
+# `backup_vitalsync.sh`, que exigia alguém lembrar de rodar e colar a
+# connection string à mão — com dado de saúde real em produção isso não se
+# sustenta.
+#
+# ⚠️ DECISÃO PENDENTE (ver docs/BACKUP.md): o dump cifrado fica como ARTEFATO
+# do GitHub. Mesmo cifrado, guardar dado de saúde na infraestrutura do GitHub
+# tem implicação de LGPD. As alternativas mais corretas são bucket privado sob
+# controle da empresa ou o Point-in-Time Recovery do Supabase (plano pago).
+
+on:
+  schedule:
+    # 06:10 UTC = 03:10 America/Sao_Paulo (madrugada, fora do horário de coleta).
+    - cron: '10 6 * * *'
+  workflow_dispatch:
+
+# Uma execução por vez: dois pg_dump simultâneos só disputam conexão.
+concurrency:
+  group: backup-banco
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: pg_dump cifrado
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Verificar se os secrets estão configurados
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$DB_URL" ]; then
+            echo "::error::Secret SUPABASE_DB_URL ausente. Configure em Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          if [ -z "$PASSPHRASE" ]; then
+            echo "::error::Secret BACKUP_PASSPHRASE ausente. Sem ele o dump sairia em texto claro — abortando."
+            exit 1
+          fi
+
+      # A imagem do runner traz um pg_dump mais antigo que o Postgres do
+      # Supabase; versões incompatíveis fazem o dump falhar no meio.
+      - name: Instalar postgresql-client 16
+        run: |
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql-client-16
+
+      - name: Gerar e cifrar o dump
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          STAMP="$(date -u +%Y-%m-%d)"
+          ARQUIVO="vitalsync-backup-${STAMP}.sql.gpg"
+
+          # O dump NUNCA toca o disco em texto claro: pg_dump escreve no pipe e
+          # o gpg cifra em fluxo. Um arquivo .sql intermediário poderia
+          # sobreviver num runner reaproveitado.
+          pg_dump "$DB_URL" --no-owner --no-privileges \
+            | gpg --batch --yes --symmetric --cipher-algo AES256 \
+                  --passphrase "$PASSPHRASE" \
+                  --output "$ARQUIVO"
+
+          if [ ! -s "$ARQUIVO" ]; then
+            echo "::error::O arquivo de backup saiu vazio."
+            exit 1
+          fi
+
+          echo "ARQUIVO=$ARQUIVO" >> "$GITHUB_ENV"
+          echo "Backup gerado: $ARQUIVO ($(du -h "$ARQUIVO" | cut -f1))"
+
+      - name: Conferir que o arquivo está mesmo cifrado
+        run: |
+          set -euo pipefail
+          # Um dump em texto claro começaria com cabeçalho do pg_dump; se o
+          # `file` reconhecer SQL/ASCII aqui, algo deu muito errado.
+          if head -c 200 "$ARQUIVO" | grep -qi "PostgreSQL database dump"; then
+            echo "::error::O arquivo NÃO está cifrado. Abortando antes do upload."
+            exit 1
+          fi
+          echo "OK: conteúdo não legível em texto claro."
+
+      - name: Publicar artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARQUIVO }}
+          path: ${{ env.ARQUIVO }}
+          # Retenção curta: dado de saúde não deve acumular na infra do GitHub.
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Resumo
+        run: |
+          {
+            echo "### Backup concluído"
+            echo ""
+            echo "- Arquivo: \`$ARQUIVO\`"
+            echo "- Cifrado com GPG simétrico (AES256)"
+            echo "- Retenção do artefato: 7 dias"
+            echo ""
+            echo "Para restaurar, veja \`docs/RUNBOOK_PILOTO.md\` seção 6."
+            echo ""
+            echo "> Backup nunca restaurado não é backup — teste a restauração periodicamente."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -2,6 +2,10 @@ import { useLayoutEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Role } from './auth/AuthContext';
 import { AlertCountProvider } from './components/AlertCount';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { PatientErrorFallback } from './components/PatientErrorFallback';
+import { MissedMeasurementCountProvider } from './components/MissedMeasurementCount';
+import { NurseQueueCountProvider } from './components/NurseQueueCount';
 import { Layout } from './components/Layout';
 import { PermissionGuard } from './components/PermissionGuard';
 import { adminRoles } from './lib/permissions';
@@ -16,6 +20,7 @@ import { MyTeamsPage } from './pages/MyTeamsPage';
 import { MyAttendancesPage } from './pages/MyAttendancesPage';
 import { PatientDashboardPage } from './pages/PatientDashboardPage';
 import { PatientRegisterPage } from './pages/PatientRegisterPage';
+import { StaffVitalsEntryPage } from './pages/StaffVitalsEntryPage';
 import { TeamsPage } from './pages/TeamsPage';
 import { UsersPage } from './pages/admin/UsersPage';
 import { VitalsRegisterPage } from './pages/VitalsRegisterPage';
@@ -27,6 +32,18 @@ import { HospitalsPage } from './pages/admin/HospitalsPage';
 import { SettingsPage } from './pages/admin/SettingsPage';
 import { SurgeryTypesPage } from './pages/admin/SurgeryTypesPage';
 import { ManagerTeamsPage } from './pages/ManagerTeamsPage';
+
+/** Tela do paciente protegida pelo fallback de linguagem simples. */
+function PacienteComBoundary() {
+  return (
+    <ErrorBoundary
+      contexto="registro-paciente"
+      fallback={(reset) => <PatientErrorFallback onReset={reset} />}
+    >
+      <VitalsRegisterPage />
+    </ErrorBoundary>
+  );
+}
 
 function ScrollToTop() {
   const location = useLocation();
@@ -69,8 +86,10 @@ export function App() {
           Fica FORA do Layout/PermissionGuard, então nunca exige autenticação nem
           redireciona para /login. Rota clara `/registro-sinais/:token`; o alias
           curto `/r/:token` é mantido para os links já enviados pelo WhatsApp. */}
-      <Route path="/registro-sinais/:token" element={<VitalsRegisterPage />} />
-      <Route path="/r/:token" element={<VitalsRegisterPage />} />
+      {/* Boundary próprio: aqui a tela branca custa mais caro (o paciente
+          desiste e ninguém fica sabendo) e o público exige outra linguagem. */}
+      <Route path="/registro-sinais/:token" element={<PacienteComBoundary />} />
+      <Route path="/r/:token" element={<PacienteComBoundary />} />
       {/* Auto-cadastro do profissional por convite (público, sem login). */}
       <Route path="/convite/:token" element={<InviteRegisterPage />} />
 
@@ -79,7 +98,11 @@ export function App() {
         element={
           <PermissionGuard>
             <AlertCountProvider>
-              <Layout />
+              <MissedMeasurementCountProvider>
+                <NurseQueueCountProvider>
+                  <Layout />
+                </NurseQueueCountProvider>
+              </MissedMeasurementCountProvider>
             </AlertCountProvider>
           </PermissionGuard>
         }
@@ -110,6 +133,16 @@ export function App() {
           element={
             <PermissionGuard roles={[Role.ADM, Role.SURGEON, Role.ASSOCIATE, Role.MANAGER, Role.NURSE]}>
               <PatientDashboardPage />
+            </PermissionGuard>
+          }
+        />
+        {/* Lançamento pela equipe do período de hoje que o paciente esqueceu (0062) —
+            Enfermagem/Cirurgião/Associado; Gerente e Suporte ficam de fora (papéis não assistenciais) */}
+        <Route
+          path="/patients/:id/registrar-medicao"
+          element={
+            <PermissionGuard roles={[Role.SURGEON, Role.ASSOCIATE, Role.NURSE]}>
+              <StaffVitalsEntryPage />
             </PermissionGuard>
           }
         />

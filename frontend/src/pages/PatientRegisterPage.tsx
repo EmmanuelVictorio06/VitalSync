@@ -4,9 +4,11 @@ import { calculateAge, whatsappLink } from '@vitalsync/shared';
 import { Role, useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
 import { ToggleSwitch } from '../components/admin';
-import { Button, CustomSelect, Field, PageContainer, PageHeader, PhoneInput, TextareaField, TextInput } from '../components/ui';
+import { Button, CustomSelect, Field, PageContainer, PageHeader, PhoneInput, RichTextField, TextInput } from '../components/ui';
 import { featureFlags } from '../config/featureFlags';
 import { patientVitalsLink } from '../lib/publicUrl';
+import { parseComorbidities } from '../lib/comorbidities';
+import { richTextToPlainText, sanitizeRichText } from '../lib/richText';
 import { formatCpf, validateCpf } from '../lib/cpfUtils';
 import { hospitalService } from '../services/hospitalService';
 import { surgeryTypeService } from '../services/surgeryTypeService';
@@ -35,10 +37,6 @@ interface FormState {
   lengthOfStayDays: string;
   alternativePhone: string;
   tcleAcceptedAt: string;
-}
-/** Comorbidades: campo de texto (separado por vírgula) vira lista para o banco (jsonb). */
-function parseCommaList(v: string): string[] {
-  return v.split(',').map((s) => s.trim()).filter(Boolean);
 }
 
 const empty: FormState = {
@@ -112,6 +110,9 @@ export function PatientRegisterPage() {
     }
     setBusy(true);
     try {
+      // Resumo de prontuário: editor rich text, então persiste o HTML (sanitizado);
+      // "vazio" é decidido pelo texto visível, não pelas tags.
+      const summaryHasText = richTextToPlainText(form.medicalRecordSummary).trim().length > 0;
       const patient = await patientService.create({
         name: form.name,
         cpf: form.cpf,
@@ -123,11 +124,14 @@ export function PatientRegisterPage() {
         hospital_id: form.hospitalId,
         team_id: form.teamId,
         is_test: form.isTest,
-        medical_record_summary: form.medicalRecordSummary.trim() || undefined,
+        medical_record_summary: summaryHasText ? sanitizeRichText(form.medicalRecordSummary) : undefined,
         sex: form.sex || undefined,
         weight_kg: form.weightKg ? Number(form.weightKg.replace(',', '.')) : undefined,
         height_cm: form.heightCm ? Number(form.heightCm.replace(',', '.')) : undefined,
-        comorbidities: parseCommaList(form.comorbidities),
+        // Comorbidades: o editor rich text é só apoio à digitação; a lista continua
+        // sendo persistida como texto puro (string[]), um item por vírgula ou por
+        // quebra visual (inclusive cada <li> da lista com marcadores).
+        comorbidities: parseComorbidities(form.comorbidities),
         length_of_stay_days: form.lengthOfStayDays ? Number(form.lengthOfStayDays) : undefined,
         alternative_phone: form.alternativePhone || undefined,
         tcle_accepted_at: form.tcleAcceptedAt || undefined,
@@ -199,13 +203,12 @@ export function PatientRegisterPage() {
             <TextInput label="Data da alta hospitalar" type="date" hint="Inicia a contagem dos 10 dias de monitoramento." value={form.dischargeDate} onChange={(e) => set('dischargeDate', e.target.value)} required />
           </div>
           <div className="mt-4">
-            <TextareaField
+            <RichTextField
               label="Resumo de prontuário"
               hint="Breve histórico clínico relevante para o acompanhamento (opcional)."
-              rows={3}
-              className="min-h-[140px]"
+              minHeightClassName="min-h-[140px]"
               value={form.medicalRecordSummary}
-              onChange={(e) => set('medicalRecordSummary', e.target.value)}
+              onChange={(html) => set('medicalRecordSummary', html)}
             />
           </div>
         </Block>
@@ -221,16 +224,16 @@ export function PatientRegisterPage() {
             <TextInput label="Peso (kg)" inputMode="decimal" placeholder="Ex. 72,5" value={form.weightKg} onChange={(e) => set('weightKg', e.target.value)} />
             <TextInput label="Altura (cm)" inputMode="numeric" placeholder="Ex. 170" value={form.heightCm} onChange={(e) => set('heightCm', e.target.value)} />
             <TextInput label="Tempo de internação (dias)" inputMode="numeric" value={form.lengthOfStayDays} onChange={(e) => set('lengthOfStayDays', e.target.value)} />
-            <TextInput label="TCLE assinado em" type="date" hint="Data de assinatura do Termo de Consentimento." value={form.tcleAcceptedAt} onChange={(e) => set('tcleAcceptedAt', e.target.value)} />
+            <TextInput label="TCLE assinado em" type="date" hint="Data de assinatura do Termo de Consentimento. O termo precisa conter a cláusula de contato ativo (ver docs/AVISO_CONTATO_ATIVO.md)." value={form.tcleAcceptedAt} onChange={(e) => set('tcleAcceptedAt', e.target.value)} />
           </div>
           <div className="mt-4">
-            <TextareaField
+            <RichTextField
               label="Comorbidades"
               hint="Separe por vírgula (ex.: diabetes, hipertensão) — opcional."
-              rows={2}
-              className="min-h-[120px]"
+              toolbar="full"
+              minHeightClassName="min-h-[120px]"
               value={form.comorbidities}
-              onChange={(e) => set('comorbidities', e.target.value)}
+              onChange={(html) => set('comorbidities', html)}
             />
           </div>
         </Block>

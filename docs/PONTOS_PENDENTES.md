@@ -57,6 +57,77 @@ de 10 dias encerrada COM adesão < 50%**. É uma assunção operacional razoáve
 confirmada — ajustar `LOST_TO_FOLLOWUP_THRESHOLD_PCT` nesse arquivo se o time do estudo definir
 outro critério (ex.: dias consecutivos sem coleta, independente da adesão total).
 
+## 5. Lançamento pela equipe de medição esquecida — decisões operacionais assumidas
+
+Migrations `0059`–`0062` implementam o alerta de esquecimento à equipe (priorizando o
+Profissional de Enfermagem) e a RPC `staff_insert_vital_record`, que permite lançar em nome do
+paciente o período de hoje que ele esqueceu. Três decisões foram tomadas sem validação adicional
+do time do estudo e podem precisar ser revisitadas:
+
+- **Só o dia corrente**: não há lançamento retroativo de dias anteriores dentro dos 10 dias de
+  acompanhamento — só o período de hoje, e só depois que a janela já fechou (10:00/20:00). Se o
+  time do estudo quiser recuperar lacunas de dias passados, o gate de janela em
+  `staff_insert_vital_record` (migration `0062`) precisa ser revisto.
+- **Quem pode lançar**: só Profissional de Enfermagem, Cirurgião e Médico Associado
+  (`profiles.role in ('NURSING_PROFESSIONAL', 'MEDICAL_SURGEON', 'ASSOCIATED_DOCTOR')`). Gerente
+  de Equipe e Suporte ficam de fora por serem papéis não assistenciais — decisão confirmada com o
+  Emmanuel, mas revisável se o estudo quiser incluir o Gerente.
+- **Sem fotos**: o lançamento pela equipe não inclui foto de cicatriz/dreno — o upload por token
+  (`upload-patient-photo`) exige `secure_token`+CPF do paciente, indisponível para staff
+  autenticado. Se isso for necessário, requer um novo caminho de upload autenticado (bucket
+  liberado por `is_team_member()` ou nova Edge Function), não construído nesta fase.
+
+## 6. Triagem de Enfermagem — decisões que exigem confirmação humana
+
+Migrations `0063`–`0069` (ver `docs/FLUXO_ENFERMAGEM.md`). Foram implementadas
+com os defaults abaixo, **todos revisáveis**. Os três primeiros itens são
+decisão do Emmanuel; o quarto é bloqueio jurídico/ético.
+
+### 6.1 🚩 Amarelo ainda notifica o médico por WhatsApp?
+
+**Estado atual: NÃO MUDADO.** O `notify_team_of_alert` continua disparando para
+amarelo exatamente como antes — a triagem foi construída **por cima** do fluxo
+existente, sem removê-lo. A proposta do desenho era que o amarelo virasse
+in-app só para o enfermeiro (médico recebe vermelho e escalados), o que
+reduziria ruído mas **é mudança de comportamento clínico** e não foi aplicada
+sem confirmação. Para aplicar, é preciso uma migration nova que condicione a
+chamada a `notify_team_of_alert` ao `status = 'RED' or escalated_at is not null`.
+
+### 6.2 Valores default dos parâmetros operacionais
+
+Todos em `app_settings`, seção `nursing` — mudam sem deploy:
+
+| Parâmetro | Default | Risco se estiver errado |
+|---|---|---|
+| `lockTtlMinutes` | 15 | Curto demais rouba o alerta de quem está atendendo; longo demais prende |
+| `offerWindowMinutes` | 5 | Longo demais atrasa a fila |
+| `wipLimit` | 5 | Alto demais sobrecarrega; baixo demais deixa alerta sem dono |
+| `slaYellowMinutes` | 60 | — |
+| `slaMaxHours` | 8 | **É a rede de segurança**: alto demais deixa amarelo envelhecer |
+| `escalationFallbackMinutes` | 30 | — |
+| `reviewSamplingPct` | 10 | Baixo demais não detecta falso-negativo |
+
+### 6.3 Cobertura de plantão — haverá turno noturno?
+
+Sem turno noturno, vale a **regra da madrugada**: o alerta espera na fila com o
+relógio de SLA parado e é entregue na abertura do próximo turno; o SLA máximo
+(8h, tempo corrido) continua correndo e escala sozinho para o médico. Se houver
+turno noturno, os defaults de SLA provavelmente precisam ser revistos.
+
+### 6.4 🚩 GATE JURÍDICO — Responsável Técnico com COREN
+
+**Nenhum enfermeiro deve contatar um paciente real antes desta definição.**
+Quem é o Responsável Técnico com COREN que assina o protocolo de teleconsulta
+de enfermagem, e ele é funcionário da startup ou do hospital? Não é bloqueio
+técnico (o código está pronto), mas é pré-requisito operacional.
+
+### 6.5 🚩 LGPD — DPA com o hospital
+
+O pool amplia o acesso do enfermeiro para além da equipe. Dado de saúde ⇒ art.
+11 da LGPD; o tratamento por operador (VitalSync) para controlador (hospital)
+exige **contrato de operador/DPA** com cada hospital coberto pelo pool. A
+trilha técnica (`patient_access_logs`) já existe; o contrato, não.
+
 ---
 
 ## Alterações já aplicadas na Fase 1 de conformidade (não são mais pendências)

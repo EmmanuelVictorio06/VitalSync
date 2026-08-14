@@ -55,6 +55,37 @@ export interface VitalSubmission {
   noticed_wound_change?: boolean;
 }
 
+/**
+ * Campos que a EQUIPE pode lançar em nome do paciente (sem token/CPF — ver 0062).
+ * As fotos entraram na 0074 (FUNC 3): o staff sobe o arquivo direto no Storage
+ * (policy `patient_photos_write`, 0020) e passa aqui apenas o PATH.
+ */
+export interface StaffVitalSubmission {
+  patient_id: string;
+  period: 'MORNING' | 'NIGHT';
+  temperature?: number;
+  oxygen_saturation?: number;
+  systolic_pressure?: number;
+  diastolic_pressure?: number;
+  heart_rate?: number;
+  pain_level?: number;
+  dyspnea_level?: number;
+  water_intake_ok?: boolean;
+  urination_count?: number;
+  urinated_normally?: boolean;
+  vomiting_count?: number;
+  had_vomit?: boolean;
+  has_bleeding?: boolean;
+  steps?: number;
+  /** Caminho da foto da cicatriz no bucket `patient-photos` (opcional). */
+  wound_photo_path?: string;
+  has_drain?: boolean;
+  /** Caminho da foto do dreno — a RPC descarta se `has_drain` não for true. */
+  drain_photo_path?: string;
+  drain_output_ml?: number;
+  noticed_wound_change?: boolean;
+}
+
 export const vitalSignsService = {
   async listByPatient(patientId: string): Promise<VitalSignRecord[]> {
     const { data, error } = await supabase
@@ -113,6 +144,41 @@ export const vitalSignsService = {
     const status = (data as { clinical_status?: string })?.clinical_status;
     if (!status) throw new Error('Não foi possível enviar sua medição. Tente novamente.');
     return { clinical_status: status };
+  },
+
+  /**
+   * Lançamento pela EQUIPE (autenticada) do período de HOJE que o paciente
+   * esqueceu — chama a RPC staff_insert_vital_record (0062, fotos na 0074)
+   * direto, sem Edge Function: diferente do fluxo por token, o staff já está
+   * autenticado e a própria RPC valida papel + vínculo com a equipe do paciente.
+   */
+  async submitByStaff(input: StaffVitalSubmission): Promise<{ clinical_status: string }> {
+    const { data, error } = await supabase.rpc('staff_insert_vital_record', {
+      p_patient_id: input.patient_id,
+      p_period: input.period,
+      p_temperature: input.temperature ?? null,
+      p_oxygen_saturation: input.oxygen_saturation ?? null,
+      p_systolic: input.systolic_pressure ?? null,
+      p_diastolic: input.diastolic_pressure ?? null,
+      p_heart_rate: input.heart_rate ?? null,
+      p_pain: input.pain_level ?? null,
+      p_dyspnea: input.dyspnea_level ?? null,
+      p_urination_count: input.urination_count ?? null,
+      p_vomiting_count: input.vomiting_count ?? null,
+      p_has_bleeding: input.has_bleeding ?? false,
+      p_steps: input.steps ?? null,
+      p_wound_photo_path: input.wound_photo_path ?? null,
+      p_has_drain: input.has_drain ?? false,
+      p_drain_photo_path: input.drain_photo_path ?? null,
+      p_urinated_normally: input.urinated_normally ?? null,
+      p_had_vomit: input.had_vomit ?? null,
+      p_water_intake_ok: input.water_intake_ok ?? null,
+      p_drain_output_ml: input.drain_output_ml ?? null,
+      p_noticed_wound_change: input.noticed_wound_change ?? null,
+    });
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error('Não foi possível registrar a medição. Tente novamente.');
+    return { clinical_status: data as string };
   },
 };
 

@@ -7,13 +7,16 @@
  */
 import { daysSinceDischarge, evaluateVitalSigns, monitoringDay } from '@vitalsync/shared';
 import { supabase } from '../lib/supabase';
+import { missedMeasurementService } from './missedMeasurementService';
 import { patientService } from './patientService';
 import { storageService } from './storageService';
 import { teamViewService } from './teamViewService';
 import type { AttendanceStatus, VitalSignRecord } from './types';
 import type { PatientDashboard, VitalRecord } from '../lib/dto';
 
-async function toVitalRecord(v: VitalSignRecord): Promise<VitalRecord> {
+async function toVitalRecord(
+  v: VitalSignRecord & { entered_by?: { name: string } | { name: string }[] | null },
+): Promise<VitalRecord> {
   // Prefere os booleanos persistidos (M-01); cai para a inferência antiga só no
   // histórico anterior à migration.
   const urinatedNormally = v.urinated_normally ?? v.urination_count != null;
@@ -81,6 +84,8 @@ async function toVitalRecord(v: VitalSignRecord): Promise<VitalRecord> {
     drainPhotoUrl,
     drainPhotoFileName: v.drain_photo_path ? v.drain_photo_path.split('/').pop() ?? null : null,
     drainPhotoUploadedAt: drainPhotoUrl ? v.created_at : null,
+    source: v.source ?? 'PATIENT',
+    enteredByName: profileName(v.entered_by),
   };
 }
 
@@ -96,12 +101,15 @@ export const patientDashboardService = {
 
     const { data: vitals, error } = await supabase
       .from('vital_sign_records')
-      .select('*')
+      .select('*, entered_by:entered_by_profile_id(name)')
       .eq('patient_id', patientId)
       .order('record_date', { ascending: true });
     if (error) throw new Error(error.message);
 
-    const records = await Promise.all(((vitals ?? []) as VitalSignRecord[]).map(toVitalRecord));
+    type VitalRow = VitalSignRecord & { entered_by: { name: string } | { name: string }[] | null };
+    const records = await Promise.all(((vitals ?? []) as unknown as VitalRow[]).map(toVitalRecord));
+
+    const missedToday = await missedMeasurementService.getForPatientToday(patientId);
 
     // Membros da equipe (para o seletor "Atendido por…").
     let teamMembers: Array<{ id: string; name: string }> = [];
@@ -160,6 +168,7 @@ export const patientDashboardService = {
         daysSinceDischarge: days,
         monitoringDay: discharge ? monitoringDay(discharge) : null,
         medicalRecordSummary: patient.medical_record_summary ?? null,
+        missedToday,
       },
       records,
       teamMembers,
