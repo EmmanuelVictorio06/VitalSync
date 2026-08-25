@@ -9,8 +9,8 @@
  * o botão. Escalar continua sendo um ato explícito e auditável (0077/0078).
  *
  * Papéis: só a enfermagem registra (a RPC recusa os demais). Para quem não é
- * enfermagem a seção é somente-leitura, e ela não renderiza nada quando o
- * paciente não tem recontato nenhum — evita card vazio na tela do médico.
+ * enfermagem a seção é somente-leitura. A seção fica sempre visível na aba de
+ * enfermagem; sem recontato, mostra um estado vazio explicando quando ele surge.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CalendarClock, CheckCircle2, ClockAlert, Loader2, ArrowUpRight } from 'lucide-react';
@@ -122,9 +122,8 @@ export function NurseReassessmentSection({
     }
   }
 
-  // Sem nenhum recontato: não ocupa espaço na tela de quem não vive esse fluxo.
-  if (!loading && rows.length === 0) return null;
-
+  // A seção fica sempre visível na aba de enfermagem: quando não há recontato,
+  // mostra um estado vazio explicando quando ele é criado (ver bloco abaixo).
   const atrasada = pendente ? minutesUntil(pendente.due_at, now) < 0 : false;
 
   return (
@@ -147,6 +146,13 @@ export function NurseReassessmentSection({
         </p>
       ) : (
         <>
+          {!pendente && historico.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              Nenhum recontato de enfermagem no momento. Um recontato de 2h é criado
+              automaticamente quando a enfermagem atende um alerta amarelo deste paciente.
+            </p>
+          )}
+
           {pendente && (
             <div
               className={cn(
