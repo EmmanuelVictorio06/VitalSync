@@ -127,8 +127,13 @@ grant  execute on function public.release_stale_alert_locks() to authenticated;
 do $$
 begin
   create extension if not exists pg_cron;
-exception when insufficient_privilege then
-  raise warning 'pg_cron não pôde ser habilitado automaticamente (permissão insuficiente). Habilite pelo Dashboard → Database → Extensions e rode esta migration novamente.';
+exception
+  when insufficient_privilege then
+    raise warning 'pg_cron não pôde ser habilitado automaticamente (permissão insuficiente). Habilite pelo Dashboard → Database → Extensions e rode esta migration novamente.';
+  when raise_exception then
+    -- Ver 0038: fora do banco de `cron.database_name`, o pg_cron recusa a
+    -- instalação com RAISE próprio (P0001), que escapa de insufficient_privilege.
+    raise warning 'pg_cron não pôde ser habilitado neste banco (%). Os agendamentos desta migration não foram criados.', sqlerrm;
 end;
 $$;
 

@@ -24,8 +24,11 @@
 --   • criação do alerta (staff_insert_vital_record / submit_vital_record)
 --         → escalated_at null → amarelo vai para a enfermagem;
 --   • `alert_escalate_to_red` (0064) → escalated_at preenchido → vai p/ médicos;
---   • auto-escalonamento de 8h (`nurse_queue_sweep`, 0068) → idem, e continua
---     funcionando sem depender de pool nenhum (rede de segurança preservada).
+--   • auto-escalonamento de 8h → idem, e continua funcionando sem depender de
+--     pool nenhum (rede de segurança preservada). A função é
+--     `reoffer_expired_alerts()` (0068); `nurse-queue-sweep` é o nome do JOB do
+--     pg_cron que a chama. Não existe função `nurse_queue_sweep` — procurar por
+--     esse nome não acha nada.
 --
 -- ─── ESCOPO DA ENFERMAGEM: EQUIPE **OU** POOL (aditivo) ─────────────────────
 -- Decisão explícita do usuário. O amarelo vai para os enfermeiros ATIVOS
@@ -284,10 +287,15 @@ begin
   end if;
 
   -- Quem já travou o alerta não pode ser atropelado por outro (mesma garantia
-  -- do lock em 0044/0045); o Admin segue como exceção administrativa.
+  -- do lock em 0044/0045).
+  --
+  -- SEM exceção de Admin aqui, ao contrário das outras RPCs de alerta: a guarda
+  -- `is_nurse(auth.uid())` acima já barrou todo mundo que não é enfermagem, e
+  -- `profiles.role` guarda UM papel só — ninguém é ADMIN e NURSING_PROFESSIONAL
+  -- ao mesmo tempo. Um `and not public.is_admin()` neste ponto seria código
+  -- morto, e código morto numa regra de exclusividade engana quem lê depois.
   if v_alert.in_analysis_by is not null
-     and v_alert.in_analysis_by <> auth.uid()
-     and not public.is_admin() then
+     and v_alert.in_analysis_by <> auth.uid() then
     raise exception 'Este alerta está em análise por outro profissional.';
   end if;
 
