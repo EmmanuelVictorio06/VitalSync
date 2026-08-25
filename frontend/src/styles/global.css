@@ -5,6 +5,11 @@
    ========================================================================= */
 @import "tailwindcss";
 
+/* Modo escuro por CLASSE (não por prefers-color-scheme puro): o usuário
+   escolhe. A classe "dark" é aplicada no <html> pelo ThemeProvider (e, antes
+   dele montar, pelo script inline em index.html — ver comentário lá). */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -44,6 +49,12 @@
 }
 
 :root {
+  /* Sem isto, o navegador não sabe em que esquema a página está renderizando
+     de verdade (só herdaria a preferência do SO) — e os internos nativos de
+     formulário (inclusive a cor padrão de ::placeholder em Chrome recente,
+     que deriva de currentColor/fieldtext) ficam com premissas erradas assim
+     que o app troca de tema manualmente, sem acompanhar o SO. */
+  color-scheme: light;
   --radius: 0.625rem;
   --background: #f8fafc;
   --foreground: #0f172a;
@@ -79,6 +90,66 @@
      bolinha do badge invisível. */
   --info: #0ea5e9;
   --info-foreground: #ffffff;
+}
+
+/* Paleta escura — redefine TODOS os tokens de :root acima, token a token, para
+   nenhum componente ficar com cor clara "furando" o tema escuro. Família das
+   cores clínicas (verde/amarelo/vermelho) preservada; só luminosidade/saturação
+   ajustadas para contraste sobre fundo escuro (ver relato de contraste na
+   entrega da tarefa). Paleta do modo CLARO em :root acima NÃO foi tocada. */
+.dark {
+  color-scheme: dark;
+  --background: #0f172a;
+  --foreground: #f1f5f9;
+  --surface: #1e293b;
+  --card: #1e293b;
+  --card-foreground: #f1f5f9;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --secondary: #334155;
+  --secondary-foreground: #f1f5f9;
+  --muted: #334155;
+  --muted-foreground: #94a3b8;
+  --accent: #16233d;
+  --accent-foreground: #93c5fd;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: #334155;
+  --input: #334155;
+  --ring: #3b82f6;
+  --stable: #22c55e;
+  --stable-foreground: #ffffff;
+  --success: var(--stable);
+  --success-foreground: var(--stable-foreground);
+  /* Amarelo puro (#eab308) "some" sobre fundo escuro — mais claro/saturado
+     aqui (yellow-400) e com texto ESCURO em cima (em vez do branco do modo
+     claro), que é o que já garante contraste de verdade sobre amarelo. */
+  --warning: #facc15;
+  --warning-foreground: #422006;
+  --alert: #ef4444;
+  --alert-foreground: #ffffff;
+  --info: #0ea5e9;
+  --info-foreground: #ffffff;
+}
+
+/* `bg-foreground/NN` é o padrão do projeto para o véu escuro atrás de modais
+   (ModalOverlay) — reaproveita --foreground por conveniência, já que ele é
+   escuro no modo claro. No escuro, --foreground fica CLARO (texto legível
+   sobre fundo escuro) e o mesmo véu clarearia o fundo em vez de escurecê-lo.
+   Corrige só essas classes exatas, só no escuro, para o véu continuar sempre
+   escuro — não mexe em nenhum outro uso de --foreground (texto, hover etc.),
+   nem em nenhum arquivo de componente. */
+.dark .bg-foreground\/10 {
+  background-color: rgb(2 6 23 / 10%);
+}
+.dark .bg-foreground\/50 {
+  background-color: rgb(2 6 23 / 50%);
+}
+.dark .bg-foreground\/70 {
+  background-color: rgb(2 6 23 / 70%);
+}
+.dark .bg-foreground\/80 {
+  background-color: rgb(2 6 23 / 80%);
 }
 
 .vitalsync-home {
@@ -122,6 +193,40 @@
       var(--home-flow-clear) 68%,
       var(--home-flow-soft) 100%
     );
+}
+
+/* Escuro da landing — só redefine os tokens de BASE (background/primary/
+   secondary/surface/...). Não redeclara --home-flow-*, .home-section-* nem
+   .home-footer: todos eles são color-mix() em cima desses tokens de base, e
+   custom property herda pelo DOM — ao mudar a base aqui, os mesmos gradientes
+   (mesma estrutura, exigida pela tarefa) recalculam sozinhos para o escuro. */
+.dark .vitalsync-home {
+  --background: oklch(21% 0.025 265.755);
+  --foreground: oklch(96% 0.005 247);
+  --surface: oklch(26% 0.03 265.755);
+  --card: oklch(26% 0.03 265.755);
+  --card-foreground: oklch(96% 0.005 247);
+  --primary: oklch(62% 0.19 263);
+  --primary-foreground: oklch(99% 0.003 247);
+  --secondary: oklch(32% 0.03 265.755);
+  --secondary-foreground: oklch(96% 0.005 247);
+  --muted: oklch(32% 0.03 265.755);
+  --muted-foreground: oklch(72% 0.03 257);
+  --accent: oklch(28% 0.05 263);
+  --accent-foreground: oklch(80% 0.09 250);
+  --destructive: oklch(68% 0.19 25);
+  --destructive-foreground: oklch(99% 0.003 247);
+  --stable: oklch(72% 0.19 145);
+  --stable-foreground: oklch(99% 0.003 247);
+  --success: oklch(72% 0.19 145);
+  --success-foreground: oklch(99% 0.003 247);
+  --warning: oklch(83% 0.16 86);
+  --warning-foreground: oklch(22% 0.05 80);
+  --alert: oklch(68% 0.19 25);
+  --alert-foreground: oklch(99% 0.003 247);
+  --border: oklch(34% 0.02 255.508);
+  --input: oklch(34% 0.02 255.508);
+  --ring: oklch(62% 0.19 263);
 }
 
 .scroll-reveal {
@@ -292,6 +397,14 @@
   &.invalid {
     border-color: var(--alert);
   }
+
+  /* Cor explícita (token), em vez de depender do padrão do navegador — que,
+     sem `color-scheme` declarado, ficava com premissa de esquema errada ao
+     trocar de tema (ver bloco :root/.dark acima). */
+  &::placeholder {
+    color: var(--muted-foreground);
+    opacity: 1;
+  }
 }
 
 /* Esconde a scrollbar visualmente (mantendo o scroll por toque/trackpad).
@@ -326,6 +439,12 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    /* Troca de tema: só background/color, curto — nunca "transition: all"
+       (isso deixaria a troca lenta/pesada). Coberto pelo bloco de
+       prefers-reduced-motion abaixo, que zera a duração de toda transição. */
+    transition:
+      background-color 150ms ease-out,
+      color 150ms ease-out;
   }
 
   .vitalsync-home section[id] {
@@ -360,6 +479,16 @@
   textarea {
     resize: none;
     overflow-y: auto;
+  }
+
+  /* Mesma regra da classe `.input` acima, mas para qualquer input/textarea que
+     NÃO use essa classe (ex.: os campos do login, o NumericInput da tela de
+     medição do paciente) — nenhum campo deve depender do placeholder padrão
+     do navegador. */
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--muted-foreground);
+    opacity: 1;
   }
 }
 

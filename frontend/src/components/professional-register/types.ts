@@ -17,9 +17,10 @@ export const STEP_LABELS: Record<Step, string> = {
 
 export const STEP_COUNT = 3;
 
-/** Fundo suave (cinza muito claro → azul muito claro), comum a todo o fluxo. */
+/** Fundo suave (background → accent), comum a todo o fluxo. Tokens (não hex
+ *  fixo) para acompanhar o tema escuro. */
 export const GRADIENT_BG: React.CSSProperties = {
-  background: 'linear-gradient(180deg, #f8fafc 0%, #eff6ff 100%)',
+  background: 'linear-gradient(180deg, var(--background) 0%, var(--accent) 100%)',
 };
 
 export interface WizardFormState {

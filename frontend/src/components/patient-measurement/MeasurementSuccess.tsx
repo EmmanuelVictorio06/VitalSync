@@ -6,12 +6,16 @@ import { CheckCircle2 } from 'lucide-react';
 import { GRADIENT_BG } from './types';
 import { ContatoAtivoAviso } from './ContatoAtivoAviso';
 import { SupportFooter } from './SupportFooter';
+import { ThemeToggle } from '../ThemeToggle';
 
 export function MeasurementSuccess({ photoSent }: { photoSent?: boolean }) {
   return (
     <div className="min-h-screen grid place-items-center p-4 sm:p-6" style={GRADIENT_BG}>
       <div className="w-full max-w-[480px]">
         <div className="bg-card border border-border rounded-3xl shadow-xl shadow-primary/5 p-8 text-center animate-entry">
+          <div className="flex justify-end -mt-2 -mr-2 mb-2">
+            <ThemeToggle />
+          </div>
           <div className="size-20 rounded-full bg-stable/10 text-stable flex items-center justify-center mx-auto mb-6">
             <CheckCircle2 className="size-10" />
           </div>

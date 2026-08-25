@@ -136,8 +136,9 @@ export function AvatarCropModal({ imageFile, onCancel, onConfirm, busy }: Avatar
       closeOnBackdrop={!busy}
       closeOnEsc={!busy}
     >
-      {/* Overlay suavemente borrado */}
-      <div className="absolute inset-0 bg-slate-900/10 backdrop-blur-sm" />
+      {/* Overlay suavemente borrado — token (não slate fixo) para continuar
+          escurecendo o fundo nos dois temas, como o drawer do Layout já faz. */}
+      <div className="absolute inset-0 bg-foreground/10 backdrop-blur-sm" />
 
       <div
         className={cn(

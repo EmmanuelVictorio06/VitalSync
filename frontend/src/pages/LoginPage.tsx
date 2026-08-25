@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthContext';
 import { homeRouteFor } from '../lib/permissions';
 import { BackToHomeButton } from '../components/BackToHomeButton';
 import { VitalSyncLogo } from '../components/VitalSyncLogo';
+import { ThemeToggle } from '../components/ThemeToggle';
 import { useToast } from '../components/Toast';
 import { Button, cn } from '../components/ui';
 
@@ -128,6 +129,7 @@ export function LoginPage() {
           onNavigate={navigateHome}
           className="absolute left-6 top-6 md:left-10 md:top-10 lg:left-12 lg:top-12"
         />
+        <ThemeToggle className="absolute right-6 top-6 md:right-10 md:top-10 lg:right-12 lg:top-12" />
 
         <div className="w-full max-w-md mx-auto animate-entry">
           <VitalSyncLogo size="sm" onNavigate={navigateHome} className="mb-8 lg:hidden" />

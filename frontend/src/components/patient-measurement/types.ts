@@ -19,9 +19,10 @@ export const STEP_LABELS: Record<MeasurementStep, string> = {
   4: 'Revisão',
 };
 
-/** Fundo suave (cinza muito claro → azul muito claro), igual ao cadastro de profissional. */
+/** Fundo suave (background → accent), igual ao cadastro de profissional. Tokens
+ *  (não hex fixo) para acompanhar o tema escuro. */
 export const GRADIENT_BG: React.CSSProperties = {
-  background: 'linear-gradient(180deg, #f8fafc 0%, #eff6ff 100%)',
+  background: 'linear-gradient(180deg, var(--background) 0%, var(--accent) 100%)',
 };
 
 /** Dados do paciente exibidos no cabeçalho e no resumo (sem dados sensíveis). */

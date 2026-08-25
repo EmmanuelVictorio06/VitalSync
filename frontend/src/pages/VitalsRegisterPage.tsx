@@ -14,6 +14,7 @@ import {
   SupportFooter,
   type MeasurementPatient,
 } from '../components/patient-measurement';
+import { ThemeToggle } from '../components/ThemeToggle';
 
 type Step = 'choose' | 'form' | 'success';
 
@@ -140,6 +141,12 @@ function CenteredCard({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen grid place-items-center p-4 sm:p-6" style={GRADIENT_BG}>
       <div className="w-full max-w-[480px]">
         <div className="bg-card border border-border rounded-3xl shadow-xl shadow-primary/5 p-8 text-center animate-entry">
+          {/* Linha própria (não absoluto): em telas alguns títulos centralizados
+              já quase preenchem a largura do card — flutuar por cima arriscaria
+              sobrepor texto num celular estreito. */}
+          <div className="flex justify-end -mt-2 -mr-2 mb-2">
+            <ThemeToggle />
+          </div>
           {children}
         </div>
         <SupportFooter />
