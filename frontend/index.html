@@ -3,10 +3,31 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#2563eb" />
+    <meta name="theme-color" content="#0B63EE" />
+    <!-- Aplica o tema (classe "dark" no <html>) ANTES do CSS/bundle carregar, para
+         não haver flash de tela clara ao recarregar em modo escuro. Duplica a regra
+         de lerTemaSalvo/resolverTemaEfetivo de src/lib/theme.ts de propósito: este
+         script tem que rodar sozinho, sem esperar o bundle React. Se a chave
+         'vitalsync:tema' mudar lá, mude aqui também. -->
+    <script>
+      (function () {
+        try {
+          var valor = localStorage.getItem('vitalsync:tema');
+          var tema = valor === 'claro' || valor === 'escuro' || valor === 'sistema' ? valor : 'sistema';
+          var escuro =
+            tema === 'escuro' ||
+            (tema === 'sistema' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (escuro) {
+            document.documentElement.classList.add('dark');
+            var meta = document.querySelector('meta[name="theme-color"]');
+            if (meta) meta.setAttribute('content', '#0f172a');
+          }
+        } catch (e) {}
+      })();
+    </script>
     <meta name="description" content="VitalSync — monitoramento domiciliar pós-operatório" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

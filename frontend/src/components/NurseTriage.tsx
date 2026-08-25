@@ -163,7 +163,7 @@ function EscalateModal({
   return (
     <ModalOverlay
       onClose={onClose}
-      className="z-50 bg-black/40 items-center justify-center p-4"
+      className="z-50 bg-foreground/50 backdrop-blur-sm items-center justify-center p-4"
       ariaLabel="Escalar para o médico"
       // Nunca fechou no clique fora (evita perder a justificativa digitada) —
       // mantido. O ESC continua valendo, e há botão Cancelar.

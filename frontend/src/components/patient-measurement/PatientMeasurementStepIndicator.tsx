@@ -66,7 +66,7 @@ function Dot({
         className={cn(
           compact ? 'size-7' : 'size-8',
           'rounded-full grid place-items-center text-sm font-bold transition-colors',
-          done && 'bg-stable text-white',
+          done && 'bg-stable text-stable-foreground',
           active && 'bg-primary text-primary-foreground ring-4 ring-primary/15',
           !done && !active && 'bg-muted text-muted-foreground',
         )}

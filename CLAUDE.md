@@ -125,5 +125,9 @@ Há **dois `.env.example` distintos, não confunda**: o da **raiz** é do backen
 - `HOMOLOGACAO.md` — modo de teste com médicos; o gate de homologação (`homologation_settings` + status `SKIPPED_TEST_MODE`) vale para **toda** notificação nova.
 - `FLUXO_ENFERMAGEM.md` — triagem de enfermagem ponta a ponta (pool, plantão, oferta, SLA, LGPD).
 - `PONTOS_PENDENTES.md` — decisões clínicas e operacionais **aguardando confirmação humana**. Consulte antes de "corrigir" um limiar ou um default que pareça arbitrário: provavelmente já está registrado ali como pendência consciente.
+- `SETUP_LOCAL.md` — subir o Supabase local do zero (`db reset` já semeia migrations + usuários de Auth + papéis + dados de demo).
+- `RUNBOOK_PILOTO.md` — runbook operacional do piloto; inclui o preflight (`supabase/_scripts/preflight_primeiro_paciente.sql`) a rodar **antes** de cadastrar o primeiro paciente real (checagem nº 1 é o modo homologação ligado).
+- `BACKUP.md` — backup do banco: workflow `.github/workflows/backup.yml` (diário 03:10 America/Sao_Paulo + manual).
+- `AVISO_CONTATO_ATIVO.md` — por que o contato de enfermagem ao paciente segue um roteiro específico (evitar parecer golpe).
 
 `AUDITORIA_VitalSync_*.md`, `PROMPT_*.md` e `council-*` na raiz são notas de trabalho/auditoria, não especificação viva.

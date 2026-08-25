@@ -17,11 +17,15 @@ import { StatusBadge, cn, statusBorder } from './ui';
 
 type IconType = React.ComponentType<{ className?: string }>;
 
+// Tokens (não hex fixo) — mesmo padrão de charts.tsx, para o tooltip e os
+// eixos (XAxis/YAxis stroke) acompanharem o tema em vez de ficar branco/preso
+// no escuro.
 const TOOLTIP_STYLE = {
-  background: '#fff',
-  border: '1px solid #e2e8f0',
+  background: 'var(--card)',
+  border: '1px solid var(--border)',
   borderRadius: 8,
   fontSize: 12,
+  color: 'var(--foreground)',
 };
 
 /* ======================= KPI / metric card ======================= */
@@ -93,11 +97,16 @@ export function WeeklyBarChart({ data, growth }: { data: WeeklyPoint[]; growth: 
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-              <XAxis dataKey="day" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
-              <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [v, 'Registros']} />
-              <Bar dataKey="count" fill="#2563eb" radius={[6, 6, 0, 0]} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+              <XAxis dataKey="day" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
+              <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
+              <Tooltip
+                contentStyle={TOOLTIP_STYLE}
+                labelStyle={{ color: 'var(--foreground)' }}
+                itemStyle={{ color: 'var(--foreground)' }}
+                formatter={(v) => [v, 'Registros']}
+              />
+              <Bar dataKey="count" fill="var(--primary)" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -108,14 +117,16 @@ export function WeeklyBarChart({ data, growth }: { data: WeeklyPoint[]; growth: 
 
 /* ======================= Donut de status clínico (clicável) ======================= */
 
+// Tokens (não hex fixo): acompanham a paleta clínica do tema ativo (o amarelo
+// do escuro, por exemplo, é mais claro de propósito — ver global.css).
 const DONUT_DATA = (
   stable: number,
   attention: number,
   alert: number,
 ) => [
-  { name: 'Estáveis', value: stable, color: '#22c55e', param: 'stable' },
-  { name: 'Atenção', value: attention, color: '#eab308', param: 'attention' },
-  { name: 'Alerta', value: alert, color: '#ef4444', param: 'alert' },
+  { name: 'Estáveis', value: stable, color: 'var(--stable)', param: 'stable' },
+  { name: 'Atenção', value: attention, color: 'var(--warning)', param: 'attention' },
+  { name: 'Alerta', value: alert, color: 'var(--alert)', param: 'alert' },
 ];
 
 export function StatusDonutCard({
@@ -159,10 +170,17 @@ export function StatusDonutCard({
                   onClick={onSegmentClick ? (entry) => onSegmentClick?.(entry.param ?? '') : undefined}
                 >
                   {data.map((d) => (
-                    <Cell key={d.name} fill={d.color} />
+                    // stroke = var(--card): contorno acompanha o fundo do card
+                    // nos dois temas, em vez do branco padrão da recharts (que
+                    // "vazava" como contorno sujo no escuro).
+                    <Cell key={d.name} fill={d.color} stroke="var(--card)" strokeWidth={2} />
                   ))}
                 </Pie>
-                <Tooltip contentStyle={TOOLTIP_STYLE} />
+                <Tooltip
+                  contentStyle={TOOLTIP_STYLE}
+                  labelStyle={{ color: 'var(--foreground)' }}
+                  itemStyle={{ color: 'var(--foreground)' }}
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>

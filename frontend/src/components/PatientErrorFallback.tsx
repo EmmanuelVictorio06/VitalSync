@@ -17,33 +17,33 @@ export function PatientErrorFallback({ onReset }: { onReset: () => void }) {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-5" style={GRADIENT_BG}>
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-lg p-7 max-w-md w-full text-center">
-        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">
+      <div className="bg-card border border-border rounded-2xl shadow-lg p-7 max-w-md w-full text-center">
+        <h1 className="text-2xl font-extrabold tracking-tight text-foreground">
           Tivemos um problema técnico
         </h1>
-        <p className="text-base text-slate-700 mt-3 leading-relaxed">
+        <p className="text-base text-muted-foreground mt-3 leading-relaxed">
           Não foi culpa sua. A página não conseguiu carregar agora, mas seus dados anteriores estão salvos.
         </p>
 
         <button
           onClick={onReset}
-          className="w-full mt-6 px-5 py-4 rounded-xl text-lg font-bold bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+          className="w-full mt-6 px-5 py-4 rounded-xl text-lg font-bold bg-primary text-primary-foreground hover:opacity-90 transition-colors"
         >
           Tentar de novo
         </button>
         <button
           onClick={() => window.location.reload()}
-          className="w-full mt-3 px-5 py-4 rounded-xl text-lg font-bold border-2 border-slate-300 text-slate-800 hover:bg-slate-50 transition-colors"
+          className="w-full mt-3 px-5 py-4 rounded-xl text-lg font-bold border-2 border-border text-foreground hover:bg-muted transition-colors"
         >
           Recarregar a página
         </button>
 
         {temTelefone && (
-          <div className="mt-6 pt-5 border-t border-slate-200">
-            <p className="text-base text-slate-700">Se continuar não funcionando, fale com a gente:</p>
+          <div className="mt-6 pt-5 border-t border-border">
+            <p className="text-base text-muted-foreground">Se continuar não funcionando, fale com a gente:</p>
             <a
               href={`tel:${supportContact.phone.replace(/\D/g, '')}`}
-              className="inline-block mt-2 text-xl font-extrabold text-blue-700 underline underline-offset-4"
+              className="inline-block mt-2 text-xl font-extrabold text-primary underline underline-offset-4"
             >
               {supportContact.phone}
             </a>

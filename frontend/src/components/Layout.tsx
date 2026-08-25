@@ -1,12 +1,14 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { Heart, LogOut, Menu, Stethoscope, User, X } from 'lucide-react';
+import { LogOut, Menu, Stethoscope, User, X } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useRoleMenus, type NavItem } from './RoleBasedSidebar';
 import { HomologationBadge } from './HomologationBadge';
 import { storageService } from '../services/storageService';
 import { initials } from './profile';
 import { ModalOverlay, ProfessionalTag, cn } from './ui';
+import { VitalSyncMark } from './VitalSyncLogo';
+import { ThemeToggle } from './ThemeToggle';
 
 const ROLE_LABEL: Record<string, string> = {
   ADM: 'Administrador Geral',
@@ -110,8 +112,8 @@ function SidebarContent({
   return (
     <>
       <div className="p-5 flex items-center gap-3">
-        <div className="size-9 bg-primary rounded-lg flex items-center justify-center text-primary-foreground shrink-0">
-          <Heart className="size-5" fill="currentColor" />
+        <div className="size-9 rounded-lg flex items-center justify-center shrink-0">
+          <VitalSyncMark width={36} height={36} className="size-9" />
         </div>
         <div className="leading-tight min-w-0">
           <span className="font-extrabold tracking-tight text-lg block truncate">
@@ -214,6 +216,7 @@ export function Layout() {
           <h1 className="text-base md:text-lg font-semibold tracking-tight truncate flex-1 min-w-0">{title}</h1>
 
           <HomologationBadge />
+          <ThemeToggle />
         </header>
 
         <main className="flex-1">

@@ -428,8 +428,8 @@ export function PatientDashboardPage() {
 
       {/* Banner de esquecimento: período de hoje com a janela fechada e sem registro */}
       {(missedToday.morning || missedToday.night) && (
-        <section className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-amber-900">
+        <section className="bg-warning/10 border border-warning/20 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-warning">
             <strong>Atenção:</strong>{' '}
             {missedToday.morning && missedToday.night
               ? 'as medições da manhã e da noite de hoje ainda não foram registradas.'

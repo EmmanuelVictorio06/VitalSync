@@ -13,18 +13,23 @@ import {
 import { ClinicalStatus } from '@vitalsync/shared';
 import { StatusBadge } from './ui';
 
+// Tokens (não hex fixo): SVG aceita var() em stroke/fill, e assim os gráficos
+// acompanham o tema (inclusive o amarelo/vermelho ajustados para o escuro).
+// Isso vale também para os EIXOS (XAxis/YAxis stroke) e para qualquer cor de
+// barra/linha nova — nenhum "#" fixo aqui, nem "só para essa vez".
 const STATUS_COLOR: Record<ClinicalStatus, string> = {
-  GREEN: '#22c55e',
-  YELLOW: '#eab308',
-  RED: '#ef4444',
+  GREEN: 'var(--stable)',
+  YELLOW: 'var(--warning)',
+  RED: 'var(--alert)',
 };
-const PRIMARY = '#2563eb';
+const PRIMARY = 'var(--primary)';
 
 const TOOLTIP_STYLE = {
-  background: '#fff',
-  border: '1px solid #e2e8f0',
+  background: 'var(--card)',
+  border: '1px solid var(--border)',
   borderRadius: 8,
   fontSize: 12,
+  color: 'var(--foreground)',
 };
 
 export interface DayPoint {
@@ -104,10 +109,16 @@ export function VitalLineChart({
     <ChartCard title={title} unit={unit} status={status} pending={pending} icon={icon}>
       <ResponsiveContainer width="100%" height={200}>
         <LineChart data={data} margin={{ top: 8, right: 10, bottom: 0, left: -20 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-          <XAxis dataKey="day" tickFormatter={(d) => `${d}`} fontSize={10} stroke="#94a3b8" tickLine={false} axisLine={false} />
-          <YAxis domain={domain} fontSize={10} stroke="#94a3b8" allowDecimals={false} tickLine={false} axisLine={false} />
-          <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [`${v} ${unit ?? ''}`, title]} labelFormatter={(d) => `Dia ${d}`} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+          <XAxis dataKey="day" tickFormatter={(d) => `${d}`} fontSize={10} stroke="var(--muted-foreground)" tickLine={false} axisLine={false} />
+          <YAxis domain={domain} fontSize={10} stroke="var(--muted-foreground)" allowDecimals={false} tickLine={false} axisLine={false} />
+          <Tooltip
+            contentStyle={TOOLTIP_STYLE}
+            labelStyle={{ color: 'var(--foreground)' }}
+            itemStyle={{ color: 'var(--foreground)' }}
+            formatter={(v) => [`${v} ${unit ?? ''}`, title]}
+            labelFormatter={(d) => `Dia ${d}`}
+          />
           <Line
             type="monotone"
             dataKey="value"
@@ -118,7 +129,7 @@ export function VitalLineChart({
               const { cx, cy, payload, index } = props;
               const key = `dot-${payload?.day ?? index}`;
               if (cx == null || cy == null || payload?.value == null) return <g key={key} />;
-              return <circle key={key} cx={cx} cy={cy} r={4} fill={STATUS_COLOR[payload.status ?? ClinicalStatus.GREEN]} stroke="#fff" strokeWidth={1.5} />;
+              return <circle key={key} cx={cx} cy={cy} r={4} fill={STATUS_COLOR[payload.status ?? ClinicalStatus.GREEN]} stroke="var(--card)" strokeWidth={1.5} />;
             }}
           />
         </LineChart>
@@ -150,18 +161,25 @@ export function BloodPressureChart({
     <ChartCard title="Pressão arterial" unit="mmHg (sistólica/diastólica)" status={status} pending={pending} icon={icon}>
       <ResponsiveContainer width="100%" height={200}>
         <BarChart data={chartData} margin={{ top: 8, right: 10, bottom: 0, left: -20 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-          <XAxis dataKey="day" fontSize={10} stroke="#94a3b8" tickLine={false} axisLine={false} />
-          <YAxis domain={[40, 200]} ticks={[40, 80, 120, 160, 200]} fontSize={10} stroke="#94a3b8" tickLine={false} axisLine={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+          <XAxis dataKey="day" fontSize={10} stroke="var(--muted-foreground)" tickLine={false} axisLine={false} />
+          <YAxis domain={[40, 200]} ticks={[40, 80, 120, 160, 200]} fontSize={10} stroke="var(--muted-foreground)" tickLine={false} axisLine={false} />
           <Tooltip
             contentStyle={TOOLTIP_STYLE}
+            labelStyle={{ color: 'var(--foreground)' }}
+            itemStyle={{ color: 'var(--foreground)' }}
             formatter={(_v, _n, item) => {
               const p = item.payload as { systolic: number | null; diastolic: number };
               return [`${p.systolic ?? '-'} / ${p.diastolic} mmHg`, 'PA'];
             }}
             labelFormatter={(d) => `Dia ${d}`}
           />
-          <Bar dataKey="diastolic" stackId="bp" fill="#93c5fd" radius={[0, 0, 4, 4]} />
+          <Bar
+            dataKey="diastolic"
+            stackId="bp"
+            fill="color-mix(in oklab, var(--primary) 40%, var(--card))"
+            radius={[0, 0, 4, 4]}
+          />
           <Bar dataKey="delta" stackId="bp" radius={[4, 4, 0, 0]}>
             {chartData.map((d, i) => (
               <Cell key={i} fill={STATUS_COLOR[d.status ?? ClinicalStatus.GREEN]} />
@@ -179,10 +197,16 @@ export function StepsBarChart({ data, status, icon }: { data: DayPoint[]; status
     <ChartCard title="Número de passos" unit="passos/dia (noite)" status={status} icon={icon}>
       <ResponsiveContainer width="100%" height={200}>
         <BarChart data={data} margin={{ top: 8, right: 10, bottom: 0, left: -20 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-          <XAxis dataKey="day" fontSize={10} stroke="#94a3b8" tickLine={false} axisLine={false} />
-          <YAxis fontSize={10} stroke="#94a3b8" allowDecimals={false} tickLine={false} axisLine={false} />
-          <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [`${v} passos`, 'Passos']} labelFormatter={(d) => `Dia ${d}`} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+          <XAxis dataKey="day" fontSize={10} stroke="var(--muted-foreground)" tickLine={false} axisLine={false} />
+          <YAxis fontSize={10} stroke="var(--muted-foreground)" allowDecimals={false} tickLine={false} axisLine={false} />
+          <Tooltip
+            contentStyle={TOOLTIP_STYLE}
+            labelStyle={{ color: 'var(--foreground)' }}
+            itemStyle={{ color: 'var(--foreground)' }}
+            formatter={(v) => [`${v} passos`, 'Passos']}
+            labelFormatter={(d) => `Dia ${d}`}
+          />
           <Bar dataKey="value" radius={[6, 6, 0, 0]}>
             {data.map((d, i) => (
               <Cell key={i} fill={STATUS_COLOR[d.status ?? ClinicalStatus.GREEN]} />

@@ -2,8 +2,9 @@
  * Cabeçalho do card de medição — ícone em círculo azul, saudação, dia de
  * monitoramento, data e badge do período. Mantém pouca informação no topo.
  */
-import { HeartPulse, Moon, Sun } from 'lucide-react';
+import { Moon, Sun } from 'lucide-react';
 import { Period } from '@vitalsync/shared';
+import { VitalSyncMark } from '../VitalSyncLogo';
 import { periodLabel } from './types';
 
 export function PatientMeasurementHeader({
@@ -21,8 +22,8 @@ export function PatientMeasurementHeader({
 
   return (
     <div className="text-center">
-      <div className="size-16 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto mb-4">
-        <HeartPulse className="size-8" />
+      <div className="size-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+        <VitalSyncMark width={40} height={40} className="size-10" />
       </div>
       <p className="text-sm text-muted-foreground">Olá, {firstName}</p>
       <h1 className="text-xl font-extrabold tracking-tight">Registro de medição</h1>

@@ -24,6 +24,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { ScrollReveal } from '../components/ScrollReveal';
+import { VitalSyncMark } from '../components/VitalSyncLogo';
+import { ThemeToggle } from '../components/ThemeToggle';
 import { cn } from '../components/ui';
 
 const navItems = [
@@ -178,6 +180,10 @@ function Header() {
           </a>
         </div>
 
+        {/* Sempre visível (sem `hidden`/breakpoint) — no mobile fica ao lado do
+            hambúrguer, sem precisar abrir o menu para achar o botão. */}
+        <ThemeToggle />
+
         <button
           type="button"
           aria-label="Abrir menu"
@@ -223,8 +229,8 @@ function Header() {
 function BrandMark({ href }: { href: string }) {
   return (
     <a href={href} className="flex items-center gap-2 min-w-0">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-        <Heart className="h-5 w-5" fill="currentColor" />
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl">
+        <VitalSyncMark width={36} height={36} className="h-9 w-9" />
       </span>
       <span className="flex flex-col leading-tight min-w-0">
         <span className="truncate text-base font-extrabold tracking-tight">VitalSync</span>
@@ -721,8 +727,8 @@ function PhonePreview() {
         </div>
 
         <div className="mt-4 flex items-center gap-2">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary text-primary-foreground">
-            <Heart className="h-4 w-4" fill="currentColor" />
+          <span className="grid h-8 w-8 place-items-center rounded-lg">
+            <VitalSyncMark width={32} height={32} className="h-8 w-8" />
           </span>
           <div>
             <p className="text-[11px] font-bold">VitalSync</p>
@@ -802,8 +808,8 @@ function Footer() {
         <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:px-6 md:grid-cols-[1.5fr_1fr_1fr] lg:px-8">
         <div>
           <div className="flex items-center gap-2">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary text-primary-foreground">
-              <Heart className="h-5 w-5" fill="currentColor" />
+            <span className="grid h-9 w-9 place-items-center rounded-xl">
+              <VitalSyncMark width={36} height={36} className="h-9 w-9" />
             </span>
             <div>
               <p className="text-base font-extrabold">VitalSync · CURAPATH</p>

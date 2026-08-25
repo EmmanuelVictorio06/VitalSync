@@ -16,6 +16,7 @@ import { useState } from 'react';
 import { Send } from 'lucide-react';
 import { Period } from '@vitalsync/shared';
 import { useToast } from '../Toast';
+import { ThemeToggle } from '../ThemeToggle';
 import { storageService } from '../../services/storageService';
 import { vitalSignsService } from '../../services/vitalSignsService';
 import { PatientMeasurementHeader } from './PatientMeasurementHeader';
@@ -144,6 +145,9 @@ export function PatientMeasurementWizard({ token, cpf, patient, period, onSucces
     <div className="min-h-screen grid place-items-center p-4 sm:p-6" style={GRADIENT_BG}>
       <div className="w-full max-w-[480px]">
         <div className="bg-card border border-border rounded-3xl shadow-xl shadow-primary/5 p-6 sm:p-8 w-full">
+          <div className="flex justify-end -mt-1 -mr-1 mb-1 sm:-mt-2 sm:-mr-2 sm:mb-2">
+            <ThemeToggle />
+          </div>
           <PatientMeasurementHeader name={patient.name} monitoringDay={patient.monitoringDay} period={period} />
 
           <div className="mt-5">
