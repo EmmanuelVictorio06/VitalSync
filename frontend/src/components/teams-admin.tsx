@@ -530,7 +530,7 @@ export function applyTeamFilters(teams: TeamDetail[], f: TeamFiltersState): Team
     if (f.alerts === 'WITH' && !teamHasAlerts(t)) return false;
     if (f.alerts === 'WITHOUT' && teamHasAlerts(t)) return false;
     if (f.surgeon !== 'ALL' && members.find((m) => m.isSurgeon)?.id !== f.surgeon) return false;
-    if (f.associate !== 'ALL' && !members.some((m) => !m.isSurgeon && m.id === f.associate)) return false;
+    if (f.associate !== 'ALL' && !members.some((m) => !m.isSurgeon && !m.isNurse && m.id === f.associate)) return false;
     if (f.patientCount === 'ZERO' && patients.length !== 0) return false;
     if (f.patientCount === '1_5' && (patients.length < 1 || patients.length > 5)) return false;
     if (f.patientCount === '5_PLUS' && patients.length <= 5) return false;

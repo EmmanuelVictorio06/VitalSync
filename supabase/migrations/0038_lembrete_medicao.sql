@@ -200,8 +200,17 @@ $$;
 do $$
 begin
   create extension if not exists pg_cron;
-exception when insufficient_privilege then
-  raise warning 'pg_cron não pôde ser habilitado automaticamente (permissão insuficiente). Habilite a extensão pelo Dashboard → Database → Extensions e rode esta migration novamente para criar os agendamentos.';
+exception
+  when insufficient_privilege then
+    raise warning 'pg_cron não pôde ser habilitado automaticamente (permissão insuficiente). Habilite a extensão pelo Dashboard → Database → Extensions e rode esta migration novamente para criar os agendamentos.';
+  when raise_exception then
+    -- O pg_cron só se instala no banco de `cron.database_name` (por padrão
+    -- `postgres`) e recusa qualquer outro com um RAISE próprio — SQLSTATE
+    -- P0001, que NÃO é insufficient_privilege e por isso escapava da guarda
+    -- acima. Acontece ao aplicar a sequência inteira de migrations num banco
+    -- descartável para conferir que ela sobe do zero. A intenção da guarda
+    -- sempre foi "avisa e segue", então o caso entra aqui.
+    raise warning 'pg_cron não pôde ser habilitado neste banco (%). Os agendamentos desta migration não foram criados; o app funciona, mas as redes de segurança agendadas ficam silenciosas.', sqlerrm;
 end;
 $$;
 

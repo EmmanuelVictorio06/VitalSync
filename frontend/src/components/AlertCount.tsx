@@ -24,7 +24,8 @@ export function AlertCountProvider({ children }: { children: ReactNode }) {
       setCount(0);
       return;
     }
-    alertService.getUnattendedCount().then(setCount).catch(() => {});
+    // O papel importa: o médico não conta o amarelo que está com a enfermagem.
+    alertService.getUnattendedCount({ role: user.role, id: user.id }).then(setCount).catch(() => {});
   }, [user]);
 
   useEffect(() => {

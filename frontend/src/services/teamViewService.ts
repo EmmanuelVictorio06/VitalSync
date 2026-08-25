@@ -36,6 +36,14 @@ export interface TeamMemberView {
   isSurgeon: boolean;
   /** Gerente de Equipe vinculado ao cirurgião responsável (não conta como associado). */
   isManager?: boolean;
+  /**
+   * Profissional de enfermagem vinculado à equipe (`role_in_team =
+   * 'NURSING_PROFESSIONAL'`, liberado na migration 0076). NÃO conta como médico
+   * associado: não ocupa vaga do limite de 10 (`count_associated_doctors` filtra
+   * por ASSOCIATED_DOCTOR) e recebe o alerta AMARELO em vez do vermelho (0077).
+   * Todo filtro de "associados" precisa excluir `isNurse` além de `isSurgeon`.
+   */
+  isNurse?: boolean;
 }
 
 export interface TeamPatientAlert {
@@ -138,7 +146,7 @@ export const teamViewService = {
     const [teamsRes, patientsRes, alertsRes] = await Promise.all([
       supabase
         .from('medical_teams')
-        .select('id, team_number, status, main_surgeon_id, surgeon:profiles!medical_teams_main_surgeon_id_fkey(name), members:team_members(status)')
+        .select('id, team_number, status, main_surgeon_id, surgeon:profiles!medical_teams_main_surgeon_id_fkey(name), members:team_members(status, role_in_team)')
         .order('team_number'),
       patientsQ,
       alertsQ,
@@ -153,11 +161,12 @@ export const teamViewService = {
       status: EntityStatus;
       main_surgeon_id: string | null;
       surgeon: { name: string } | null;
-      members: Array<{ status: string }>;
+      members: Array<{ status: string; role_in_team: RoleInTeam }>;
     }>;
 
     return teams.map((t) => {
-      const activeMembers = t.members.filter((m) => m.status === 'ACTIVE').length;
+      // Só médicos (a enfermagem compartilha a tabela desde a 0076).
+      const activeMembers = t.members.filter((m) => m.status === 'ACTIVE' && m.role_in_team !== 'NURSING_PROFESSIONAL').length;
       return {
         id: t.id,
         number: t.team_number,
@@ -177,7 +186,7 @@ export const teamViewService = {
     const { data: team, error } = await supabase
       .from('medical_teams')
       .select(
-        'id, team_number, status, main_surgeon_id, surgeon:profiles!medical_teams_main_surgeon_id_fkey(id,name,email,whatsapp,professional_tag), members:team_members(id, status, doctor:profiles(id,name,email,whatsapp,professional_tag))',
+        'id, team_number, status, main_surgeon_id, surgeon:profiles!medical_teams_main_surgeon_id_fkey(id,name,email,whatsapp,professional_tag), members:team_members(id, status, role_in_team, doctor:profiles(id,name,email,whatsapp,professional_tag))',
       )
       .eq('id', teamId)
       .single();
@@ -188,7 +197,7 @@ export const teamViewService = {
       status: EntityStatus;
       main_surgeon_id: string | null;
       surgeon: { id: string; name: string; email: string; whatsapp: string | null; professional_tag: string | null } | null;
-      members: Array<{ id: string; status: string; doctor: { id: string; name: string; email: string; whatsapp: string | null; professional_tag: string | null } | null }>;
+      members: Array<{ id: string; status: string; role_in_team: RoleInTeam; doctor: { id: string; name: string; email: string; whatsapp: string | null; professional_tag: string | null } | null }>;
     };
 
     // Fora do modo homologação, oculta pacientes/alertas de teste (is_test) — M-14.
@@ -233,7 +242,16 @@ export const teamViewService = {
       members.push({ membershipId: null, id: t.surgeon.id, name: t.surgeon.name, email: t.surgeon.email, whatsapp: t.surgeon.whatsapp, tag: t.surgeon.professional_tag, isSurgeon: true });
     }
     for (const m of t.members.filter((x) => x.status === 'ACTIVE' && x.doctor)) {
-      members.push({ membershipId: m.id, id: m.doctor!.id, name: m.doctor!.name, email: m.doctor!.email, whatsapp: m.doctor!.whatsapp, tag: m.doctor!.professional_tag, isSurgeon: false });
+      members.push({
+        membershipId: m.id,
+        id: m.doctor!.id,
+        name: m.doctor!.name,
+        email: m.doctor!.email,
+        whatsapp: m.doctor!.whatsapp,
+        tag: m.doctor!.professional_tag,
+        isSurgeon: false,
+        isNurse: m.role_in_team === 'NURSING_PROFESSIONAL',
+      });
     }
 
     const patients: TeamPatientView[] = patientsRaw.map((p) => ({
@@ -247,7 +265,9 @@ export const teamViewService = {
       lastAlert: alertsByPatient.get(p.id) ?? null,
     }));
 
-    const activeMembers = t.members.filter((m) => m.status === 'ACTIVE').length;
+    // `doctors` conta MÉDICOS: a enfermagem vive na mesma tabela desde a 0076,
+    // mas não é corpo clínico médico da equipe.
+    const activeMembers = t.members.filter((m) => m.status === 'ACTIVE' && m.role_in_team !== 'NURSING_PROFESSIONAL').length;
     const summary: TeamSummary = {
       id: t.id,
       number: t.team_number,

@@ -120,35 +120,39 @@ update public.profiles
 -- ############################################################################
 -- 2) TEAM_MEMBERS — o vínculo que DEFINE o escopo.
 --
---    role_in_team = 'ASSOCIATED_DOCTOR' — deliberado, não descuido. A tabela
---    tem DUAS check constraints vivas que só aceitam esse valor:
---      • team_members_assoc_only_chk       (0026 — NOT VALID, mas ativa p/ INSERT)
---      • team_members_role_associate_only  (0030 — VALID)
---    e nenhuma migration posterior as removeu. Inserir 'NURSING_PROFESSIONAL'
---    aqui falharia com violação de check.
+--    role_in_team = 'NURSING_PROFESSIONAL' — o papel correto. Até a 0075 isto
+--    era impossível: duas check constraints (team_members_assoc_only_chk, 0026;
+--    team_members_role_associate_only, 0030) só aceitavam 'ASSOCIATED_DOCTOR',
+--    e o piloto inseria o enfermeiro disfarçado de médico associado. A **0076**
+--    derruba as duas e passa a aceitar ASSOCIATED_DOCTOR + NURSING_PROFESSIONAL
+--    (MAIN_SURGEON segue barrado — M-12), e migra os vínculos antigos.
 --
---    DÍVIDA TÉCNICA ACEITA: relaxar a constraint exigiria migration, e não
---    compra nada — NADA no fluxo de enfermagem lê `role_in_team`:
+--    PRÉ-REQUISITO: a 0076 precisa estar aplicada. Sem ela, este INSERT falha
+--    com violação de check.
+--
+--    POR QUE AGORA IMPORTA (antes não importava): a **0077** roteia o alerta
+--    AMARELO por `role_in_team = 'NURSING_PROFESSIONAL'`. Com o papel errado, o
+--    enfermeiro do piloto seria contado como médico e não receberia o amarelo —
+--    receberia o vermelho, exatamente ao contrário do desenho. O resto do fluxo
+--    continua indiferente ao valor:
 --      • `is_team_member()` (0001) ignora role_in_team  -> escopo de leitura OK
---      • `notify_team_of_alert()` (0018) manda para main_surgeon + TODOS os
---        team_members ATIVOS, sem olhar role_in_team    -> recebe WhatsApp OK
---      • fallback de EQUIPE da medição esquecida (0069/0073, passo 3) idem
 --      • `nurse_may_finalize()` (0067) usa `is_nurse()`, que lê profiles.role
 --                                                        -> bloqueio de vermelho OK
 --    O papel real do profissional mora em `profiles.role`, e é ele que o app
 --    inteiro consulta (menu, guardas, dashboard).
 --
---    Efeitos colaterais conhecidos e aceitáveis: consome 1 das 10 vagas de
---    associado da equipe (trigger `trg_team_doctor_limit`, 0028) e dispara o
---    aviso "você foi adicionado à equipe" (trigger `trg_notify_team_member_added`,
---    0030) — que neste caso é desejável.
+--    Efeitos colaterais: NÃO consome mais vaga das 10 de associado
+--    (`count_associated_doctors`, 0028, filtra por ASSOCIATED_DOCTOR) e segue
+--    disparando o aviso "você foi adicionado à equipe" (trigger
+--    `trg_notify_team_member_added`, estendido à enfermagem na 0076) — que
+--    neste caso é desejável.
 -- ############################################################################
 
 insert into public.team_members (team_id, doctor_id, role_in_team, status)
-values ('<EQUIPE_DO_PILOTO>', '<PROFILE_ID>', 'ASSOCIATED_DOCTOR', 'ACTIVE')
+values ('<EQUIPE_DO_PILOTO>', '<PROFILE_ID>', 'NURSING_PROFESSIONAL', 'ACTIVE')
 on conflict (team_id, doctor_id) do update   -- unique(team_id, doctor_id) da 0001
    set status       = 'ACTIVE',
-       role_in_team = 'ASSOCIATED_DOCTOR';
+       role_in_team = 'NURSING_PROFESSIONAL';
 
 
 -- ############################################################################
@@ -442,10 +446,10 @@ select a.created_at, a.action, a.entity
 --     piloto, contato em vermelho fica sem registro na timeline, a menos que
 --     seja gravado por SQL.
 --
---   • `role_in_team = 'ASSOCIATED_DOCTOR'` para um enfermeiro é dívida técnica
---     aceita (ver bloco 2). Consequência visível: telas que rotulam o membro
---     pelo `role_in_team` mostram "Médico Associado" para ele. O papel correto
---     aparece em `profiles.role` e no perfil do usuário.
+--   • RESOLVIDA na 0076: `role_in_team = 'ASSOCIATED_DOCTOR'` para um enfermeiro
+--     era dívida técnica aceita. A constraint foi relaxada, os vínculos antigos
+--     migrados e o bloco 2 passou a inserir 'NURSING_PROFESSIONAL'. As telas de
+--     equipe agora rotulam o membro corretamente.
 --
 --   • `recipient_is_nurse = false` na medição esquecida do piloto (ver 7.4).
 --     Cosmético; não altera o roteamento nem o envio.

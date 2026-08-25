@@ -93,6 +93,21 @@ Ligar a distribuição automática:
 update public.app_settings set data = data || '{"autoRouting": true}'::jsonb where section = 'nursing';
 ```
 
+### Jobs do `pg_cron` × funções (o nome do job **não** é o nome da função)
+
+Procurar pelo nome do job no código não acha nada — este de-para evita a busca perdida:
+
+| Job (`cron.job.jobname`) | Função que executa | Cadência |
+|---|---|---|
+| `nurse-queue-sweep` | `reoffer_expired_alerts()` (0068) — reoferta, SLA e o **auto-escalonamento de 8h** | `*/2 * * * *` |
+| `release-stale-alert-locks` | `release_stale_alert_locks()` (0063) | `*/5 * * * *` |
+| `check-unanswered-escalations` | `check_unanswered_escalations()` (0064) | `*/5 * * * *` |
+| `nurse-review-sampling` | `sample_yellow_for_review()` (0066) | `10 3 * * *` |
+
+> Não existe função `nurse_queue_sweep`. O auto-escalonamento de 8h vive dentro de
+> `reoffer_expired_alerts()` e **não** passa por `alert_escalate_to_red` — é por isso
+> que a guarda `is_nurse()` da 0077 não derruba a rede de segurança.
+
 ---
 
 ## 5. Regra da madrugada (§4.5)

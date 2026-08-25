@@ -10,6 +10,7 @@ import {
   Activity,
   AlertCircle,
   AlertTriangle,
+  ArrowUpRight,
   Bell,
   CheckCircle2,
   ClipboardCopy,
@@ -31,6 +32,7 @@ import {
 } from 'lucide-react';
 import { Period, formatCivilDate, formatPhoneBR, whatsappLink } from '@vitalsync/shared';
 import type { AttendanceStatus, AttendanceConfirmation, NotificationLog } from '../services/types';
+import { effectiveSeverity, isEscalated } from '../lib/alertSeverity';
 import type { AlertRow, AlertSummary, TeamProfessional } from '../services/alertService';
 import { alertService } from '../services/alertService';
 import { attendanceService, type AttendanceRow } from '../services/attendanceService';
@@ -198,8 +200,10 @@ function QuickCard({ label, value, icon: Icon, color, active, onClick }: {
   );
 }
 
-export function AlertQuickFilters({ summary, active, onSelect }: {
+export function AlertQuickFilters({ summary, active, onSelect, yellowIsNursing = false }: {
   summary: AlertSummary; active: QuickKey | null; onSelect: (key: QuickKey) => void;
+  /** Médico: o card dos amarelos representa a fila da enfermagem, não a dele. */
+  yellowIsNursing?: boolean;
 }) {
   const counts: Record<QuickKey, number> = {
     ALL: summary.total, RED: summary.red, YELLOW: summary.yellow,
@@ -210,7 +214,7 @@ export function AlertQuickFilters({ summary, active, onSelect }: {
       {QUICK_CARDS.map((c) => (
         <QuickCard
           key={c.key}
-          label={c.label}
+          label={c.key === 'YELLOW' && yellowIsNursing ? 'Com a enfermagem' : c.label}
           value={counts[c.key]}
           icon={c.icon}
           color={c.color}
@@ -372,7 +376,9 @@ export function applyAlertFilters(alerts: AlertRow[], f: AlertFiltersState): Ale
     } else if (f.attendance !== 'ALL' && a.attendance_status !== f.attendance) {
       return false;
     }
-    if (f.severity !== 'ALL' && a.status !== f.severity) return false;
+    // Severidade EFETIVA (0077): filtrar por "Vermelhos" tem que trazer também
+    // os amarelos escalados — são eles que foram parar na fila dos médicos.
+    if (f.severity !== 'ALL' && effectiveSeverity(a) !== f.severity) return false;
     if (f.signal !== 'ALL' && (a.type ?? '').toLowerCase() !== f.signal.toLowerCase()) return false;
     if (f.measurement !== 'ALL' && a.vital_record?.period !== f.measurement) return false;
     if (f.team !== 'ALL' && String(a.team?.team_number ?? '') !== f.team) return false;
@@ -392,8 +398,10 @@ export function sortAlerts(alerts: AlertRow[]): AlertRow[] {
     const ra = isResolved(a) ? 1 : 0;
     const rb = isResolved(b) ? 1 : 0;
     if (ra !== rb) return ra - rb;
-    const sa = sev[a.status] ?? 3;
-    const sb = sev[b.status] ?? 3;
+    // Escalado sobe junto com os vermelhos — é exatamente o que o médico
+    // precisa ver primeiro depois que a enfermagem passou o caso.
+    const sa = sev[effectiveSeverity(a)] ?? 3;
+    const sb = sev[effectiveSeverity(b)] ?? 3;
     if (sa !== sb) return sa - sb;
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
@@ -401,34 +409,53 @@ export function sortAlerts(alerts: AlertRow[]): AlertRow[] {
 
 /* ============================ Alert card ============================ */
 
-export function AlertCard({ alert, canAttend, lockedByOther, canRelease, onDetails, onInAnalysis, onAttend, onRelease }: {
+export function AlertCard({ alert, canAttend, lockedByOther, canRelease, withNursing = false, onDetails, onInAnalysis, onAttend, onRelease }: {
   alert: AlertRow;
   canAttend: boolean;
   /** Alerta travado por outro profissional (usuário não é dono do lock, Admin nem Cirurgião Principal). */
   lockedByOther: boolean;
   /** Pode liberar o alerta de volta à fila (dono do lock, Admin ou Cirurgião Principal). */
   canRelease: boolean;
+  /** Amarelo ainda na fila da ENFERMAGEM (0077): visível ao médico, mas não é tarefa dele. */
+  withNursing?: boolean;
   onDetails: () => void;
   onInAnalysis: () => void;
   onAttend: () => void;
   onRelease: () => void;
 }) {
   const resolved = alert.attendance_status === 'ATTENDED' || alert.attendance_status === 'IGNORED';
+  // Cor, peso e ordem seguem a severidade EFETIVA: escalado aparece como vermelho
+  // sem que `status` tenha sido tocado no banco (0064/0077).
+  const sev = effectiveSeverity(alert);
+  const escalado = isEscalated(alert);
   return (
     <li
       className={cn(
         'bg-card border border-border rounded-xl p-4 shadow-sm border-l-4 animate-entry',
-        alert.status === 'RED' ? 'border-l-alert' : 'border-l-warning',
+        sev === 'RED' ? 'border-l-alert' : 'border-l-warning',
         resolved && 'opacity-75',
+        withNursing && 'bg-muted/30',
       )}
     >
       <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
-        <span className={cn('size-2.5 rounded-full mt-1.5 shrink-0', alert.status === 'RED' ? 'bg-alert pulse-alert' : 'bg-warning')} />
+        <span className={cn('size-2.5 rounded-full mt-1.5 shrink-0', sev === 'RED' ? 'bg-alert pulse-alert' : 'bg-warning')} />
         <div className="flex-1 min-w-[12rem]">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className={cn('truncate', alert.status === 'RED' ? 'font-extrabold' : 'font-bold')}>{alert.patient?.name ?? '—'}</p>
-            <StatusBadge status={alert.status} />
-            <AttendanceStatusBadge status={alert.attendance_status} label={attendanceBadgeLabel(alert)} />
+            <p className={cn('truncate', sev === 'RED' ? 'font-extrabold' : 'font-bold')}>{alert.patient?.name ?? '—'}</p>
+            <StatusBadge status={sev} />
+            {escalado && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-alert/10 border border-alert/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-alert">
+                <ArrowUpRight className="size-3" />
+                {alert.auto_escalated ? 'Escalado por tempo' : 'Escalado pela enfermagem'}
+              </span>
+            )}
+            {withNursing ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted text-muted-foreground border border-border px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider">
+                <Stethoscope className="size-3" /> Com a enfermagem
+              </span>
+            ) : (
+              <AttendanceStatusBadge status={alert.attendance_status} label={attendanceBadgeLabel(alert)} />
+            )}
           </div>
           <div className="mt-1.5 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-xs">
             <Meta label="Alteração" value={`${alert.type ?? '—'} · ${triggerValue(alert)}`} />
@@ -442,28 +469,36 @@ export function AlertCard({ alert, canAttend, lockedByOther, canRelease, onDetai
           </div>
         </div>
       </div>
-      <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-border">
+      <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-border">
         <Button size="sm" variant="ghost" onClick={onDetails}><Eye className="size-3.5" /> Ver detalhes</Button>
-        {canAttend && !resolved && (
+        {withNursing ? (
+          <span className="text-[11px] text-muted-foreground">
+            A enfermagem tria este caso e escala para você se precisar de médico.
+          </span>
+        ) : (
           <>
-            {alert.attendance_status === 'PENDING' && (
-              <Button size="sm" variant="secondary" onClick={onInAnalysis}><Activity className="size-3.5" /> Em análise</Button>
+            {canAttend && !resolved && (
+              <>
+                {alert.attendance_status === 'PENDING' && (
+                  <Button size="sm" variant="secondary" onClick={onInAnalysis}><Activity className="size-3.5" /> Em análise</Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="success"
+                  onClick={onAttend}
+                  disabled={lockedByOther}
+                  title={lockedByOther ? LOCK_TOOLTIP : undefined}
+                >
+                  <CheckCircle2 className="size-3.5" /> Atender
+                </Button>
+              </>
             )}
-            <Button
-              size="sm"
-              variant="success"
-              onClick={onAttend}
-              disabled={lockedByOther}
-              title={lockedByOther ? LOCK_TOOLTIP : undefined}
-            >
-              <CheckCircle2 className="size-3.5" /> Atender
-            </Button>
+            {canRelease && !resolved && (
+              <Button size="sm" variant="ghost" onClick={onRelease} title="Devolve o alerta para a fila de pendentes.">
+                <Undo2 className="size-3.5" /> Liberar
+              </Button>
+            )}
           </>
-        )}
-        {canRelease && !resolved && (
-          <Button size="sm" variant="ghost" onClick={onRelease} title="Devolve o alerta para a fila de pendentes.">
-            <Undo2 className="size-3.5" /> Liberar
-          </Button>
         )}
       </div>
     </li>
