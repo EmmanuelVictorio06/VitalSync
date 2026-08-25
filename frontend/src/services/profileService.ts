@@ -97,6 +97,32 @@ export const profileService = {
   },
 
   /**
+   * Profissionais de enfermagem ativos, elegíveis para vincular a uma equipe.
+   * Quem já é membro é excluído no componente (via memberIds), como em
+   * `getEligibleAssociates`. Não há teto de enfermeiros por equipe — o
+   * requisito é "um ou mais" e `count_associated_doctors` (0028) só conta
+   * médicos associados.
+   *
+   * Lê o ESPELHO `profiles_public` (0058), não `profiles`. Motivo: a RLS de
+   * `profiles` (profiles_select) só libera self/admin/colega de equipe —
+   * `manager_scope_includes` alcança os associados das equipes geridas, mas NÃO
+   * um enfermeiro que ainda não está em equipe nenhuma. Pela tabela base, o
+   * Gerente veria uma lista vazia e o requisito 2 seria impossível. O espelho
+   * expõe só campos não sensíveis (sem e-mail/whatsapp/CRM), que é exatamente o
+   * necessário para escolher alguém numa lista.
+   */
+  async getEligibleNurses(): Promise<Array<{ id: string; name: string; professional_tag: string | null }>> {
+    const { data, error } = await supabase
+      .from('profiles_public')
+      .select('id, name, professional_tag')
+      .eq('role', 'NURSING_PROFESSIONAL')
+      .eq('status', 'ACTIVE')
+      .order('name');
+    if (error) throw new Error(error.message);
+    return (data as Array<{ id: string; name: string; professional_tag: string | null }>) ?? [];
+  },
+
+  /**
    * Cria a CONTA de login + perfil de um médico (cirurgião ou associado). Só
    * ADMIN — via Edge Function `admin-create-user` (auth.admin.createUser; valida
    * is_admin no servidor), substituindo a RPC admin_create_doctor que inseria à

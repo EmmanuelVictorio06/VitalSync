@@ -53,7 +53,8 @@ function TeamBlock({ detail, roleLabel, currentUserId, onManageTeam }: { detail:
   const navigate = useNavigate();
   const { summary, members, patients, managers } = detail;
   const teamParam = String(summary.number);
-  const associates = useMemo(() => members.filter((m) => !m.isSurgeon && !m.isManager), [members]);
+  // Enfermagem entra em `members` desde a 0076, mas não é médico associado.
+  const associates = useMemo(() => members.filter((m) => !m.isSurgeon && !m.isManager && !m.isNurse), [members]);
   // Card "Integrantes da Equipe": Responsável → Associados → Gerente (o gerente
   // vem de `managers`, separado de `members` de propósito — não conta como associado).
   const roster = useMemo(() => [...members, ...managers], [members, managers]);
@@ -234,7 +235,7 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: str
 
 function DoctorRow({ m, isMe = false }: { m: TeamMemberView; isMe?: boolean }) {
   const wa = whatsappUrl(m.whatsapp);
-  const roleLabel = m.isManager ? 'Gerente' : m.isSurgeon ? 'Responsável' : 'Associado';
+  const roleLabel = m.isManager ? 'Gerente' : m.isSurgeon ? 'Responsável' : m.isNurse ? 'Enfermagem' : 'Associado';
   return (
     <li className="flex items-center justify-between gap-3 bg-muted/40 rounded-lg px-3 py-2">
       <div className="min-w-0">

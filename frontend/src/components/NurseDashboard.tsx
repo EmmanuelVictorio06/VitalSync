@@ -27,6 +27,7 @@ import type { AlertRow } from '../services/alertService';
 import type { MissingMeasurementPatient } from '../services/patientService';
 import { DashboardMetricCard } from './dashboard';
 import { NurseTriage } from './NurseTriage';
+import { NurseReassessmentQueue } from './NurseReassessmentQueue';
 import { Button, StatusBadge, cn } from './ui';
 
 /** Nº de itens mostrados em cada lista antes do "ver todos". */
@@ -218,6 +219,11 @@ export function NurseDashboard() {
 
       {/* Plantão + fila de triagem (oferta / fila aberta / em análise) */}
       <NurseTriage />
+
+      {/* Recontatos de 2h agendados ao atender um amarelo (0078). Fica logo
+          abaixo da triagem porque é a continuação natural dela: o que eu
+          atendi e preciso conferir depois. */}
+      <NurseReassessmentQueue />
 
       <div className="grid lg:grid-cols-3 gap-6 lg:gap-8">
         <div className="lg:col-span-2 space-y-6 animate-entry [animation-delay:100ms]">

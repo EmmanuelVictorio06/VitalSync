@@ -360,7 +360,7 @@ function TeamCard({
 }) {
   const { summary, members, patients } = detail;
   const surgeon = members.find((m) => m.isSurgeon);
-  const associatesCount = members.filter((m) => !m.isSurgeon).length;
+  const associatesCount = members.filter((m) => !m.isSurgeon && !m.isNurse).length;
   const active = summary.status === 'ACTIVE';
 
   return (
@@ -704,6 +704,18 @@ function TeamEditModal({
   const memberIds = new Set(members.map((m) => m.id));
   const available = eligible.filter((a) => !memberIds.has(a.id));
 
+  // Enfermagem da equipe (0076/0077): mesma tabela `team_members`, papel
+  // `NURSING_PROFESSIONAL`. Não ocupa vaga do limite de médicos associados.
+  const teamNurses = members.filter((m) => m.isNurse);
+  const teamAssociates = members.filter((m) => !m.isSurgeon && !m.isNurse);
+  const [eligibleNurses, setEligibleNurses] = useState<Array<{ id: string; name: string; professional_tag: string | null }>>([]);
+  const [nursePick, setNursePick] = useState('');
+  const [addingNurse, setAddingNurse] = useState(false);
+  useEffect(() => {
+    profileService.getEligibleNurses().then(setEligibleNurses).catch(() => setEligibleNurses([]));
+  }, [summary.id]);
+  const availableNurses = eligibleNurses.filter((n) => !memberIds.has(n.id));
+
   // Gerentes de Equipe vinculados ao Cirurgião Principal desta equipe. Como o
   // vínculo é Gerente↔Cirurgião (não Gerente↔Equipe) e cada cirurgião tem no
   // máximo 1 equipe, vincular ao cirurgião equivale a dar acesso a esta equipe.
@@ -837,13 +849,41 @@ function TeamEditModal({
     }
   }
 
-  async function removeMember(membershipId: string) {
+  async function removeMember(membershipId: string, isNurse = false) {
     try {
       await teamService.removeMember(membershipId);
-      toast.success('Médico associado removido.');
+      toast.success(isNurse ? 'Profissional de enfermagem removido.' : 'Médico associado removido.');
       await onChanged();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Não foi possível remover o médico.');
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : isNurse
+            ? 'Não foi possível remover o profissional de enfermagem.'
+            : 'Não foi possível remover o médico.',
+      );
+    }
+  }
+
+  async function addNurse() {
+    if (!nursePick) {
+      toast.error('Selecione um profissional de enfermagem para vincular.');
+      return;
+    }
+    setAddingNurse(true);
+    try {
+      await teamService.addMember({
+        team_id: summary.id,
+        doctor_id: nursePick,
+        role_in_team: 'NURSING_PROFESSIONAL',
+      });
+      toast.success('Profissional de enfermagem vinculado.');
+      setNursePick('');
+      await onChanged();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Não foi possível vincular o profissional de enfermagem.');
+    } finally {
+      setAddingNurse(false);
     }
   }
 
@@ -967,14 +1007,13 @@ function TeamEditModal({
         {/* Médicos associados */}
         <section className="space-y-2">
           <h3 className="text-sm font-bold">
-            Médicos Associados <span className="text-muted-foreground font-normal">({members.filter((m) => !m.isSurgeon).length})</span>
+            Médicos Associados <span className="text-muted-foreground font-normal">({teamAssociates.length})</span>
           </h3>
           <ul className="space-y-2">
-            {members.filter((m) => !m.isSurgeon).length === 0 && (
+            {teamAssociates.length === 0 && (
               <li className="text-sm text-muted-foreground">Nenhum médico associado vinculado.</li>
             )}
-            {members
-              .filter((m) => !m.isSurgeon)
+            {teamAssociates
               .map((m) => (
                 <li key={m.id} className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3 rounded-lg border border-border p-3">
                   <div className="min-w-0 flex-1">
@@ -1034,6 +1073,64 @@ function TeamEditModal({
                 </div>
               </div>
             )}
+          </div>
+        </section>
+
+        {/* Enfermagem da equipe — recebe os alertas AMARELOS dos pacientes desta
+            equipe (0077). Sem teto: o requisito é "um ou mais". */}
+        <section className="space-y-2">
+          <h3 className="text-sm font-bold">
+            Enfermagem da Equipe <span className="text-muted-foreground font-normal">({teamNurses.length})</span>
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            Profissionais de enfermagem vinculados recebem e triam os alertas de atenção (amarelos) dos pacientes desta
+            equipe, e escalam ao médico os casos que precisam.
+          </p>
+          <ul className="space-y-2">
+            {teamNurses.length === 0 && (
+              <li className="text-sm text-muted-foreground">Nenhum profissional de enfermagem vinculado.</li>
+            )}
+            {teamNurses.map((m) => (
+              <li key={m.id} className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3 rounded-lg border border-border p-3">
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold flex flex-wrap items-center gap-1.5">
+                    <span className="min-w-0 break-words">{m.name}</span>
+                    {m.tag && <ProfessionalTag tag={m.tag} className="shrink-0" />}
+                  </p>
+                  <ContactLine email={m.email} whatsapp={m.whatsapp} className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 mt-0.5" />
+                </div>
+                {m.membershipId && (
+                  <button onClick={() => removeMember(m.membershipId!, true)} className="size-8 rounded-md border border-alert/30 text-alert hover:bg-alert/5 flex items-center justify-center shrink-0 self-end sm:self-auto" aria-label={`Remover ${m.name}`}>
+                    <Trash2 className="size-4" />
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+
+          <div className="rounded-lg border border-dashed border-border p-3 space-y-3">
+            <span className="text-xs font-bold text-muted-foreground inline-flex items-center gap-1.5">
+              <UserPlus className="size-3.5" /> Adicionar profissional de enfermagem
+            </span>
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+              <div className="flex-1 min-w-0">
+                <ProfessionalCombobox
+                  label="Profissional de enfermagem"
+                  value={nursePick}
+                  onChange={setNursePick}
+                  options={availableNurses.map((n) => ({
+                    id: n.id,
+                    name: n.name,
+                    tag: n.professional_tag,
+                    roleLabel: 'Profissional de Enfermagem',
+                  }))}
+                  placeholder={availableNurses.length ? 'Buscar por nome ou tag…' : 'Nenhum profissional de enfermagem disponível'}
+                />
+              </div>
+              <Button onClick={addNurse} loading={addingNurse} disabled={!nursePick}>
+                <Plus className="size-4" /> Vincular
+              </Button>
+            </div>
           </div>
         </section>
 

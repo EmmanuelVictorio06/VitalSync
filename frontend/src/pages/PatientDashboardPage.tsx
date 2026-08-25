@@ -31,6 +31,8 @@ import { PatientEditModal } from '../components/PatientEditModal';
 import { PatientRecordSummaryModal } from '../components/PatientRecordSummaryModal';
 import { PatientFollowupSection } from '../components/PatientFollowupSection';
 import { PatientDay30Section } from '../components/PatientDay30Section';
+import { NurseReassessmentSection, useReassessmentBadge } from '../components/NurseReassessmentSection';
+import { Tabs, type TabDef } from '../components/Tabs';
 import { useToast } from '../components/Toast';
 import {
   BloodPressureChart,
@@ -70,6 +72,14 @@ export function PatientDashboardPage() {
   const [recordViewer, setRecordViewer] = useState<{ mode: 'view' | 'edit' } | null>(null);
 
   const canEditPatient = permissionService.canEditPatient(user);
+
+  /* Aba inicial por PAPEL: o enfermeiro cai direto no fluxo dele (recontato +
+     atendimentos); médico/cirurgião começam na visão clínica. `?tab=` na URL
+     sempre vence — a preferência é um default, não uma trava. */
+  const abaInicial = hasRole(Role.NURSE) ? 'enfermagem' : 'visao-geral';
+
+  /* Selo de pendência da aba: mostra "atrasado" sem obrigar a abrir a aba. */
+  const reassessBadge = useReassessmentBadge(id);
 
   async function load() {
     if (!id) return;
@@ -190,6 +200,125 @@ export function PatientDashboardPage() {
 
   const p = data.patient;
   const worst = (s?: ClinicalStatus) => s ?? ClinicalStatus.GREEN;
+
+  /* ── Conteúdo das abas ──────────────────────────────────────────────────
+     Os componentes são os MESMOS de antes — apenas reagrupados. Nenhuma
+     mudança de dado ou de RPC aqui. */
+
+  const abaVisaoGeral = (
+    <>
+      {/* Período */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Período:</span>
+        <div className="flex gap-1 bg-muted rounded-lg p-1">
+          {PERIOD_OPTIONS.map((o) => (
+            <button
+              key={o.value}
+              onClick={() => setPeriod(o.value)}
+              className={cn(
+                'min-h-10 px-3 rounded-md text-xs font-semibold transition-colors',
+                period === o.value ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {data.records.length === 0 ? (
+        <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground">
+          <p className="font-semibold">Nenhuma medição registrada</p>
+          <p className="text-sm mt-1">O paciente ainda não enviou nenhuma medição.</p>
+        </div>
+      ) : (
+        <>
+          <h3 className="sr-only">Gráficos de sinais vitais</h3>
+          <section className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <VitalLineChart title="Temperatura" unit="°C" icon={Thermometer} data={tempSeries} domain={[35, 42]} status={worstOf(tempSeries)} />
+            <VitalLineChart title="Saturação O₂" unit="%" icon={Wind} data={spo2Series} domain={[91, 100]} status={worstOf(spo2Series)} />
+            <BloodPressureChart icon={Gauge} data={bpSeries} status={worstOfBp(bpSeries)} pending={ALERT_THRESHOLDS.bloodPressureSystolic.PENDING_MEDICAL_VALIDATION} />
+            <VitalLineChart title="Frequência Cardíaca" unit="bpm" icon={HeartPulse} data={hrSeries} domain={[60, 130]} status={worstOf(hrSeries)} />
+            <StepsBarChart icon={Footprints} data={stepsSeries} status={worstOf(stepsSeries)} />
+          </section>
+
+          {/* Indicadores do último registro */}
+          {latest && (
+            <>
+              <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground pt-2 flex items-center gap-2 flex-wrap">
+                <span>
+                  Indicadores do último registro ({latest.monitoringDay}º dia ·{' '}
+                  {latest.period === Period.MORNING ? 'manhã' : 'noite'})
+                </span>
+                {latest.source === 'STAFF' && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] normal-case font-semibold tracking-normal text-blue-800">
+                    <UserCog className="size-3" />
+                    Registrado por {latest.enteredByName ?? 'equipe'} (equipe)
+                  </span>
+                )}
+              </h3>
+              <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                <ScaleIndicatorCard title="Dor" icon={AlertCircle} value={latest.pain} status={worst(latest.statusByVital.PAIN)} />
+                <ScaleIndicatorCard title="Dispneia" icon={Wind} value={latest.dyspnea} status={worst(latest.statusByVital.DYSPNEA)} />
+                <IndicatorCard
+                  title="Diurese"
+                  icon={Droplets}
+                  valueText={latest.urinationCount != null ? `${latest.urinationCount} micções` : latest.urinatedNormally ? 'Normal' : 'Reduzida'}
+                  status={worst(latest.statusByVital.DIURESIS)}
+                />
+                <IndicatorCard
+                  title="Vômitos"
+                  icon={Activity}
+                  valueText={latest.hadVomit ? `Sim${latest.vomitCount ? ` (${latest.vomitCount}x)` : ''}` : 'Não'}
+                  status={worst(latest.statusByVital.VOMIT)}
+                />
+                <IndicatorCard
+                  title="Sangramento"
+                  icon={Droplets}
+                  valueText={latest.hadBleeding ? 'Sim' : 'Não'}
+                  status={worst(latest.statusByVital.BLEEDING)}
+                />
+              </div>
+            </>
+          )}
+
+          {/* Foto da ferida operatória ou do dreno (período selecionado) */}
+          <PatientMeasurementPhotoSection records={periodRecords} />
+        </>
+      )}
+    </>
+  );
+
+  const abaEnfermagem = (
+    <>
+      <h3 className="sr-only">Enfermagem e atendimentos</h3>
+      {id && <NurseReassessmentSection patientId={id} onChanged={load} />}
+      {id && <PatientFollowupSection patientId={id} />}
+    </>
+  );
+
+  const abas: TabDef[] = [
+    { id: 'visao-geral', label: 'Visão geral', shortLabel: 'Visão', content: abaVisaoGeral },
+    {
+      id: 'enfermagem',
+      label: 'Enfermagem e atendimentos',
+      shortLabel: 'Enfermagem',
+      badge: reassessBadge.overdue > 0 ? 'atrasado' : reassessBadge.pending || null,
+      badgeTone: reassessBadge.overdue > 0 ? 'alert' : 'warning',
+      content: abaEnfermagem,
+    },
+    {
+      id: 'dia-30',
+      label: 'Avaliação em 30 dias',
+      shortLabel: '30 dias',
+      content: (
+        <>
+          <h3 className="sr-only">Avaliação em 30 dias</h3>
+          {id && <PatientDay30Section patientId={id} />}
+        </>
+      ),
+    },
+  ];
 
   return (
     <PageContainer size="wide">
@@ -325,90 +454,8 @@ export function PatientDashboardPage() {
         </section>
       )}
 
-      {/* Período */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Período:</span>
-        <div className="flex gap-1 bg-muted rounded-lg p-1">
-          {PERIOD_OPTIONS.map((o) => (
-            <button
-              key={o.value}
-              onClick={() => setPeriod(o.value)}
-              className={cn(
-                'px-3 py-1.5 rounded-md text-xs font-semibold transition-colors',
-                period === o.value ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {data.records.length === 0 ? (
-        <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground">
-          <p className="font-semibold">Nenhuma medição registrada</p>
-          <p className="text-sm mt-1">O paciente ainda não enviou nenhuma medição.</p>
-        </div>
-      ) : (
-        <>
-          <section className="grid md:grid-cols-2 xl:grid-cols-3 gap-4 animate-entry [animation-delay:100ms]">
-            <VitalLineChart title="Temperatura" unit="°C" icon={Thermometer} data={tempSeries} domain={[35, 42]} status={worstOf(tempSeries)} />
-            <VitalLineChart title="Saturação O₂" unit="%" icon={Wind} data={spo2Series} domain={[91, 100]} status={worstOf(spo2Series)} />
-            <BloodPressureChart icon={Gauge} data={bpSeries} status={worstOfBp(bpSeries)} pending={ALERT_THRESHOLDS.bloodPressureSystolic.PENDING_MEDICAL_VALIDATION} />
-            <VitalLineChart title="Frequência Cardíaca" unit="bpm" icon={HeartPulse} data={hrSeries} domain={[60, 130]} status={worstOf(hrSeries)} />
-            <StepsBarChart icon={Footprints} data={stepsSeries} status={worstOf(stepsSeries)} />
-          </section>
-
-          {/* Indicadores do último registro */}
-          {latest && (
-            <>
-              <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground pt-2 flex items-center gap-2 flex-wrap">
-                <span>
-                  Indicadores do último registro ({latest.monitoringDay}º dia ·{' '}
-                  {latest.period === Period.MORNING ? 'manhã' : 'noite'})
-                </span>
-                {latest.source === 'STAFF' && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] normal-case font-semibold tracking-normal text-blue-800">
-                    <UserCog className="size-3" />
-                    Registrado por {latest.enteredByName ?? 'equipe'} (equipe)
-                  </span>
-                )}
-              </h3>
-              <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                <ScaleIndicatorCard title="Dor" icon={AlertCircle} value={latest.pain} status={worst(latest.statusByVital.PAIN)} />
-                <ScaleIndicatorCard title="Dispneia" icon={Wind} value={latest.dyspnea} status={worst(latest.statusByVital.DYSPNEA)} />
-                <IndicatorCard
-                  title="Diurese"
-                  icon={Droplets}
-                  valueText={latest.urinationCount != null ? `${latest.urinationCount} micções` : latest.urinatedNormally ? 'Normal' : 'Reduzida'}
-                  status={worst(latest.statusByVital.DIURESIS)}
-                />
-                <IndicatorCard
-                  title="Vômitos"
-                  icon={Activity}
-                  valueText={latest.hadVomit ? `Sim${latest.vomitCount ? ` (${latest.vomitCount}x)` : ''}` : 'Não'}
-                  status={worst(latest.statusByVital.VOMIT)}
-                />
-                <IndicatorCard
-                  title="Sangramento"
-                  icon={Droplets}
-                  valueText={latest.hadBleeding ? 'Sim' : 'Não'}
-                  status={worst(latest.statusByVital.BLEEDING)}
-                />
-              </div>
-            </>
-          )}
-
-          {/* Foto da ferida operatória ou do dreno (período selecionado) */}
-          <PatientMeasurementPhotoSection records={periodRecords} />
-        </>
-      )}
-
-      {/* Atendimento a cada 48h — independe de haver medições registradas */}
-      {id && <PatientFollowupSection patientId={id} />}
-
-      {/* Avaliação em 30 dias (protocolo 5.8) — desfechos + satisfação */}
-      {id && <PatientDay30Section patientId={id} />}
+      {/* Abas: o urgente (banner acima) fica fora delas, sempre visível. */}
+      <Tabs tabs={abas} defaultTab={abaInicial} ariaLabel="Seções do acompanhamento do paciente" />
 
       {editing && id && (
         <PatientEditModal

@@ -1,48 +1,69 @@
 -- ============================================================================
 -- VitalSync — Seed de demonstração (robusto, DEV LOCAL)
 --
--- O QUE MUDOU nesta versão (para acabar com o retrabalho):
---   0) CRIA os 3 usuários de Auth automaticamente (senha `senha123`), com a
---      linha em auth.identities — sem ela o login falha com 500. Idempotente.
---      Se a sua versão do GoTrue tiver schema diferente, o bloco AVISA e segue;
---      aí você cria os usuários no Studio (Auth → Users, Auto Confirm) e roda
---      o seed de novo — a mensagem da seção 1 te lembra disso.
---   1) Define os papéis corretos DESLIGANDO temporariamente trg_protect_profile
---      (migration 0006), que senão reverte a role pro default ASSOCIATED_DOCTOR
---      (era por isso que o admin logava como médico associado).
+-- COMO APLICAR MUDANÇAS SEM PERDER DADOS (leia isto):
+--   • Para aplicar migrations novas mantendo login + pacientes:  supabase migration up
+--   • `supabase db reset` APAGA o banco inteiro e reconstrói a partir das
+--     migrations + deste seed. Ou seja, tudo o que você criou em runtime
+--     (usuários novos, pacientes novos, senhas trocadas) é DESCARTADO, e só
+--     volta o que está escrito aqui. Use db reset SÓ quando quiser zerar.
+--
+-- O QUE ESTE SEED GARANTE (idempotente; pode rodar quantas vezes quiser):
+--   0) CRIA/GARANTE os 3 usuários de Auth (senha SEMPRE `senha123`), com
+--      auth.identities e com as colunas de token preenchidas ('') — sem isso o
+--      GoTrue local pode devolver 500 no login ("linhas em auth.users inseridas
+--      na mão quebram o login"). Em DO block: se o schema do Auth diferir, AVISA
+--      e segue (você cria no Studio, Auto Confirm, e roda o seed de novo).
+--   1) Define os papéis corretos DESLIGANDO trg_protect_profile (0006), que
+--      senão reverte a role pro default ASSOCIATED_DOCTOR.
 --   5) Pacientes com datas RELATIVAS a hoje (current_date - N), pra caírem
 --      sempre dentro da janela de 10 dias e aparecerem na lista.
 --
 -- ⚠️  O bloco 0 é SÓ PARA DEV LOCAL. Nunca rode em produção.
--- Idempotente: pode rodar quantas vezes quiser.
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
--- 0) Usuários de Auth (DEV LOCAL). Cria admin/cirurgiao/medico com senha
---    `senha123`, confirmados, + auth.identities. Em um DO block com tratamento
---    de erro: se o schema do Auth for diferente, avisa e NÃO aborta o seed.
+-- 0) Usuários de Auth (DEV LOCAL). Cria/garante admin/cirurgiao/medico com
+--    senha `senha123`, confirmados, + auth.identities. Tudo em DO block com
+--    tratamento de erro: se o schema do Auth for diferente, avisa e NÃO aborta.
 -- ----------------------------------------------------------------------------
 do $$
 begin
-  -- usuários
+  -- 0.a) cria os usuários que ainda não existem.
+  --      As colunas de token vão como '' (não NULL) de propósito: várias versões
+  --      do GoTrue estouram 500 ao ler NULL nesses campos.
   insert into auth.users
     (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
-     raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+     raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+     confirmation_token, recovery_token, email_change, email_change_token_new)
   select '00000000-0000-0000-0000-000000000000'::uuid,
          gen_random_uuid(), 'authenticated', 'authenticated', e.email,
          crypt('senha123', gen_salt('bf')), now(),
          '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb,
-         now(), now()
+         now(), now(),
+         '', '', '', ''
   from (values ('admin@vitalsync.com'),
                ('cirurgiao@vitalsync.com'),
                ('medico@vitalsync.com')) as e(email)
   where not exists (select 1 from auth.users u where u.email = e.email);
 
-  -- identities (provider 'email') — sem isto o login dá 500.
+  -- 0.b) GARANTE senha e confirmação dos usuários-semente, mesmo se já existirem
+  --      (login previsível após qualquer reset; conserta senha trocada em runtime).
+  update auth.users u
+     set encrypted_password = crypt('senha123', gen_salt('bf')),
+         email_confirmed_at = coalesce(u.email_confirmed_at, now()),
+         confirmation_token = coalesce(nullif(u.confirmation_token, ''), ''),
+         recovery_token     = coalesce(nullif(u.recovery_token, ''), ''),
+         email_change       = coalesce(nullif(u.email_change, ''), ''),
+         email_change_token_new = coalesce(nullif(u.email_change_token_new, ''), ''),
+         updated_at = now()
+   where u.email in ('admin@vitalsync.com','cirurgiao@vitalsync.com','medico@vitalsync.com');
+
+  -- 0.c) identities (provider 'email') — sem isto o login dá 500.
   insert into auth.identities
     (provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
   select u.id::text, u.id,
-         jsonb_build_object('sub', u.id::text, 'email', u.email),
+         jsonb_build_object('sub', u.id::text, 'email', u.email, 'email_verified', true),
          'email', now(), now(), now()
   from auth.users u
   where u.email in ('admin@vitalsync.com','cirurgiao@vitalsync.com','medico@vitalsync.com')
@@ -50,7 +71,7 @@ begin
       select 1 from auth.identities i where i.user_id = u.id and i.provider = 'email'
     );
 exception when others then
-  raise warning 'Não criei os usuários de Auth automaticamente (%). Crie admin@/cirurgiao@/medico@vitalsync.com no Studio (Auth -> Users -> Add user, Auto Confirm, senha senha123) e rode o seed de novo.', sqlerrm;
+  raise warning 'Não criei/garanti os usuários de Auth automaticamente (%). Crie admin@/cirurgiao@/medico@vitalsync.com no Studio (Auth -> Users -> Add user, Auto Confirm, senha senha123) e rode o seed de novo.', sqlerrm;
 end $$;
 
 -- ----------------------------------------------------------------------------
@@ -84,7 +105,8 @@ on conflict (id) do update set role = excluded.role, name = excluded.name, email
 
 alter table public.profiles enable trigger trg_protect_profile;
 
--- Verificação amigável: aborta com mensagem clara se faltar algum usuário.
+-- Verificação amigável: AVISA (não aborta) se faltar algum usuário, para o reset
+-- não morrer no meio e os pacientes/catálogos ainda entrarem.
 do $$
 declare missing text;
 begin
@@ -92,7 +114,7 @@ begin
   from (select unnest(array['admin@vitalsync.com','cirurgiao@vitalsync.com','medico@vitalsync.com']) e) x
   where not exists (select 1 from public.profiles p where p.email = x.e);
   if missing is not null then
-    raise exception 'Faltam usuários no Auth: %. Crie-os em Authentication -> Users (Auto Confirm, senha senha123) e rode o seed de novo.', missing;
+    raise warning 'Faltam usuários no Auth: %. Crie-os em Authentication -> Users (Auto Confirm, senha senha123) e rode o seed de novo.', missing;
   end if;
 end $$;
 

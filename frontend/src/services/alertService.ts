@@ -8,7 +8,9 @@
  * exigem campos obrigatórios, gravam a timeline e auditam.
  */
 import { supabase } from '../lib/supabase';
+import { effectiveSeverity, isWithNursing } from '../lib/alertSeverity';
 import { homologationService } from './homologationService';
+import type { Role } from '@vitalsync/shared';
 import type {
   AttendanceConfirmation,
   ClinicalAlert,
@@ -145,13 +147,20 @@ export const alertService = {
     return rows;
   },
 
-  /** Resumo agregado para os cards do topo (a partir do conjunto já carregado). */
+  /**
+   * Resumo agregado para os cards do topo (a partir do conjunto já carregado).
+   *
+   * As contagens de severidade usam a severidade EFETIVA (0077): um amarelo
+   * escalado conta como vermelho, igual ao que o roteamento de notificação faz.
+   * Sem isso o card "Vermelhos" divergiria de quem realmente foi avisado.
+   */
   summarize(alerts: AlertRow[]): AlertSummary {
     const activePatients = new Set<string>();
     let pending = 0, inAnalysis = 0, red = 0, yellow = 0, attended = 0, attendedToday = 0;
     for (const a of alerts) {
-      if (a.status === 'RED') red++;
-      if (a.status === 'YELLOW') yellow++;
+      const sev = effectiveSeverity(a);
+      if (sev === 'RED') red++;
+      if (sev === 'YELLOW') yellow++;
       if (a.attendance_status === 'PENDING') pending++;
       if (a.attendance_status === 'IN_ANALYSIS') inAnalysis++;
       if (a.attendance_status === 'ATTENDED') {
@@ -180,18 +189,28 @@ export const alertService = {
    * (RLS). Alimenta o badge da sidebar — diminui à medida que são atendidos.
    * Exclui alertas de pacientes inativos (soft-deleted).
    */
-  async getUnattendedCount(): Promise<number> {
+  async getUnattendedCount(viewer?: { role: Role | null | undefined; id: string | null }): Promise<number> {
     const { data, error } = await supabase
       .from('clinical_alerts')
-      .select('id, patient:patients(status)')
+      .select('id, status, escalated_at, attendance_status, attended, in_analysis_by, patient:patients(status)')
       .in('attendance_status', ['PENDING', 'IN_ANALYSIS']);
     if (error) return 0;
-    return ((data ?? []) as unknown as Array<{ patient: { status: string } | Array<{ status: string }> | null }>)
+    return ((data ?? []) as unknown as Array<{
+      status: string;
+      escalated_at: string | null;
+      attendance_status: string;
+      attended: boolean;
+      in_analysis_by: string | null;
+      patient: { status: string } | Array<{ status: string }> | null;
+    }>)
       .filter((a) => {
         const p = a.patient;
         if (!p) return false;
-        if (Array.isArray(p)) return p[0]?.status === 'ACTIVE';
-        return p.status === 'ACTIVE';
+        const ativo = Array.isArray(p) ? p[0]?.status === 'ACTIVE' : p.status === 'ACTIVE';
+        if (!ativo) return false;
+        // O badge conta a fila DELE: para o médico, o amarelo não escalado é da
+        // enfermagem (0077) e não pode inflar a contagem de pendências.
+        return !isWithNursing(a, viewer?.role, viewer?.id);
       })
       .length;
   },

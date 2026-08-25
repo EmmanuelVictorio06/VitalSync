@@ -32,6 +32,7 @@ import {
 import { useAlertCount } from '../components/AlertCount';
 import { MissingMeasurementsCard } from '../components/MissingMeasurementsCard';
 import { Role } from '@vitalsync/shared';
+import { isWithNursing, ownsDoctorQueue } from '../lib/alertSeverity';
 import { alertService, type AlertRow } from '../services/alertService';
 import { permissionService } from '../services/permissionService';
 
@@ -67,6 +68,16 @@ export function AlertsPage() {
       return !user || a.in_analysis_by !== user.id;
     },
     [isAdmin, user],
+  );
+
+  /**
+   * Amarelo não escalado é evento da ENFERMAGEM (0077): para cirurgião e
+   * associado ele continua VISÍVEL — a equipe é deles — mas sem botão de ação,
+   * porque a triagem é da enfermagem e a escalada é que o traz de volta.
+   */
+  const withNursing = useCallback(
+    (a: AlertRow): boolean => isWithNursing(a, user?.role, user?.id ?? null),
+    [user],
   );
 
   /** "Liberar" (devolver à fila): dono do lock, Admin ou Cirurgião Principal da equipe. */
@@ -185,6 +196,7 @@ export function AlertsPage() {
           summary={summary}
           active={activeQuick}
           onSelect={(key) => setFilters((f) => applyQuickCard(f, key))}
+          yellowIsNursing={ownsDoctorQueue(user?.role)}
         />
       )}
 
@@ -220,6 +232,7 @@ export function AlertsPage() {
               canAttend={canAttend}
               lockedByOther={isLockedByOther(a)}
               canRelease={canReleaseAlert(a)}
+              withNursing={withNursing(a)}
               onDetails={() => setSelected(a)}
               onInAnalysis={() => handleInAnalysis(a)}
               onAttend={() => setAttendTarget(a)}
@@ -234,10 +247,12 @@ export function AlertsPage() {
         <AlertDetailsDrawer
           alert={selected}
           perms={{
-            canAttend,
+            // O drawer é a outra porta para Atender/Ignorar: fechar só o card
+            // deixaria a ação acessível por dentro dos detalhes.
+            canAttend: canAttend && !withNursing(selected),
             canResend,
             lockedByOther: isLockedByOther(selected),
-            canRelease: canReleaseAlert(selected),
+            canRelease: canReleaseAlert(selected) && !withNursing(selected),
           }}
           onClose={() => setSelected(null)}
           onAction={load}
