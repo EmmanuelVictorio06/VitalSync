@@ -6,6 +6,7 @@
  * (a fonte de dados garante isso via service).
  */
 import type { AttendanceStatus } from '../../services/attendanceService';
+import { ALERT_TYPE_OPTIONS } from '../../lib/alertTrigger';
 
 export type QuickKey = 'ALL' | 'TODAY' | 'RED' | 'YELLOW';
 
@@ -36,15 +37,9 @@ export const EMPTY_FILTERS: AttendanceFiltersState = {
   surgeryType: 'ALL',
 };
 
-export const SIGNAL_OPTIONS = [
-  'Temperatura',
-  'Saturação',
-  'Pressão',
-  'Frequência Cardíaca',
-  'Dor',
-  'Dispneia',
-  'Diurese',
-  'Vômitos',
-  'Sangramento',
-  'Passos',
-];
+/**
+ * Opções do filtro "Sinal vital relacionado". O filtro compara com
+ * `related_vital_sign` (= `clinical_alerts.type`), então a lista tem de ser o
+ * vocabulário real da RPC — fonte única em `lib/alertTrigger.ts`.
+ */
+export const SIGNAL_OPTIONS = ALERT_TYPE_OPTIONS;

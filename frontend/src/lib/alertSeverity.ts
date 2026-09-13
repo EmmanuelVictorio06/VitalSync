@@ -66,6 +66,25 @@ export function ownsDoctorQueue(role: Role | null | undefined): boolean {
 }
 
 /**
+ * Espelho no FRONT da guarda `nurse_may_finalize` (0080): a enfermagem não
+ * conclui (atender/ignorar) alerta de severidade EFETIVA vermelha — vermelho no
+ * banco OU já escalado ao médico. Nesses casos o caminho dela é registrar o
+ * contato ativo, que não exige o lock e não fecha o alerta.
+ *
+ * Médicos e Admin não são afetados. A tela não é autoridade — o banco repete a
+ * checagem. Isto existe para não OFERECER um botão que a RPC vai recusar e,
+ * no caso do escalado, para o enfermeiro não travar um alerta que já é fila do
+ * médico (o lock bloquearia a conclusão dele até o TTL ou um "Liberar").
+ */
+export function canFinalizeAlert(
+  a: Pick<SeverityAlertLike, 'status' | 'escalated_at'>,
+  role: Role | null | undefined,
+): boolean {
+  if (role !== Role.NURSE) return true;
+  return effectiveSeverity(a) !== ClinicalStatus.RED;
+}
+
+/**
  * true = este alerta está COM A ENFERMAGEM do ponto de vista deste usuário:
  * visível, porém não acionável por ele.
  *

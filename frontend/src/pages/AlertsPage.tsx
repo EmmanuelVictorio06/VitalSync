@@ -22,6 +22,7 @@ import {
   ErrorState,
   IgnoreAlertModal,
   MarkAttendedModal,
+  RegisterContactModal,
   activeQuickCard,
   applyAlertFilters,
   applyQuickCard,
@@ -32,7 +33,7 @@ import {
 import { useAlertCount } from '../components/AlertCount';
 import { MissingMeasurementsCard } from '../components/MissingMeasurementsCard';
 import { Role } from '@vitalsync/shared';
-import { isWithNursing, ownsDoctorQueue } from '../lib/alertSeverity';
+import { canFinalizeAlert, isWithNursing, ownsDoctorQueue } from '../lib/alertSeverity';
 import { alertService, type AlertRow } from '../services/alertService';
 import { permissionService } from '../services/permissionService';
 
@@ -52,9 +53,10 @@ export function AlertsPage() {
   const [selected, setSelected] = useState<AlertRow | null>(null);
   const [attendTarget, setAttendTarget] = useState<AlertRow | null>(null);
   const [ignoreTarget, setIgnoreTarget] = useState<AlertRow | null>(null);
+  const [contactTarget, setContactTarget] = useState<AlertRow | null>(null);
 
   const isAdmin = permissionService.isAdmin(user);
-  const canAttend = permissionService.canAttendAlerts(user);
+  const isClinical = permissionService.canAttendAlerts(user);
   const canResend = permissionService.canResendAlertNotification(user);
   const isReadOnlyManager = user?.role === Role.MANAGER;
 
@@ -78,6 +80,21 @@ export function AlertsPage() {
   const withNursing = useCallback(
     (a: AlertRow): boolean => isWithNursing(a, user?.role, user?.id ?? null),
     [user],
+  );
+
+  /**
+   * Concluir (Em análise / Atender / Ignorar) x registrar contato. Para o
+   * enfermeiro, alerta vermelho ou já escalado é do médico (0080): oferecer
+   * "Atender" só produziria um erro vindo da RPC, e deixá-lo travar o alerta
+   * bloquearia o médico. Os dois são mutuamente exclusivos.
+   */
+  const canFinalize = useCallback(
+    (a: AlertRow): boolean => isClinical && canFinalizeAlert(a, user?.role),
+    [isClinical, user],
+  );
+  const canRegisterContact = useCallback(
+    (a: AlertRow): boolean => isClinical && !canFinalizeAlert(a, user?.role),
+    [isClinical, user],
   );
 
   /** "Liberar" (devolver à fila): dono do lock, Admin ou Cirurgião Principal da equipe. */
@@ -168,6 +185,13 @@ export function AlertsPage() {
     await load();
   }
 
+  async function handleContactConfirm(alert: AlertRow, note: string) {
+    await alertService.registerContact(alert.id, note);
+    toast.success('Contato registrado na linha do tempo. O alerta segue aberto para o médico.');
+    setContactTarget(null);
+    await load();
+  }
+
   if (!permissionService.canViewAlerts(user)) {
     return (
       <div className="p-8 max-w-2xl mx-auto">
@@ -229,7 +253,8 @@ export function AlertsPage() {
             <AlertCard
               key={a.id}
               alert={a}
-              canAttend={canAttend}
+              canAttend={canFinalize(a)}
+              canRegisterContact={canRegisterContact(a)}
               lockedByOther={isLockedByOther(a)}
               canRelease={canReleaseAlert(a)}
               withNursing={withNursing(a)}
@@ -237,6 +262,7 @@ export function AlertsPage() {
               onInAnalysis={() => handleInAnalysis(a)}
               onAttend={() => setAttendTarget(a)}
               onRelease={() => handleRelease(a)}
+              onRegisterContact={() => setContactTarget(a)}
             />
           ))}
         </ul>
@@ -249,7 +275,8 @@ export function AlertsPage() {
           perms={{
             // O drawer é a outra porta para Atender/Ignorar: fechar só o card
             // deixaria a ação acessível por dentro dos detalhes.
-            canAttend: canAttend && !withNursing(selected),
+            canAttend: canFinalize(selected) && !withNursing(selected),
+            canRegisterContact: canRegisterContact(selected) && !withNursing(selected),
             canResend,
             lockedByOther: isLockedByOther(selected),
             canRelease: canReleaseAlert(selected) && !withNursing(selected),
@@ -259,6 +286,7 @@ export function AlertsPage() {
           onAttend={() => setAttendTarget(selected)}
           onIgnore={() => setIgnoreTarget(selected)}
           onRelease={() => handleRelease(selected)}
+          onRegisterContact={() => setContactTarget(selected)}
         />
       )}
 
@@ -274,6 +302,13 @@ export function AlertsPage() {
         <IgnoreAlertModal
           onCancel={() => setIgnoreTarget(null)}
           onConfirm={(reason) => handleIgnoreConfirm(ignoreTarget, reason)}
+        />
+      )}
+
+      {contactTarget && (
+        <RegisterContactModal
+          onCancel={() => setContactTarget(null)}
+          onConfirm={(note) => handleContactConfirm(contactTarget, note)}
         />
       )}
 

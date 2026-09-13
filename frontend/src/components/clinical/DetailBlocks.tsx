@@ -9,6 +9,7 @@
 import type { ComponentType, ReactNode } from 'react';
 import { calculateAge, Period } from '@vitalsync/shared';
 import type { VitalSignRecord } from '../../services/types';
+import { DYSPNEA_LABEL } from '../../lib/alertTrigger';
 import { fmtDate, teamLabel } from '../attendances/utils';
 
 /* ---------------- DSection ---------------- */
@@ -93,13 +94,8 @@ export function PatientInfoGrid({
  * Detalhes do Atendimento); sem ele, as fotos só são exibidas.
  */
 
-/** Mapeia dyspnea_level (0-2) p/ label legível, igual ao ReviewStep do
- *  paciente (só trocamos "Sem dispneia" por "Ausente" p/ maior clareza). */
-const DYSPNEA_LABEL: Record<number, string> = {
-  0: 'Ausente',
-  1: 'Leve',
-  2: 'Moderada/Intensa',
-};
+/* dyspnea_level (0-2) → label legível: `DYSPNEA_LABEL` em `lib/alertTrigger.ts`
+   (o mesmo de-para é usado no "Valor que disparou"). */
 
 /** Vômitos: usa `had_vomit` como primário (boolean); quando ausente, fallback
  *  p/ `vomiting_count > 0`. Se true, mostra "Sim (N episódios)" ou só "Sim". */
@@ -143,6 +139,10 @@ export function MeasurementGrid({
           ['Vômitos', fmtVomiting(r)],
           ['Sangramento', r?.has_bleeding ? 'Sim' : 'Não'],
           ['Passos', r?.steps != null ? String(r.steps) : '—'],
+          // Ingestão hídrica e mudança na cicatriz são coletadas do paciente
+          // (0051) e faltavam aqui — ingestão hídrica "Não" é regra de VERMELHO.
+          ['Ingestão hídrica', r?.water_intake_ok == null ? '—' : r.water_intake_ok ? 'Adequada' : 'Abaixo do recomendado'],
+          ['Notou algo na cicatriz', r?.noticed_wound_change == null ? '—' : r.noticed_wound_change ? 'Sim' : 'Não'],
         ]}
       />
       {r && (
@@ -151,6 +151,13 @@ export function MeasurementGrid({
           <span className={r.has_drain ? 'text-primary font-semibold' : 'text-muted-foreground'}>
             {r.has_drain ? 'Sim' : 'Não'}
           </span>
+          {r.has_drain && r.drain_output_ml != null && (
+            <>
+              {' · '}
+              <span className="font-bold">Débito:</span>{' '}
+              <span className="text-primary font-semibold">{r.drain_output_ml} ml</span>
+            </>
+          )}
         </p>
       )}
       {(photoUrl || drainPhotoUrl) && (
