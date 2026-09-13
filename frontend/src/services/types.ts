@@ -175,8 +175,14 @@ export interface VitalSignRecord {
   had_vomit: boolean | null;
   has_bleeding: boolean | null;
   steps: number | null;
+  /** Ingestão hídrica adequada (protocolo 5.7.3) — coluna existe desde a 0051. */
+  water_intake_ok: boolean | null;
+  /** "Notou algo na cicatriz?" respondido pelo paciente — coluna da 0051. */
+  noticed_wound_change: boolean | null;
   wound_photo_path: string | null;
   has_drain: boolean | null;
+  /** Débito do dreno em ml, quando há dreno — coluna da 0051. */
+  drain_output_ml: number | null;
   drain_photo_path: string | null;
   clinical_status: ClinicalStatus;
   created_at: string;

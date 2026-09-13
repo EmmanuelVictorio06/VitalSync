@@ -33,6 +33,7 @@ import {
 import { Period, formatCivilDate, formatPhoneBR, whatsappLink } from '@vitalsync/shared';
 import type { AttendanceStatus, AttendanceConfirmation, NotificationLog } from '../services/types';
 import { effectiveSeverity, isEscalated } from '../lib/alertSeverity';
+import { ALERT_TYPE_OPTIONS, clinicalRuleFor, triggerValueFor } from '../lib/alertTrigger';
 import type { AlertRow, AlertSummary, TeamProfessional } from '../services/alertService';
 import { alertService } from '../services/alertService';
 import { attendanceService, type AttendanceRow } from '../services/attendanceService';
@@ -81,26 +82,12 @@ const fmtDateTime = (v: string | null | undefined) => (v ? new Date(v).toLocaleS
 
 /** Valor que disparou o alerta (a partir do registro de sinais). */
 function triggerValue(a: AlertRow): string {
-  const r = a.vital_record;
-  if (!r) return '—';
-  switch (a.type) {
-    case 'Temperatura': return r.temperature != null ? `${r.temperature}°C` : '—';
-    case 'Saturação': return r.oxygen_saturation != null ? `${r.oxygen_saturation}%` : '—';
-    case 'Dor': return r.pain_level != null ? `${r.pain_level}/10` : '—';
-    case 'Sangramento': return r.has_bleeding ? 'Presente' : '—';
-    default: return '—';
-  }
+  return triggerValueFor(a.type, a.vital_record);
 }
 
 /** Regra clínica aplicada (texto curto e didático). */
 function clinicalRule(a: AlertRow): string {
-  switch (a.type) {
-    case 'Temperatura': return a.status === 'RED' ? 'Temperatura ≥ 38,5 °C' : 'Temperatura ≥ 37,8 °C';
-    case 'Saturação': return a.status === 'RED' ? 'Saturação < 92%' : 'Saturação < 94%';
-    case 'Dor': return a.status === 'RED' ? 'Dor ≥ 8/10' : 'Dor ≥ 5/10';
-    case 'Sangramento': return 'Sangramento relatado';
-    default: return 'Conjunto de sinais limítrofes';
-  }
+  return clinicalRuleFor(a.type, a.status === 'RED');
 }
 
 const teamLabel = (n: number | null | undefined) => (n != null ? `Equipe ${String(n).padStart(2, '0')}` : '—');
@@ -120,6 +107,12 @@ export function alertSummaryText(a: AlertRow): string {
   const first = (a.patient?.name ?? '—').split(' ')[0];
   return [
     `VitalSync — Alerta ${a.status === 'RED' ? 'VERMELHO' : 'AMARELO'}`,
+    // A classificação clínica não muda ao escalar (0064), mas quem recebe este
+    // resumo precisa saber que o caso já foi passado ao médico — sem esta linha
+    // um amarelo escalado chega do outro lado como um amarelo qualquer.
+    isEscalated(a)
+      ? `ESCALADO PARA O MÉDICO${a.auto_escalated ? ' (automático por tempo)' : ''} — tratar como vermelho`
+      : null,
     `Paciente: ${first}`,
     `Alteração: ${a.type ?? '—'} (${triggerValue(a)})`,
     a.vital_record?.period ? `Período: ${a.vital_record.period === Period.MORNING ? 'Manhã' : 'Noite'}` : null,
@@ -245,7 +238,8 @@ export const EMPTY_FILTERS: AlertFiltersState = {
   search: '', severity: 'ALL', attendance: 'ACTIVE', period: 'ALL', signal: 'ALL', measurement: 'ALL', team: 'ALL',
 };
 
-const SIGNAL_OPTIONS = ['Temperatura', 'Saturação', 'Pressão', 'Frequência Cardíaca', 'Dor', 'Dispneia', 'Diurese', 'Vômitos', 'Sangramento', 'Passos'];
+/** Opções do filtro "Alteração" — vêm do vocabulário real de `type` (0075). */
+const SIGNAL_OPTIONS = ALERT_TYPE_OPTIONS;
 
 function Sel({ label, value, onChange, options }: {
   label: string; value: string; onChange: (v: string) => void; options: Array<{ value: string; label: string }>;
@@ -409,9 +403,15 @@ export function sortAlerts(alerts: AlertRow[]): AlertRow[] {
 
 /* ============================ Alert card ============================ */
 
-export function AlertCard({ alert, canAttend, lockedByOther, canRelease, withNursing = false, onDetails, onInAnalysis, onAttend, onRelease }: {
+export function AlertCard({ alert, canAttend, canRegisterContact = false, lockedByOther, canRelease, withNursing = false, onDetails, onInAnalysis, onAttend, onRelease, onRegisterContact }: {
   alert: AlertRow;
   canAttend: boolean;
+  /**
+   * Enfermeiro diante de um alerta de severidade EFETIVA vermelha (vermelho ou
+   * escalado): o caminho dele é registrar o contato ativo — concluir é do
+   * médico (0080). Mutuamente exclusivo com `canAttend`.
+   */
+  canRegisterContact?: boolean;
   /** Alerta travado por outro profissional (usuário não é dono do lock, Admin nem Cirurgião Principal). */
   lockedByOther: boolean;
   /** Pode liberar o alerta de volta à fila (dono do lock, Admin ou Cirurgião Principal). */
@@ -422,6 +422,7 @@ export function AlertCard({ alert, canAttend, lockedByOther, canRelease, withNur
   onInAnalysis: () => void;
   onAttend: () => void;
   onRelease: () => void;
+  onRegisterContact?: () => void;
 }) {
   const resolved = alert.attendance_status === 'ATTENDED' || alert.attendance_status === 'IGNORED';
   // Cor, peso e ordem seguem a severidade EFETIVA: escalado aparece como vermelho
@@ -493,6 +494,18 @@ export function AlertCard({ alert, canAttend, lockedByOther, canRelease, withNur
                 </Button>
               </>
             )}
+            {canRegisterContact && !resolved && (
+              <>
+                <Button size="sm" variant="secondary" onClick={onRegisterContact}>
+                  <MessageCircle className="size-3.5" /> Registrar contato
+                </Button>
+                <span className="text-[11px] text-muted-foreground">
+                  {isEscalated(alert)
+                    ? 'Já escalado — a conclusão é do médico da equipe.'
+                    : 'Alerta vermelho — a conclusão é do médico da equipe.'}
+                </span>
+              </>
+            )}
             {canRelease && !resolved && (
               <Button size="sm" variant="ghost" onClick={onRelease} title="Devolve o alerta para a fila de pendentes.">
                 <Undo2 className="size-3.5" /> Liberar
@@ -520,14 +533,22 @@ const SIGNAL_ICON: Record<string, typeof Bell> = {
   Temperatura: Thermometer, Saturação: Wind, Dor: AlertCircle, Sangramento: Droplets,
 };
 
-export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, onIgnore, onRelease }: {
+export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, onIgnore, onRelease, onRegisterContact }: {
   alert: AlertRow;
-  perms: { canAttend: boolean; canResend: boolean; lockedByOther: boolean; canRelease: boolean };
+  perms: {
+    canAttend: boolean;
+    /** Enfermeiro em alerta vermelho/escalado: registra contato, não conclui (0080). */
+    canRegisterContact?: boolean;
+    canResend: boolean;
+    lockedByOther: boolean;
+    canRelease: boolean;
+  };
   onClose: () => void;
   onAction: () => void; // recarrega a lista após uma ação
   onAttend: () => void;
   onIgnore: () => void;
   onRelease: () => void;
+  onRegisterContact?: () => void;
 }) {
   const [timeline, setTimeline] = useState<AttendanceConfirmation[] | null>(null);
   const [logs, setLogs] = useState<NotificationLog[] | null>(null);
@@ -759,6 +780,11 @@ export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, 
           {perms.canRelease && !resolved && (
             <Button size="sm" variant="ghost" onClick={onRelease} title="Devolve o alerta para a fila de pendentes.">
               <Undo2 className="size-3.5" /> Liberar
+            </Button>
+          )}
+          {perms.canRegisterContact && !resolved && (
+            <Button size="sm" variant="secondary" onClick={onRegisterContact}>
+              <MessageCircle className="size-3.5" /> Registrar contato
             </Button>
           )}
           {perms.canAttend && !resolved && (
@@ -1025,6 +1051,57 @@ export function IgnoreAlertModal({ onConfirm, onCancel }: {
       <ModalFooter>
         <Button variant="ghost" onClick={onCancel}>Cancelar</Button>
         <Button variant="danger" onClick={confirm} loading={busy}>Ignorar alerta</Button>
+      </ModalFooter>
+    </ModalShell>
+  );
+}
+
+/**
+ * Contato ativo com o paciente SEM finalizar o alerta — o caminho do enfermeiro
+ * num alerta vermelho ou já escalado, que ele não pode concluir (0080).
+ *
+ * Grava só na timeline (`attendance_confirmations` com status CONTACT): não
+ * entra em "Meus Atendimentos" e não muda o estado do alerta. É o histórico que
+ * o médico lê antes de assumir, para o paciente não ter que repetir tudo.
+ */
+export function RegisterContactModal({ onConfirm, onCancel }: {
+  onConfirm: (note: string) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function confirm() {
+    if (!note.trim()) { setError('Descreva o que foi conversado com o paciente.'); return; }
+    setBusy(true);
+    setError(null);
+    try {
+      await onConfirm(note.trim());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao registrar o contato.');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <ModalShell title="Registrar contato com o paciente" onCancel={onCancel}>
+      <p className="text-sm text-muted-foreground">
+        O alerta continua aberto para o médico da equipe. O que você escrever aqui entra na linha do tempo e é o que ele lê antes de assumir o caso.
+      </p>
+      <div className="mt-4">
+        <Field label="O que foi conversado" required error={error ?? undefined}>
+          <textarea
+            className="input min-h-24 resize-none"
+            placeholder="Ex.: paciente contatado por telefone, refere melhora da dor após medicação; orientado a repetir a aferição em 1h."
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+        </Field>
+      </div>
+      <ModalFooter>
+        <Button variant="ghost" onClick={onCancel}>Cancelar</Button>
+        <Button onClick={confirm} loading={busy}>Registrar contato</Button>
       </ModalFooter>
     </ModalShell>
   );

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Role } from '@vitalsync/shared';
 import {
+  canFinalizeAlert,
   effectiveSeverity,
   isEscalated,
   isResolvedAlert,
@@ -129,5 +130,38 @@ describe('isWithNursing', () => {
 
   it('sem viewerId, o amarelo pendente segue sendo da enfermagem', () => {
     expect(isWithNursing(alerta(), Role.SURGEON, null)).toBe(true);
+  });
+});
+
+describe('canFinalizeAlert', () => {
+  const ESCALADO = alerta({ status: 'YELLOW', escalated_at: '2026-09-13T09:00:00Z' });
+  const VERMELHO = alerta({ status: 'RED' });
+  const AMARELO = alerta();
+
+  it('enfermeiro conclui amarelo não escalado', () => {
+    expect(canFinalizeAlert(AMARELO, Role.NURSE)).toBe(true);
+  });
+
+  it('enfermeiro NÃO conclui vermelho', () => {
+    expect(canFinalizeAlert(VERMELHO, Role.NURSE)).toBe(false);
+  });
+
+  it('enfermeiro NÃO conclui amarelo já escalado ao médico', () => {
+    // O furo que a 0080 fecha: status continua YELLOW, mas a severidade
+    // efetiva é RED e o caso é fila do médico.
+    expect(ESCALADO.status).toBe('YELLOW');
+    expect(canFinalizeAlert(ESCALADO, Role.NURSE)).toBe(false);
+  });
+
+  it('médicos e admin não são afetados', () => {
+    for (const papel of [Role.SURGEON, Role.ASSOCIATE, Role.ADM, Role.MANAGER]) {
+      expect(canFinalizeAlert(ESCALADO, papel), `papel afetado: ${papel}`).toBe(true);
+      expect(canFinalizeAlert(VERMELHO, papel), `papel afetado: ${papel}`).toBe(true);
+    }
+  });
+
+  it('sem papel definido não restringe (a RPC é a autoridade)', () => {
+    expect(canFinalizeAlert(VERMELHO, null)).toBe(true);
+    expect(canFinalizeAlert(VERMELHO, undefined)).toBe(true);
   });
 });

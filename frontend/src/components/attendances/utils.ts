@@ -6,46 +6,25 @@
  */
 import { formatCivilDate } from '@vitalsync/shared';
 import type { AttendanceRow } from '../../services/attendanceService';
+import { clinicalRuleFor, triggerValueFor } from '../../lib/alertTrigger';
 import type { AttendanceFiltersState, QuickKey } from './types';
 import { EMPTY_FILTERS } from './types';
 
 export const observationPreview = (row: AttendanceRow): string =>
   row.observation?.trim() ? row.observation.trim() : 'Sem observação registrada.';
 
-/** Valor que disparou o alerta relacionado (a partir do registro de sinais). */
+/**
+ * Valor que disparou o alerta relacionado e a regra aplicada. A lógica mora em
+ * `lib/alertTrigger.ts` (fonte única, compartilhada com o Detalhes do Alerta);
+ * aqui ficam só os adaptadores de `AttendanceRow`.
+ */
 export function triggerValue(row: AttendanceRow): string {
-  const r = row.vital_record;
-  const type = row.related_vital_sign;
-  if (!r || !type) return '—';
-  switch (type) {
-    case 'Temperatura':
-      return r.temperature != null ? `${r.temperature}°C` : '—';
-    case 'Saturação':
-      return r.oxygen_saturation != null ? `${r.oxygen_saturation}%` : '—';
-    case 'Dor':
-      return r.pain_level != null ? `${r.pain_level}/10` : '—';
-    case 'Sangramento':
-      return r.has_bleeding ? 'Presente' : '—';
-    default:
-      return '—';
-  }
+  return triggerValueFor(row.related_vital_sign, row.vital_record);
 }
 
 /** Faixa de referência / regra clínica aplicada (texto curto e didático). */
 export function clinicalRule(row: AttendanceRow): string {
-  const red = row.alert?.status === 'RED';
-  switch (row.related_vital_sign) {
-    case 'Temperatura':
-      return red ? 'Temperatura ≥ 38,5 °C' : 'Temperatura ≥ 37,8 °C';
-    case 'Saturação':
-      return red ? 'Saturação < 92%' : 'Saturação < 94%';
-    case 'Dor':
-      return red ? 'Dor ≥ 8/10' : 'Dor ≥ 5/10';
-    case 'Sangramento':
-      return 'Sangramento relatado';
-    default:
-      return '—';
-  }
+  return clinicalRuleFor(row.related_vital_sign, row.alert?.status === 'RED');
 }
 
 export const fmtDate = (v: string | null | undefined) => (v ? formatCivilDate(v) : '—');
