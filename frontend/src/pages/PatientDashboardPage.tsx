@@ -257,7 +257,10 @@ export function PatientDashboardPage() {
                   </span>
                 )}
               </h3>
-              <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              {/* Trilha-base `minmax(0,1fr)`: no mobile o grid tem uma coluna
+                  IMPLÍCITA `auto` (min-content), e os cards de indicador
+                  truncam o título ao lado de um ícone `shrink-0`. */}
+              <div className="grid grid-cols-[minmax(0,1fr)] sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 <ScaleIndicatorCard title="Dor" icon={AlertCircle} value={latest.pain} status={worst(latest.statusByVital.PAIN)} />
                 <ScaleIndicatorCard title="Dispneia" icon={Wind} value={latest.dyspnea} status={worst(latest.statusByVital.DYSPNEA)} />
                 <IndicatorCard

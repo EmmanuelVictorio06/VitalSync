@@ -198,8 +198,12 @@ export function DashboardPage() {
       </section>
 
       {/* Layout principal: coluna esquerda (gráfico + lista crítica) | coluna direita (status + alertas) */}
-      <div className="grid lg:grid-cols-3 gap-6 lg:gap-8">
-        <div className="lg:col-span-2 space-y-6 animate-entry [animation-delay:100ms]">
+      {/* Trilha-base `minmax(0,1fr)`: abaixo de `lg` o grid tem uma coluna
+          IMPLÍCITA `auto`, dimensionada por min-content, e a coluna principal
+          contém cards que truncam texto (AlertListCard). Sem isso a coluna
+          estoura o container. `min-w-0` nos itens é a garantia no próprio item. */}
+      <div className="grid grid-cols-[minmax(0,1fr)] lg:grid-cols-3 gap-6 lg:gap-8">
+        <div className="lg:col-span-2 min-w-0 space-y-6 animate-entry [animation-delay:100ms]">
           <WeeklyBarChart data={data.weekly} growth={data.weeklyGrowth} />
 
           {/* Lista Crítica de Monitoramento */}
@@ -232,7 +236,7 @@ export function DashboardPage() {
         </div>
 
         {/* Coluna lateral */}
-        <aside className="space-y-6 animate-entry [animation-delay:200ms]">
+        <aside className="min-w-0 space-y-6 animate-entry [animation-delay:200ms]">
           <StatusDonutCard
             stable={kpis.stable}
             attention={kpis.attention}

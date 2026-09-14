@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Calendar, Copy, Eye, MessageCircle, Search, Trash2, X } from 'lucide-react';
 import { ClinicalStatus, formatCivilDate, whatsappLink } from '@vitalsync/shared';
 import { useAuth } from '../auth/AuthContext';
+import { ActionsMenu } from '../components/ActionsMenu';
 import { useToast } from '../components/Toast';
 import { SegmentedFilter } from '../components/admin';
 import { ConfirmModal, PageContainer, PageHeader, StatusBadge, cn, statusBorder } from '../components/ui';
@@ -39,6 +40,24 @@ async function copyToClipboard(text: string): Promise<void> {
 function patientLink(p: PatientWithNames): string {
   return `${window.location.origin}/r/${p.secure_token}`;
 }
+
+/**
+ * Grade dos cards de paciente.
+ *
+ * `grid-cols-[minmax(0,1fr)]` na base é OBRIGATÓRIO, não enfeite: `grid`
+ * sozinho cria uma coluna IMPLÍCITA `auto`, dimensionada por min-content — e o
+ * min-content do card é enorme porque o nome e o subtítulo usam `truncate`
+ * (`white-space: nowrap`), cujo min-content é o texto inteiro sem cortar. Em
+ * 390px o card estourava a coluna em 56px (380 vs. 324), sem scrollbar à vista
+ * porque um ancestral tem `overflow-x: clip` e cortava em silêncio.
+ * As variantes `sm:`/`xl:` nunca tiveram o problema: `grid-cols-N` do Tailwind
+ * já expande para `repeat(N, minmax(0,1fr))`.
+ */
+const CARD_GRID = 'grid grid-cols-[minmax(0,1fr)] sm:grid-cols-2 xl:grid-cols-3 gap-4';
+
+/** Botão de ação do card. `min-h-11` = 44px, o alvo de toque mínimo no mobile. */
+const ACTION_BTN =
+  'inline-flex items-center justify-center gap-1.5 px-3 min-h-11 sm:min-h-9 rounded-md text-sm sm:text-xs font-semibold transition-colors';
 
 export function MonitoringPage() {
   const toast = useToast();
@@ -223,7 +242,7 @@ export function MonitoringPage() {
           <p className="text-sm mt-1">Ajuste os filtros ou cadastre um novo paciente.</p>
         </div>
       ) : (
-        <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 animate-entry [animation-delay:150ms]">
+        <div className={cn(CARD_GRID, 'animate-entry [animation-delay:150ms]')}>
           {visible.map((p) => (
             <PatientCard
               key={p.id}
@@ -268,8 +287,11 @@ function PatientCard({
   onDelete?: () => void;
 }) {
   return (
-    <article className={cn('bg-card border border-border rounded-xl p-4 md:p-5 shadow-sm border-l-4 flex flex-col gap-4', statusBorder(p.current_status))}>
-      <header className="flex items-start justify-between gap-3 min-w-0">
+    // `min-w-0`: como grid item, o card tem `min-width: auto` e não encolheria
+    // abaixo do próprio min-content. É a garantia no item, redundante com o
+    // `minmax(0,1fr)` da trilha de propósito — uma protege a outra.
+    <article className={cn('bg-card border border-border rounded-xl p-4 md:p-5 shadow-sm border-l-4 flex flex-col gap-4 min-w-0', statusBorder(p.current_status))}>
+      <header className="flex items-start justify-between gap-2 min-w-0">
         <div className="min-w-0 flex-1">
           <h3 className={cn('font-bold text-base leading-tight truncate', onOpen && 'cursor-pointer hover:text-primary')} onClick={onOpen}>
             {p.name}
@@ -284,7 +306,17 @@ function PatientCard({
             {p.medical_team ? ` · Equipe ${String(p.medical_team.team_number).padStart(2, '0')}` : ''}
           </p>
         </div>
-        <StatusBadge status={p.current_status} />
+        <div className="flex items-center gap-1 shrink-0">
+          <StatusBadge status={p.current_status} />
+          {/* Excluir é destrutivo sobre paciente real: sai do rodapé (onde o
+              polegar bate sem querer) e passa a exigir um toque intencional. */}
+          {onDelete && (
+            <ActionsMenu
+              ariaLabel={`Mais ações de ${p.name}`}
+              entries={[{ kind: 'button', icon: Trash2, label: 'Excluir paciente', onClick: onDelete, danger: true }]}
+            />
+          )}
+        </div>
       </header>
 
       <dl className="grid grid-cols-2 gap-3 text-xs">
@@ -304,23 +336,23 @@ function PatientCard({
         </div>
       </dl>
 
+      {/* Duas colunas em qualquer largura, com "Acompanhar" ocupando a linha
+          inteira: o grid fecha certo tanto com 2 quanto com 3 botões (Suporte
+          não vê "Acompanhar"), sem buraco nem botão esticado sozinho.
+          Alvo de toque de 44px no mobile; do `sm` pra cima volta à densidade
+          anterior. */}
       <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border">
         {onOpen && (
-          <button onClick={onOpen} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-primary text-primary-foreground rounded-md text-xs font-semibold hover:bg-primary/90 transition-colors">
+          <button onClick={onOpen} className={cn(ACTION_BTN, 'col-span-2 bg-primary text-primary-foreground hover:bg-primary/90')}>
             <Eye className="size-3.5" /> Acompanhar
           </button>
         )}
-        <button onClick={onWhats} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-border rounded-md text-xs font-semibold hover:bg-muted transition-colors">
+        <button onClick={onWhats} className={cn(ACTION_BTN, 'border border-border hover:bg-muted')}>
           <MessageCircle className="size-3.5" /> WhatsApp
         </button>
-        <button onClick={onCopy} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-border rounded-md text-xs font-semibold hover:bg-muted transition-colors">
+        <button onClick={onCopy} className={cn(ACTION_BTN, 'border border-border hover:bg-muted')}>
           <Copy className="size-3.5" /> Copiar link
         </button>
-        {onDelete && (
-          <button onClick={onDelete} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-alert/30 text-alert rounded-md text-xs font-semibold hover:bg-alert/5 transition-colors">
-            <Trash2 className="size-3.5" /> Excluir
-          </button>
-        )}
       </div>
     </article>
   );

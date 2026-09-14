@@ -66,7 +66,7 @@ function SectionCard({
     warning: 'text-warning',
   }[tone];
   return (
-    <section className={cn('bg-card border rounded-xl shadow-sm overflow-hidden', toneCls)}>
+    <section className={cn('bg-card border rounded-xl shadow-sm overflow-hidden min-w-0', toneCls)}>
       <div className="p-4 border-b border-border flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
           <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
@@ -225,8 +225,12 @@ export function NurseDashboard() {
           atendi e preciso conferir depois. */}
       <NurseReassessmentQueue />
 
-      <div className="grid lg:grid-cols-3 gap-6 lg:gap-8">
-        <div className="lg:col-span-2 space-y-6 animate-entry [animation-delay:100ms]">
+      {/* Trilha-base `minmax(0,1fr)`: abaixo de `lg` o grid tem uma coluna
+          IMPLÍCITA `auto`, dimensionada por min-content, e os SectionCard
+          contêm texto truncado (nome do paciente na fila). Sem isso a coluna
+          estoura o container. `min-w-0` nos itens é a garantia no próprio item. */}
+      <div className="grid grid-cols-[minmax(0,1fr)] lg:grid-cols-3 gap-6 lg:gap-8">
+        <div className="lg:col-span-2 min-w-0 space-y-6 animate-entry [animation-delay:100ms]">
           {/* a) Preciso agir agora */}
           <SectionCard
             title="Preciso agir agora"
@@ -353,7 +357,7 @@ export function NurseDashboard() {
         </div>
 
         {/* Coluna lateral: agenda + meu dia */}
-        <aside className="space-y-6 animate-entry [animation-delay:200ms]">
+        <aside className="min-w-0 space-y-6 animate-entry [animation-delay:200ms]">
           <SectionCard
             title="Agenda de acompanhamento"
             description="Contatos previstos pelo protocolo, derivados das datas de alta."

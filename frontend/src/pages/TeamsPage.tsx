@@ -51,6 +51,14 @@ import { teamService, type AdminTeamSummary } from '../services/teamService';
 import { teamViewService, type TeamDetail } from '../services/teamViewService';
 import type { Profile } from '../services/types';
 
+/**
+ * Grade dos cards de equipe. A trilha-base `minmax(0,1fr)` é obrigatória: `grid`
+ * sem `grid-cols-*` cria uma coluna IMPLÍCITA `auto`, dimensionada por
+ * min-content — e o `<TeamCard>` trunca o nome do cirurgião, cujo min-content é
+ * o texto inteiro. Mesmo bug do card de paciente em Monitoramento.
+ */
+const TEAM_GRID = 'grid grid-cols-[minmax(0,1fr)] md:grid-cols-2 gap-4';
+
 export function TeamsPage() {
   const { user } = useAuth();
   const toast = useToast();
@@ -240,7 +248,7 @@ export function TeamsPage() {
         ) : filtered.length === 0 ? (
           <EmptyState title="Nenhuma equipe encontrada para os filtros selecionados." hint="Ajuste a busca ou os filtros para ver outras equipes." />
         ) : (
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className={TEAM_GRID}>
             {filtered.map((t) => (
               <TeamCard
                 key={t.summary.id}
@@ -364,7 +372,9 @@ function TeamCard({
   const active = summary.status === 'ACTIVE';
 
   return (
-    <article className="bg-card rounded-xl border border-border shadow-sm p-5 flex flex-col gap-4">
+    // `min-w-0`: como grid item o card tem `min-width: auto` e não encolheria
+    // abaixo do próprio min-content (o nome truncado do cirurgião).
+    <article className="bg-card rounded-xl border border-border shadow-sm p-5 flex flex-col gap-4 min-w-0">
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Equipe nº {pad(summary.number)}</p>

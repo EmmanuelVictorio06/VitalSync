@@ -266,7 +266,7 @@ export function PatientCriticalCard({ patient }: { patient: CriticalPatient }) {
 
 export function AlertListCard({ alerts }: { alerts: RecentAlert[] }) {
   return (
-    <section className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+    <section className="bg-card rounded-xl border border-border shadow-sm overflow-hidden min-w-0">
       <div className="p-4 border-b border-border flex items-center justify-between">
         <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">
           Alertas Recentes
