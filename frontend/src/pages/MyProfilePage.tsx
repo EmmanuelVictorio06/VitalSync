@@ -47,6 +47,14 @@ import { DEFAULT_NOTIFICATION_PREFS, type NotificationPrefs, type Profile } from
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/**
+ * Grade do perfil. A trilha-base `minmax(0,1fr)` é obrigatória: abaixo de `lg`
+ * o grid tem uma coluna IMPLÍCITA `auto`, dimensionada por min-content, e o
+ * `ProfileSummaryCard` trunca nome e e-mail. A coluna da direita já carregava
+ * `min-w-0`; a da esquerda não.
+ */
+const PROFILE_GRID = 'grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[320px_1fr] gap-6 items-start';
+
 export function MyProfilePage() {
   const { user, logout, refreshUser } = useAuth();
   const toast = useToast();
@@ -87,9 +95,9 @@ export function MyProfilePage() {
       ) : profile === null ? (
         <LoadingState label="Carregando seu perfil..." />
       ) : (
-        <div className="grid lg:grid-cols-[320px_1fr] gap-6 items-start">
+        <div className={PROFILE_GRID}>
           {/* Coluna esquerda: resumo (fixo no desktop) */}
-          <div className="lg:sticky lg:top-20 space-y-6">
+          <div className="lg:sticky lg:top-20 min-w-0 space-y-6">
             <ProfileSummaryCard
               name={profile.name}
               email={profile.email}

@@ -224,7 +224,7 @@ export function ProfileSummaryCard({
   lastSignInAt?: string | null;
 }) {
   return (
-    <div className="bg-card border border-border rounded-xl shadow-sm p-6 flex flex-col items-center text-center gap-3">
+    <div className="bg-card border border-border rounded-xl shadow-sm p-6 flex flex-col items-center text-center gap-3 min-w-0">
       <div className="size-24 rounded-full overflow-hidden border border-border bg-primary/10 text-primary grid place-items-center">
         {avatarUrl ? (
           <img src={avatarUrl} alt={`Avatar de ${name}`} className="size-full object-cover" />

@@ -30,8 +30,14 @@ function migrationViva(nomeDaFuncao: string): { arquivo: string; sql: string } {
   const arquivos = readdirSync(MIGRATIONS_DIR)
     .filter((f) => f.endsWith('.sql'))
     .sort();
+  // Exige a DEFINIÇÃO (`create [or replace] function`): só citar o nome não
+  // conta. A 0081 apenas comenta a função (`comment on function public.
+  // eval_clinical_status`) e chegou a ser eleita como viva por um regex que
+  // casava qualquer `function public.<nome>`, quebrando o parser do `vtype`.
   const encontrados = arquivos.filter((f) =>
-    new RegExp(`function\\s+public\\.${nomeDaFuncao}\\b`).test(readFileSync(MIGRATIONS_DIR + f, 'utf8')),
+    new RegExp(`create\\s+(or\\s+replace\\s+)?function\\s+public\\.${nomeDaFuncao}\\b`).test(
+      readFileSync(MIGRATIONS_DIR + f, 'utf8'),
+    ),
   );
   const arquivo = encontrados[encontrados.length - 1];
   if (!arquivo) throw new Error(`Nenhuma migration define public.${nomeDaFuncao}`);

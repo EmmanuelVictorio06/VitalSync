@@ -94,26 +94,38 @@ describe('evaluateRange — dispneia (3 níveis)', () => {
   it('2 (moderada/intensa) é RED', () => expect(evaluateRange(2, ALERT_THRESHOLDS.dyspnea)).toBe(ClinicalStatus.RED));
 });
 
-describe('evaluateRange — pressão arterial sistólica (confirmado ago/2026)', () => {
+// A PA perdeu a faixa amarela em set/2026 (decisão médica: reduzir ruído na
+// triagem). É a única métrica verde/vermelho pura — os limites de vermelho não
+// mudaram, o verde só absorveu o que era amarelo.
+describe('evaluateRange — pressão arterial sistólica (sem amarelo, set/2026)', () => {
   it('≤89 é RED', () => expect(evaluateRange(89, ALERT_THRESHOLDS.bloodPressureSystolic)).toBe(ClinicalStatus.RED));
-  it('90-99 é YELLOW', () =>
-    expect(evaluateRange(95, ALERT_THRESHOLDS.bloodPressureSystolic)).toBe(ClinicalStatus.YELLOW));
-  it('100-129 é GREEN', () =>
-    expect(evaluateRange(120, ALERT_THRESHOLDS.bloodPressureSystolic)).toBe(ClinicalStatus.GREEN));
-  it('130-139 é YELLOW', () =>
-    expect(evaluateRange(135, ALERT_THRESHOLDS.bloodPressureSystolic)).toBe(ClinicalStatus.YELLOW));
-  it('≥140 é RED', () => expect(evaluateRange(145, ALERT_THRESHOLDS.bloodPressureSystolic)).toBe(ClinicalStatus.RED));
+  it('90-139 é GREEN (absorveu os antigos amarelos 90-99 e 130-139)', () => {
+    expect(evaluateRange(90, ALERT_THRESHOLDS.bloodPressureSystolic)).toBe(ClinicalStatus.GREEN);
+    expect(evaluateRange(95, ALERT_THRESHOLDS.bloodPressureSystolic)).toBe(ClinicalStatus.GREEN);
+    expect(evaluateRange(120, ALERT_THRESHOLDS.bloodPressureSystolic)).toBe(ClinicalStatus.GREEN);
+    expect(evaluateRange(135, ALERT_THRESHOLDS.bloodPressureSystolic)).toBe(ClinicalStatus.GREEN);
+    expect(evaluateRange(139, ALERT_THRESHOLDS.bloodPressureSystolic)).toBe(ClinicalStatus.GREEN);
+  });
+  it('≥140 é RED (limite inalterado)', () => {
+    expect(evaluateRange(140, ALERT_THRESHOLDS.bloodPressureSystolic)).toBe(ClinicalStatus.RED);
+    expect(evaluateRange(145, ALERT_THRESHOLDS.bloodPressureSystolic)).toBe(ClinicalStatus.RED);
+  });
+  // Não há teste de "nenhuma faixa é amarela": com `as const`, o próprio tsc
+  // estreita `rules[].status` para 'GREEN' | 'RED' e recusa a comparação com
+  // YELLOW. A ausência do amarelo é garantida em tempo de compilação.
 });
 
-describe('evaluateRange — pressão arterial diastólica (confirmado ago/2026)', () => {
+describe('evaluateRange — pressão arterial diastólica (sem amarelo, set/2026)', () => {
   it('≤49 é RED', () => expect(evaluateRange(48, ALERT_THRESHOLDS.bloodPressureDiastolic)).toBe(ClinicalStatus.RED));
-  it('50-59 é YELLOW', () =>
-    expect(evaluateRange(55, ALERT_THRESHOLDS.bloodPressureDiastolic)).toBe(ClinicalStatus.YELLOW));
-  it('60-89 é GREEN', () =>
-    expect(evaluateRange(80, ALERT_THRESHOLDS.bloodPressureDiastolic)).toBe(ClinicalStatus.GREEN));
-  it('90-99 é YELLOW', () =>
-    expect(evaluateRange(92, ALERT_THRESHOLDS.bloodPressureDiastolic)).toBe(ClinicalStatus.YELLOW));
-  it('≥100 é RED', () => expect(evaluateRange(100, ALERT_THRESHOLDS.bloodPressureDiastolic)).toBe(ClinicalStatus.RED));
+  it('50-99 é GREEN (absorveu os antigos amarelos 50-59 e 90-99)', () => {
+    expect(evaluateRange(50, ALERT_THRESHOLDS.bloodPressureDiastolic)).toBe(ClinicalStatus.GREEN);
+    expect(evaluateRange(55, ALERT_THRESHOLDS.bloodPressureDiastolic)).toBe(ClinicalStatus.GREEN);
+    expect(evaluateRange(80, ALERT_THRESHOLDS.bloodPressureDiastolic)).toBe(ClinicalStatus.GREEN);
+    expect(evaluateRange(92, ALERT_THRESHOLDS.bloodPressureDiastolic)).toBe(ClinicalStatus.GREEN);
+    expect(evaluateRange(99, ALERT_THRESHOLDS.bloodPressureDiastolic)).toBe(ClinicalStatus.GREEN);
+  });
+  it('≥100 é RED (limite inalterado)', () =>
+    expect(evaluateRange(100, ALERT_THRESHOLDS.bloodPressureDiastolic)).toBe(ClinicalStatus.RED));
 });
 
 describe('evaluateDiuresis', () => {
@@ -166,20 +178,26 @@ describe('evaluateVitalSigns — pressão arterial (sistólica+diastólica, pior
     expect(result.byVital[VitalKind.BLOOD_PRESSURE]).toBe(ClinicalStatus.GREEN);
     expect(result.overall).toBe(ClinicalStatus.GREEN);
   });
-  it('135×92 é YELLOW', () => {
-    const result = evaluateVitalSigns({ ...baseInput, systolic: 135, diastolic: 92 });
-    expect(result.byVital[VitalKind.BLOOD_PRESSURE]).toBe(ClinicalStatus.YELLOW);
-    expect(result.overall).toBe(ClinicalStatus.YELLOW);
+  it('134×92 é GREEN e não dispara nada (decisão set/2026: era YELLOW e ia à enfermagem)', () => {
+    const result = evaluateVitalSigns({ ...baseInput, systolic: 134, diastolic: 92 });
+    expect(result.byVital[VitalKind.BLOOD_PRESSURE]).toBe(ClinicalStatus.GREEN);
+    expect(result.overall).toBe(ClinicalStatus.GREEN);
+    expect(result.triggers.some((t) => t.kind === VitalKind.BLOOD_PRESSURE)).toBe(false);
+  });
+  it('168×104 continua RED (limites de vermelho inalterados)', () => {
+    const result = evaluateVitalSigns({ ...baseInput, systolic: 168, diastolic: 104 });
+    expect(result.byVital[VitalKind.BLOOD_PRESSURE]).toBe(ClinicalStatus.RED);
+    expect(result.overall).toBe(ClinicalStatus.RED);
   });
   it('145×85 é RED (sistólica crítica, mesmo com diastólica em faixa verde)', () => {
     const result = evaluateVitalSigns({ ...baseInput, systolic: 145, diastolic: 85 });
     expect(result.byVital[VitalKind.BLOOD_PRESSURE]).toBe(ClinicalStatus.RED);
     expect(result.overall).toBe(ClinicalStatus.RED);
   });
-  it('95×55 é YELLOW', () => {
+  it('95×55 é GREEN (hipotensão leve também perdeu o amarelo em set/2026)', () => {
     const result = evaluateVitalSigns({ ...baseInput, systolic: 95, diastolic: 55 });
-    expect(result.byVital[VitalKind.BLOOD_PRESSURE]).toBe(ClinicalStatus.YELLOW);
-    expect(result.overall).toBe(ClinicalStatus.YELLOW);
+    expect(result.byVital[VitalKind.BLOOD_PRESSURE]).toBe(ClinicalStatus.GREEN);
+    expect(result.overall).toBe(ClinicalStatus.GREEN);
   });
   it('88×48 é RED', () => {
     const result = evaluateVitalSigns({ ...baseInput, systolic: 88, diastolic: 48 });

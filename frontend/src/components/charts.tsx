@@ -233,7 +233,7 @@ export function IndicatorCard({
   icon?: IconType;
 }) {
   return (
-    <div className="bg-card border border-border rounded-xl shadow-sm p-4">
+    <div className="bg-card border border-border rounded-xl shadow-sm p-4 min-w-0">
       <div className="flex items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-2 min-w-0">
           {Icon && (
@@ -267,7 +267,7 @@ export function ScaleIndicatorCard({
   const color =
     status === ClinicalStatus.RED ? 'bg-alert' : status === ClinicalStatus.YELLOW ? 'bg-warning' : 'bg-stable';
   return (
-    <div className="bg-card border border-border rounded-xl shadow-sm p-4">
+    <div className="bg-card border border-border rounded-xl shadow-sm p-4 min-w-0">
       <div className="flex items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-2 min-w-0">
           {Icon && (

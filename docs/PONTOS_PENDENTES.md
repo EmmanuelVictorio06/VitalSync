@@ -14,17 +14,35 @@ em `thresholds.ts`.
 
 ---
 
-## 1. Pressão arterial sistólica — protocolo diverge do valor confirmado (ago/2026)
+## 1. Pressão arterial sistólica — protocolo diverge do limite de vermelho
+
+> **Atualização set/2026 — a faixa AMARELA da PA foi REMOVIDA (decisão médica, já aplicada).**
+> Sistólica: vermelho ≤89 · **verde 90–139** · vermelho ≥140.
+> Diastólica: vermelho ≤49 · **verde 50–99** · vermelho ≥100.
+> Objetivo declarado: reduzir ruído na triagem de enfermagem. Os limites de vermelho **não**
+> mudaram — o verde apenas absorveu as faixas amarelas. Efeito prático: 134/92 deixou de gerar
+> alerta; 168/104 segue vermelho. Implementado em `thresholds.ts` + migration
+> `0081_pressao_arterial_sem_amarelo.sql`. A PA passou a ser a **única** métrica verde/vermelho
+> pura, e por isso a faixa amarela deixou de ser obrigatória em `validate_clinical_rules`.
+> Isso **não resolve** a pendência abaixo, que é sobre o limite de vermelho.
 
 | Fonte | Vermelho |
 |-------|----------|
-| Protocolo do estudo (`FLUXOoperacional.pdf`, 5.7.1) | PAS **> 160** (sem faixa amarela alta explícita) |
-| Código atual (confirmado pela equipe médica, ago/2026 — migration `0048`) | PAS **≥ 140** (amarelo 130–139) |
+| Protocolo do estudo (`FLUXOoperacional.pdf`, 5.7.1) | PAS **> 160** |
+| Código atual (confirmado pela equipe médica, ago/2026 — migrations `0048`/`0081`) | PAS **≥ 140** |
 
 **Status:** ⚠️ PENDENTE — não alterado. A regra ago/2026 pode ser uma decisão médica posterior
 e mais rigorosa que o protocolo, ou o protocolo pode não ter sido atualizado desde então. Não
 decidimos sozinhos: o cirurgião responsável precisa confirmar **qual das duas regras vale** antes
-de qualquer mudança em `thresholds.ts`/`eval_clinical_status`.
+de qualquer mudança em `thresholds.ts`/`eval_clinical_status`. A decisão de set/2026 tratou só da
+faixa amarela e **não** se pronunciou sobre esse limite.
+
+**Impacto no estudo (registrar no protocolo de pesquisa):** a remoção do amarelo cria uma
+**descontinuidade na coorte** — alertas gerados antes e depois de set/2026 seguem regras
+diferentes para a PA. Alertas já existentes **não** foram reclassificados (`status` é imutável
+por invariante e alimenta as métricas da `0055`); o momento exato da troca fica em `audit_logs`
+(`SETTINGS_CHANGE`, entidade `Regra clínica "Pressão …"`). Qualquer análise que agregue alertas
+amarelos ao longo de toda a janela do estudo precisa segmentar por essa data.
 
 ## 2. Saturação de O2 — fronteira exata em 92% (ambiguidade no próprio protocolo)
 
@@ -154,8 +172,8 @@ Estas regras **foram alteradas** para seguir o protocolo do estudo e já estão 
 | Temperatura | < 37,8 °C | 37,8–38,4 °C | ≥ 38,5 °C |
 | Saturação SpO₂ | > 94% (ver pendência acima p/ o valor 92) | 92,1–94% | ≤ 92% |
 | Frequência cardíaca | ≤ 110 bpm | 111–119 bpm | ≥ 120 bpm |
-| Pressão sistólica (ago/2026 — ver pendência acima) | 100–129 mmHg | 90–99 / 130–139 mmHg | ≤89 / ≥140 mmHg |
-| Pressão diastólica | 60–89 mmHg | 50–59 / 90–99 mmHg | ≤49 / ≥100 mmHg |
+| Pressão sistólica (set/2026 — sem amarelo; ver pendência 1) | 90–139 mmHg | — | ≤89 / ≥140 mmHg |
+| Pressão diastólica (set/2026 — sem amarelo) | 50–99 mmHg | — | ≤49 / ≥100 mmHg |
 | Diurese | ≥ 4 micções/dia | 2–3 micções/dia | < 2 micções/dia |
 | Ingestão hídrica | Sim | — | Não |
 | Vômitos | Não | — | Sim |
