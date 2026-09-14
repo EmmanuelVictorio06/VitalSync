@@ -6,6 +6,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
 import { SegmentedFilter } from '../components/admin';
 import { ConfirmModal, PageContainer, PageHeader, StatusBadge, cn, statusBorder } from '../components/ui';
+import { useMissedMeasurementCount } from '../components/MissedMeasurementCount';
 import { homologationService } from '../services/homologationService';
 import { patientService, type PatientKind, type PatientWithNames } from '../services/patientService';
 import { supportPermissionService } from '../services/supportPermissionService';
@@ -48,6 +49,8 @@ export function MonitoringPage() {
   // backend recusaria (M-03).
   const canOpen = !supportPermissionService.isSupport(user);
   const canDelete = supportPermissionService.canDeletePatient(user);
+  // Exclusão pode remover paciente com medição de hoje pendente — atualiza o badge da sidebar.
+  const { refresh: refreshMissedCount } = useMissedMeasurementCount();
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [patients, setPatients] = useState<PatientWithNames[] | null>(null);
@@ -125,6 +128,7 @@ export function MonitoringPage() {
       setToDelete(null);
       setConfirmText('');
       await load();
+      refreshMissedCount();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao excluir paciente.');
     }
