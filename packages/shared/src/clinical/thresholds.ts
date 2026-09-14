@@ -186,40 +186,46 @@ export const ALERT_THRESHOLDS = {
   /**
    * PRESSÃO ARTERIAL — sistólica e diastólica avaliadas SEPARADAMENTE (mmHg);
    * o status da PA é o PIOR entre as duas (ver `worstStatus` em status.ts).
-   * Confirmado pela equipe médica (ago/2026) — substitui a antiga faixa
-   * sistólica-única provisória.
    *
-   * Sistólica: RED ≤89 · YELLOW 90–99 · GREEN 100–129 · YELLOW 130–139 · RED ≥140
+   * >>> SEM FAIXA AMARELA (decisão médica set/2026) <<<
+   * A PA é a ÚNICA métrica verde/vermelho puro. O objetivo declarado foi
+   * reduzir ruído na triagem de enfermagem: um paciente com 134/92 deixou de
+   * gerar alerta (até ago/2026 virava amarelo e ia para a fila da enfermagem).
+   * Os limites de VERMELHO não mudaram — 168/104 segue vermelho como antes; o
+   * verde apenas absorveu as faixas amarelas.
+   *
+   * Sistólica:  RED ≤89 · GREEN 90–139 · RED ≥140
+   * Diastólica: RED ≤49 · GREEN 50–99  · RED ≥100
+   *
+   * Aplicado ao banco na migration `0081_pressao_arterial_sem_amarelo.sql`, que
+   * também precisou tornar a faixa amarela OPCIONAL em `validate_clinical_rules`
+   * (antes as três faixas eram obrigatórias e a regra nova seria recusada).
    *
    * ⚠️ DIVERGÊNCIA COM O PROTOCOLO DO ESTUDO (FLUXOoperacional.pdf, 5.7.1):
-   * o protocolo define vermelho só em PAS > 160 (sem faixa amarela alta
-   * explícita), enquanto esta regra (confirmada ago/2026) usa vermelho ≥140.
-   * NÃO alterado sem confirmação médica — ver docs/PONTOS_PENDENTES.md.
+   * o protocolo define vermelho só em PAS > 160, enquanto esta regra usa
+   * vermelho ≥140. A decisão de set/2026 não tocou nesse limite — a divergência
+   * continua aberta. Ver docs/PONTOS_PENDENTES.md.
    */
   bloodPressureSystolic: {
     label: 'Pressão sistólica',
     axis: { min: 40, max: 200, step: 20 },
     rules: [
       { status: ClinicalStatus.RED, max: 89 },
-      { status: ClinicalStatus.YELLOW, min: 90, max: 99 },
-      { status: ClinicalStatus.GREEN, min: 100, max: 129 },
-      { status: ClinicalStatus.YELLOW, min: 130, max: 139 },
+      { status: ClinicalStatus.GREEN, min: 90, max: 139 },
       { status: ClinicalStatus.RED, min: 140 },
     ],
     PENDING_MEDICAL_VALIDATION: false,
   } satisfies VitalThreshold,
 
   /**
-   * Diastólica: RED ≤49 · YELLOW 50–59 · GREEN 60–89 · YELLOW 90–99 · RED ≥100
+   * Diastólica: RED ≤49 · GREEN 50–99 · RED ≥100 (sem amarelo — ver acima).
    */
   bloodPressureDiastolic: {
     label: 'Pressão diastólica',
     axis: { min: 20, max: 140, step: 20 },
     rules: [
       { status: ClinicalStatus.RED, max: 49 },
-      { status: ClinicalStatus.YELLOW, min: 50, max: 59 },
-      { status: ClinicalStatus.GREEN, min: 60, max: 89 },
-      { status: ClinicalStatus.YELLOW, min: 90, max: 99 },
+      { status: ClinicalStatus.GREEN, min: 50, max: 99 },
       { status: ClinicalStatus.RED, min: 100 },
     ],
     PENDING_MEDICAL_VALIDATION: false,
