@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Camera,
-  ChevronLeft,
-  ChevronRight,
   ImageIcon,
   Loader2,
   Maximize2,
@@ -29,6 +27,8 @@ import {
   type ZoomState,
 } from '../lib/imageZoom';
 import { ModalOverlay, cn } from './ui';
+import { SlideCarousel } from './SlideCarousel';
+import { recordKey } from '../lib/recordTimeline';
 
 /** `accept` do input — restringe a seleção a imagens aceitas (JPG/PNG/WEBP). */
 const ACCEPT = WOUND_PHOTO.acceptedMimeTypes.join(',');
@@ -715,107 +715,28 @@ export function PatientMeasurementPhotoSection({ records }: { records: VitalReco
   // Mostra os registros que tenham ALGO de acompanhamento de foto: alguma foto
   // anexada ou a informação de que possui dreno.
   const relevant = records.filter((r) => r.woundPhotoUrl || r.drainPhotoUrl || r.hasDrain);
-  const count = relevant.length;
 
-  // Carrossel: um registro por vez (a tela não estica com dezenas de fotos).
-  // Rolagem horizontal com scroll-snap; setas/indicadores controlam a posição.
-  const trackRef = useRef<HTMLDivElement>(null);
-  const [index, setIndex] = useState(0);
-
-  function goTo(i: number) {
-    const clamped = Math.max(0, Math.min(count - 1, i));
-    const track = trackRef.current;
-    const slide = track?.children[clamped] as HTMLElement | undefined;
-    if (track && slide) track.scrollTo({ left: slide.offsetLeft - track.offsetLeft, behavior: 'smooth' });
-    setIndex(clamped);
-  }
-
-  // Mantém o indicador em sincronia quando o usuário arrasta/rola manualmente.
-  function handleScroll() {
-    const track = trackRef.current;
-    if (!track) return;
-    const center = track.scrollLeft + track.clientWidth / 2;
-    let nearest = 0;
-    let best = Infinity;
-    Array.from(track.children).forEach((c, i) => {
-      const el = c as HTMLElement;
-      const mid = el.offsetLeft - track.offsetLeft + el.clientWidth / 2;
-      const dist = Math.abs(mid - center);
-      if (dist < best) {
-        best = dist;
-        nearest = i;
-      }
-    });
-    setIndex(nearest);
-  }
-
+  // Carrossel (um registro por vez) em `SlideCarousel` — mesmo componente do
+  // carrossel de indicadores do registro.
   return (
-    <section className="bg-card border border-border rounded-xl shadow-sm p-5 md:p-6 space-y-4">
-      <header className="flex items-center gap-2">
-        <Camera className="size-4 text-primary" />
-        <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Fotos de acompanhamento</h3>
-        {count > 1 && (
-          <div className="ml-auto flex items-center gap-1.5">
-            <span className="text-xs font-semibold text-muted-foreground tabular-nums mr-1">
-              {index + 1} / {count}
-            </span>
-            <button
-              type="button"
-              onClick={() => goTo(index - 1)}
-              disabled={index === 0}
-              aria-label="Foto anterior"
-              className="size-8 grid place-items-center rounded-full border border-border bg-card text-muted-foreground hover:text-primary hover:border-primary/40 disabled:opacity-40 disabled:hover:text-muted-foreground disabled:hover:border-border transition-colors"
-            >
-              <ChevronLeft className="size-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => goTo(index + 1)}
-              disabled={index === count - 1}
-              aria-label="Próxima foto"
-              className="size-8 grid place-items-center rounded-full border border-border bg-card text-muted-foreground hover:text-primary hover:border-primary/40 disabled:opacity-40 disabled:hover:text-muted-foreground disabled:hover:border-border transition-colors"
-            >
-              <ChevronRight className="size-4" />
-            </button>
-          </div>
+    <section className="bg-card border border-border rounded-xl shadow-sm p-5 md:p-6">
+      <SlideCarousel
+        items={relevant}
+        getKey={(r) => recordKey(r)}
+        renderItem={(r) => <RecordPhotosBlock record={r} />}
+        header={() => (
+          <>
+            <Camera className="size-4 text-primary" />
+            <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">
+              Fotos de acompanhamento
+            </h3>
+          </>
         )}
-      </header>
-
-      {count === 0 ? (
-        <p className="text-sm text-muted-foreground">Nenhuma foto enviada neste período.</p>
-      ) : (
-        <>
-          <div
-            ref={trackRef}
-            onScroll={handleScroll}
-            className="flex gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth -mx-1 px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          >
-            {relevant.map((r) => (
-              <div key={`${r.monitoringDay}-${r.period}`} className="snap-center shrink-0 w-full">
-                <RecordPhotosBlock record={r} />
-              </div>
-            ))}
-          </div>
-
-          {count > 1 && (
-            <div className="flex justify-center gap-1.5 pt-1">
-              {relevant.map((r, i) => (
-                <button
-                  key={`${r.monitoringDay}-${r.period}`}
-                  type="button"
-                  onClick={() => goTo(i)}
-                  aria-label={`Ir para a foto ${i + 1}`}
-                  aria-current={i === index}
-                  className={cn(
-                    'h-1.5 rounded-full transition-all',
-                    i === index ? 'w-5 bg-primary' : 'w-1.5 bg-border hover:bg-muted-foreground/40',
-                  )}
-                />
-              ))}
-            </div>
-          )}
-        </>
-      )}
+        prevLabel="Foto anterior"
+        nextLabel="Próxima foto"
+        dotLabel={(i) => `Ir para a foto ${i + 1}`}
+        empty={<p className="text-sm text-muted-foreground">Nenhuma foto enviada neste período.</p>}
+      />
     </section>
   );
 }

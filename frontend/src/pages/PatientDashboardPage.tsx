@@ -44,6 +44,9 @@ import {
   type DayPoint,
 } from '../components/charts';
 import { PatientMeasurementPhotoSection } from '../components/photo';
+import { SlideCarousel } from '../components/SlideCarousel';
+import { dyspneaLabel } from '../lib/alertTrigger';
+import { recordKey, recordSlideLabel, recordsNewestFirst } from '../lib/recordTimeline';
 import { Button, CustomSelect, Loading, PageContainer, StatusBadge, cn, statusBorder } from '../components/ui';
 import { patientDashboardService } from '../services/patientDashboardService';
 import { permissionService } from '../services/permissionService';
@@ -161,11 +164,6 @@ export function PatientDashboardPage() {
     [data],
   );
 
-  const latest = useMemo(() => {
-    const recs = data?.records ?? [];
-    return recs.length ? recs[recs.length - 1] : null;
-  }, [data]);
-
   // Período(s) de hoje já com a janela fechada e sem registro — dispara o banner.
   const missedToday = useMemo(
     () => getMissedPeriodsToday(data?.records ?? [], data?.patient.monitoringDay ?? null),
@@ -180,6 +178,11 @@ export function PatientDashboardPage() {
     if (period === 'NIGHT') return recs.filter((r) => r.period === Period.NIGHT);
     return recs;
   }, [data, period]);
+
+  /* Registros do MAIS RECENTE para o mais antigo — um slide por período.
+     A ordem é explícita porque a query ordena por `record_date` (DATE), em que
+     manhã e noite do mesmo dia empatam (ver lib/recordTimeline.ts). */
+  const slides = useMemo(() => recordsNewestFirst(periodRecords), [periodRecords]);
 
   async function markAttended() {
     const currentAlertId = data?.patient.currentAlertId;
@@ -208,7 +211,6 @@ export function PatientDashboardPage() {
   if (!data) return <PageContainer size="wide"><p className="text-center text-muted-foreground py-12">Paciente não encontrado.</p></PageContainer>;
 
   const p = data.patient;
-  const worst = (s?: ClinicalStatus) => s ?? ClinicalStatus.GREEN;
 
   /* ── Conteúdo das abas ──────────────────────────────────────────────────
      Os componentes são os MESMOS de antes — apenas reagrupados. Nenhuma
@@ -254,48 +256,27 @@ export function PatientDashboardPage() {
             <StepsBarChart icon={Footprints} data={stepsSeries} status={worstOf(stepsSeries)} />
           </section>
 
-          {/* Indicadores do último registro */}
-          {latest && (
-            <>
+          {/* Indicadores por registro — um slide por dia/período, do mais
+              recente para o mais antigo (abre no último, como antes). */}
+          <SlideCarousel
+            items={slides}
+            getKey={recordKey}
+            renderItem={(r) => <RecordIndicators record={r} />}
+            header={(r) => (
               <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground pt-2 flex items-center gap-2 flex-wrap">
-                <span>
-                  Indicadores do último registro ({latest.monitoringDay}º dia ·{' '}
-                  {latest.period === Period.MORNING ? 'manhã' : 'noite'})
-                </span>
-                {latest.source === 'STAFF' && (
+                <span>{r ? `Indicadores do registro (${recordSlideLabel(r)})` : 'Indicadores do registro'}</span>
+                {r?.source === 'STAFF' && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] normal-case font-semibold tracking-normal text-blue-800">
                     <UserCog className="size-3" />
-                    Registrado por {latest.enteredByName ?? 'equipe'} (equipe)
+                    Registrado por {r.enteredByName ?? 'equipe'} (equipe)
                   </span>
                 )}
               </h3>
-              {/* Trilha-base `minmax(0,1fr)`: no mobile o grid tem uma coluna
-                  IMPLÍCITA `auto` (min-content), e os cards de indicador
-                  truncam o título ao lado de um ícone `shrink-0`. */}
-              <div className="grid grid-cols-[minmax(0,1fr)] sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                <ScaleIndicatorCard title="Dor" icon={AlertCircle} value={latest.pain} status={worst(latest.statusByVital.PAIN)} />
-                <ScaleIndicatorCard title="Dispneia" icon={Wind} value={latest.dyspnea} status={worst(latest.statusByVital.DYSPNEA)} />
-                <IndicatorCard
-                  title="Diurese"
-                  icon={Droplets}
-                  valueText={latest.urinationCount != null ? `${latest.urinationCount} micções` : latest.urinatedNormally ? 'Normal' : 'Reduzida'}
-                  status={worst(latest.statusByVital.DIURESIS)}
-                />
-                <IndicatorCard
-                  title="Vômitos"
-                  icon={Activity}
-                  valueText={latest.hadVomit ? `Sim${latest.vomitCount ? ` (${latest.vomitCount}x)` : ''}` : 'Não'}
-                  status={worst(latest.statusByVital.VOMIT)}
-                />
-                <IndicatorCard
-                  title="Sangramento"
-                  icon={Droplets}
-                  valueText={latest.hadBleeding ? 'Sim' : 'Não'}
-                  status={worst(latest.statusByVital.BLEEDING)}
-                />
-              </div>
-            </>
-          )}
+            )}
+            prevLabel="Registro anterior"
+            nextLabel="Próximo registro"
+            dotLabel={(i) => `Ir para o registro ${i + 1}`}
+          />
 
           {/* Foto da ferida operatória ou do dreno (período selecionado) */}
           <PatientMeasurementPhotoSection records={periodRecords} />
@@ -520,4 +501,49 @@ function worstOfBp(series: Array<{ status?: ClinicalStatus }>): ClinicalStatus {
 function reduceStatus(list: Array<ClinicalStatus | undefined>): ClinicalStatus {
   const sev = { GREEN: 0, YELLOW: 1, RED: 2 } as const;
   return list.reduce<ClinicalStatus>((acc, s) => (s && sev[s] > sev[acc] ? s : acc), ClinicalStatus.GREEN);
+}
+
+/**
+ * Indicadores discretos de UM registro (um slide do carrossel). Os mesmos
+ * cards de antes; muda só a fonte, que agora é o registro em foco.
+ *
+ * Dispneia usa `IndicatorCard` (texto), e não a escala 0–10 da dor: são três
+ * alternativas categóricas, e o número guardado é só o código delas — o rótulo
+ * sai de `dyspneaLabel` (lib/alertTrigger.ts), a mesma fonte do Detalhes do
+ * Alerta. O badge continua vindo do `statusByVital` já calculado.
+ */
+function RecordIndicators({ record }: { record: VitalRecord }) {
+  const status = (s?: ClinicalStatus) => s ?? ClinicalStatus.GREEN;
+  return (
+    /* Trilha-base `minmax(0,1fr)`: no mobile o grid tem uma coluna IMPLÍCITA
+       `auto` (min-content), e os cards de indicador truncam o título ao lado
+       de um ícone `shrink-0`. */
+    <div className="grid grid-cols-[minmax(0,1fr)] sm:grid-cols-2 xl:grid-cols-3 gap-4">
+      <ScaleIndicatorCard title="Dor" icon={AlertCircle} value={record.pain} status={status(record.statusByVital.PAIN)} />
+      <IndicatorCard
+        title="Dispneia"
+        icon={Wind}
+        valueText={dyspneaLabel(record.dyspnea)}
+        status={status(record.statusByVital.DYSPNEA)}
+      />
+      <IndicatorCard
+        title="Diurese"
+        icon={Droplets}
+        valueText={record.urinationCount != null ? `${record.urinationCount} micções` : record.urinatedNormally ? 'Normal' : 'Reduzida'}
+        status={status(record.statusByVital.DIURESIS)}
+      />
+      <IndicatorCard
+        title="Vômitos"
+        icon={Activity}
+        valueText={record.hadVomit ? `Sim${record.vomitCount ? ` (${record.vomitCount}x)` : ''}` : 'Não'}
+        status={status(record.statusByVital.VOMIT)}
+      />
+      <IndicatorCard
+        title="Sangramento"
+        icon={Droplets}
+        valueText={record.hadBleeding ? 'Sim' : 'Não'}
+        status={status(record.statusByVital.BLEEDING)}
+      />
+    </div>
+  );
 }
