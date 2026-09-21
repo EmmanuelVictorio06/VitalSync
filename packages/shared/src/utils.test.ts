@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { monitoringDay, daysSinceDischarge, startOfToday, CLINIC_TIMEZONE, isDischargeAfterSurgery } from './utils.js';
+import {
+  monitoringDay,
+  monitoringDayDate,
+  daysSinceDischarge,
+  startOfToday,
+  CLINIC_TIMEZONE,
+  isDischargeAfterSurgery,
+} from './utils.js';
 
 /** Data civil (meia-noite UTC), no mesmo formato usado pelo código de produção. */
 const day = (y: number, m: number, d: number) => new Date(Date.UTC(y, m - 1, d));
@@ -25,6 +32,34 @@ describe('monitoringDay', () => {
 
   it('antes da data de alta é null', () => {
     expect(monitoringDay(discharge, day(2026, 2, 28))).toBeNull();
+  });
+});
+
+describe('monitoringDayDate — inverso de monitoringDay', () => {
+  const discharge = day(2026, 3, 1);
+
+  it('dia 1 é o próprio dia da alta', () => {
+    expect(monitoringDayDate(discharge, 1)?.toISOString()).toBe(discharge.toISOString());
+  });
+
+  it('dia 10 é 9 dias depois da alta', () => {
+    expect(monitoringDayDate(discharge, 10)?.toISOString()).toBe(day(2026, 3, 10).toISOString());
+  });
+
+  it('atravessa a virada de mês sem deslocar', () => {
+    expect(monitoringDayDate(day(2026, 3, 28), 10)?.toISOString()).toBe(day(2026, 4, 6).toISOString());
+  });
+
+  it('é o inverso exato de monitoringDay para todos os 10 dias', () => {
+    for (let d = 1; d <= 10; d++) {
+      expect(monitoringDay(discharge, monitoringDayDate(discharge, d)!)).toBe(d);
+    }
+  });
+
+  it('fora de 1..10 é null', () => {
+    expect(monitoringDayDate(discharge, 0)).toBeNull();
+    expect(monitoringDayDate(discharge, 11)).toBeNull();
+    expect(monitoringDayDate(discharge, 1.5)).toBeNull();
   });
 });
 

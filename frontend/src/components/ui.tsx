@@ -100,11 +100,39 @@ export function PageHeader({
 }
 
 /* ---------------- Status badge (semáforo) ---------------- */
-const STATUS_META: Record<ClinicalStatus, { cls: string; dot: string; label: string }> = {
-  GREEN: { cls: 'bg-stable/10 text-stable border border-stable/20', dot: 'bg-stable', label: 'Estável' },
-  YELLOW: { cls: 'bg-warning/10 text-warning border border-warning/20', dot: 'bg-warning', label: 'Atenção' },
-  RED: { cls: 'bg-alert/10 text-alert border border-alert/20', dot: 'bg-alert', label: 'Alerta' },
+const STATUS_META: Record<ClinicalStatus, { cls: string; dot: string; solid: string; label: string }> = {
+  GREEN: { cls: 'bg-stable/10 text-stable border border-stable/20', dot: 'bg-stable', solid: 'bg-stable text-stable-foreground', label: 'Estável' },
+  YELLOW: { cls: 'bg-warning/10 text-warning border border-warning/20', dot: 'bg-warning', solid: 'bg-warning text-warning-foreground', label: 'Atenção' },
+  RED: { cls: 'bg-alert/10 text-alert border border-alert/20', dot: 'bg-alert', solid: 'bg-alert text-alert-foreground', label: 'Alerta' },
 };
+
+/**
+ * Rótulo PT-BR do status clínico ("Estável"/"Atenção"/"Alerta") — mesmo texto
+ * do `StatusBadge`. Exposto para quem precisa do rótulo sem o badge inteiro
+ * (ex.: a legenda do calendário de acompanhamento), sem recriar o de-para.
+ */
+export function statusLabel(status: ClinicalStatus): string {
+  return (STATUS_META[status] ?? STATUS_META.GREEN).label;
+}
+
+/**
+ * Classe de preenchimento (bolinha/bloco) do status — o mesmo `bg-stable` /
+ * `bg-warning` / `bg-alert` que o badge e os gráficos usam.
+ */
+export function statusFill(status: ClinicalStatus): string {
+  return (STATUS_META[status] ?? STATUS_META.GREEN).dot;
+}
+
+/**
+ * Preenchimento sólido do status JUNTO com a cor de texto/ícone que combina
+ * com ele (`bg-warning text-warning-foreground`, etc.). Devolve o PAR de
+ * propósito: no tema escuro `--warning-foreground` é escuro, então um branco
+ * fixo sobre o amarelo fica ilegível. Use isto sempre que houver ícone ou
+ * texto EM CIMA da cor de status.
+ */
+export function statusSolid(status: ClinicalStatus): string {
+  return (STATUS_META[status] ?? STATUS_META.GREEN).solid;
+}
 
 export function StatusBadge({ status, showDot = true }: { status: ClinicalStatus; showDot?: boolean }) {
   const meta = STATUS_META[status] ?? STATUS_META.GREEN;

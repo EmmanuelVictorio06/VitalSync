@@ -30,6 +30,7 @@ import { sanitizeRichText } from '../lib/richText';
 import { PatientEditModal } from '../components/PatientEditModal';
 import { PatientRecordSummaryModal } from '../components/PatientRecordSummaryModal';
 import { PatientFollowupSection } from '../components/PatientFollowupSection';
+import { MonitoringStreak } from '../components/MonitoringStreak';
 import { PatientDay30Section } from '../components/PatientDay30Section';
 import { NurseReassessmentSection, useReassessmentBadge } from '../components/NurseReassessmentSection';
 import { Tabs, type TabDef } from '../components/Tabs';
@@ -47,6 +48,7 @@ import { Button, CustomSelect, Loading, PageContainer, StatusBadge, cn, statusBo
 import { patientDashboardService } from '../services/patientDashboardService';
 import { permissionService } from '../services/permissionService';
 import { getMissedPeriodsToday } from '../lib/staffEntry';
+import { buildMonitoringCalendar } from '../lib/monitoringCalendar';
 import type { PatientDashboard, VitalRecord } from '../lib/dto';
 
 type PeriodFilter = 'MORNING' | 'NIGHT' | 'BOTH';
@@ -152,6 +154,13 @@ export function PatientDashboardPage() {
     return { day, value: night.stepsCount, status: night.statusByVital.STEPS ?? ClinicalStatus.GREEN };
   });
 
+  /* Calendário dos 10 dias (widget de adesão). Usa os MESMOS `records` dos
+     gráficos e a data de alta do cabeçalho — nenhuma busca nova. */
+  const calendario = useMemo(
+    () => buildMonitoringCalendar({ dischargeDate: data?.patient.dischargeDate ?? '', records: data?.records ?? [] }),
+    [data],
+  );
+
   const latest = useMemo(() => {
     const recs = data?.records ?? [];
     return recs.length ? recs[recs.length - 1] : null;
@@ -207,6 +216,9 @@ export function PatientDashboardPage() {
 
   const abaVisaoGeral = (
     <>
+      {/* Adesão dos 10 dias (manhã/noite) — vem antes do seletor e dos gráficos. */}
+      <MonitoringStreak days={calendario} />
+
       {/* Período */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Período:</span>

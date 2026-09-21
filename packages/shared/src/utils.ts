@@ -53,6 +53,19 @@ export function monitoringDay(dischargeDate: Date, reference: Date = startOfToda
   return diffDays;
 }
 
+/**
+ * INVERSO de `monitoringDay`: a data civil (meia-noite UTC) do dia N de
+ * monitoramento. Dia 1 = dia da alta, então dia N = alta + (N-1) dias.
+ *
+ * Existe para que a régua de datas do calendário de acompanhamento saia da
+ * MESMA fonte que numera os dias — nada de recalcular "início + offset" na
+ * tela. Retorna null fora de 1..MONITORING_DAYS.
+ */
+export function monitoringDayDate(dischargeDate: Date, day: number): Date | null {
+  if (!Number.isInteger(day) || day < 1 || day > MONITORING_DAYS) return null;
+  return new Date(civilMs(dischargeDate) + (day - 1) * 86_400_000);
+}
+
 /** Nº de dias decorridos desde a alta (pode passar de 10, p/ exibição "Nº de dias pós-alta"). */
 export function daysSinceDischarge(dischargeDate: Date, reference: Date = startOfToday()): number {
   return Math.max(0, Math.round((civilMs(reference) - civilMs(dischargeDate)) / 86_400_000));
