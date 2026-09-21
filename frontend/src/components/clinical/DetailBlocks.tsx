@@ -9,7 +9,7 @@
 import type { ComponentType, ReactNode } from 'react';
 import { Period } from '@vitalsync/shared';
 import type { VitalSignRecord } from '../../services/types';
-import { DYSPNEA_LABEL } from '../../lib/alertTrigger';
+import { dyspneaLabel } from '../../lib/alertTrigger';
 import { patientInfoRows, type PatientInfoInput } from '../../lib/patientInfo';
 import { fmtDate } from '../attendances/utils';
 
@@ -114,7 +114,7 @@ export function MeasurementGrid({
           ],
           ['Frequência cardíaca', r?.heart_rate != null ? `${r.heart_rate} bpm` : '—'],
           ['Dor', r?.pain_level != null ? `${r.pain_level}/10` : '—'],
-          ['Dispneia', r?.dyspnea_level != null ? (DYSPNEA_LABEL[r.dyspnea_level] ?? String(r.dyspnea_level)) : '—'],
+          ['Dispneia', dyspneaLabel(r?.dyspnea_level)],
           ['Diurese', r?.urination_count != null ? `${r.urination_count}×` : '—'],
           ['Vômitos', fmtVomiting(r)],
           ['Sangramento', r?.has_bleeding ? 'Sim' : 'Não'],

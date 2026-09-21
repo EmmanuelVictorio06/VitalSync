@@ -50,12 +50,32 @@ export const ALERT_TYPE_OPTIONS = [
   'Passos',
 ] as const;
 
-/** Rótulos de dispneia (0-2) — mesmos do ReviewStep do paciente. */
+/**
+ * Rótulos CLÍNICOS de dispneia (0-2) — fonte única para as telas da equipe
+ * (Detalhes do Alerta, Detalhes do Atendimento, Acompanhamento Individual).
+ *
+ * Dispneia NÃO é escala 0–10 como a dor: são três alternativas categóricas, e
+ * o número guardado é só o código delas. Quem exibe usa `dyspneaLabel()`.
+ *
+ * As telas DO PACIENTE (SymptomsStep/ReviewStep) têm um vocabulário próprio,
+ * mais coloquial ("Sem dispneia", "Dispneia leve") — é deliberado, público
+ * diferente; não unifique sem decidir qual texto o paciente deve ler.
+ */
 export const DYSPNEA_LABEL: Record<number, string> = {
   0: 'Ausente',
   1: 'Leve',
   2: 'Moderada/Intensa',
 };
+
+/**
+ * Rótulo do nível de dispneia, com os fallbacks que todas as telas repetiam:
+ * `null`/ausente → placeholder; código desconhecido → o próprio número (não
+ * some da tela se um nível novo entrar antes do de-para ser atualizado).
+ */
+export function dyspneaLabel(level: number | null | undefined, empty = '—'): string {
+  if (level == null) return empty;
+  return DYSPNEA_LABEL[level] ?? String(level);
+}
 
 /**
  * O embed `vital_record:vital_sign_records(*)` é many-to-one e o PostgREST
@@ -86,9 +106,7 @@ function metricValue(type: string, r: VitalSignRecord): string | null {
     case 'Dor':
       return r.pain_level != null ? `${r.pain_level}/10` : null;
     case 'Dispneia':
-      return r.dyspnea_level != null
-        ? DYSPNEA_LABEL[r.dyspnea_level] ?? String(r.dyspnea_level)
-        : null;
+      return r.dyspnea_level != null ? dyspneaLabel(r.dyspnea_level) : null;
     case 'Vômito':
       if (r.had_vomit == null && (r.vomiting_count ?? 0) === 0) return null;
       if (!(r.had_vomit ?? (r.vomiting_count ?? 0) > 0)) return 'Não';

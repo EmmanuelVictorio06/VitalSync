@@ -20,7 +20,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { ALERT_TYPE_OPTIONS } from './alertTrigger';
+import { ALERT_TYPE_OPTIONS, DYSPNEA_LABEL, dyspneaLabel } from './alertTrigger';
 
 /** <raiz>/supabase/migrations — este arquivo está em <raiz>/frontend/src/lib/. */
 const MIGRATIONS_DIR = fileURLToPath(new URL('../../../supabase/migrations/', import.meta.url));
@@ -69,5 +69,33 @@ describe('contrato: vtype da RPC x ALERT_TYPE_OPTIONS', () => {
     for (const t of fallback) {
       expect(ALERT_TYPE_OPTIONS, `fallback virou opção de filtro: ${t}`).not.toContain(t);
     }
+  });
+});
+
+/**
+ * Dispneia NÃO é escala 0–10: são três alternativas categóricas, e o número
+ * guardado é só o código delas. `dyspneaLabel` é a fonte única desse de-para
+ * nas telas da equipe — se alguém acrescentar um nível sem atualizar o mapa, a
+ * tela mostra o número em vez de sumir com o dado.
+ */
+describe('dyspneaLabel — rótulos categóricos de dispneia', () => {
+  it('cobre exatamente os três níveis do protocolo', () => {
+    expect(Object.keys(DYSPNEA_LABEL)).toEqual(['0', '1', '2']);
+    expect(dyspneaLabel(0)).toBe('Ausente');
+    expect(dyspneaLabel(1)).toBe('Leve');
+    expect(dyspneaLabel(2)).toBe('Moderada/Intensa');
+  });
+
+  it('nenhum rótulo é numérico (não pode virar "2 / 10" na tela)', () => {
+    for (const rotulo of Object.values(DYSPNEA_LABEL)) {
+      expect(rotulo).not.toMatch(/\d/);
+    }
+  });
+
+  it('sem valor cai no placeholder; nível desconhecido mostra o código', () => {
+    expect(dyspneaLabel(null)).toBe('—');
+    expect(dyspneaLabel(undefined)).toBe('—');
+    expect(dyspneaLabel(null, 'sem dado')).toBe('sem dado');
+    expect(dyspneaLabel(7)).toBe('7');
   });
 });
