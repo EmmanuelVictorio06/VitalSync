@@ -9,6 +9,8 @@
  */
 import { supabase } from '../lib/supabase';
 import { effectiveSeverity, isWithNursing } from '../lib/alertSeverity';
+import { STUDY_VARIABLE_COLUMNS } from '../lib/studyVariables';
+import type { StudyVariablesSource } from '../lib/studyVariables';
 import { homologationService } from './homologationService';
 import type { Role } from '@vitalsync/shared';
 import type {
@@ -19,30 +21,31 @@ import type {
   VitalSignRecord,
 } from './types';
 
+/**
+ * Dados do paciente embutidos na linha do alerta. As variáveis clínicas do
+ * estudo entram por `StudyVariablesSource` (lib/studyVariables.ts) — mesma
+ * fonte que a UI e o select usam, para os três não poderem divergir.
+ */
+export interface AlertPatient extends StudyVariablesSource {
+  id: string;
+  name: string;
+  birth_date: string | null;
+  phone: string | null;
+  surgery_date: string | null;
+  hospital_discharge_date: string | null;
+  team_id: string;
+  status: EntityStatus;
+  surgery_type: { name: string } | null;
+  hospital: { name: string } | null;
+  /** Resumo de prontuário (texto livre, opcional) — histórico, comorbidades, alergias, medicação de uso contínuo. */
+  medical_record_summary: string | null;
+  /** Comorbidades (protocolo 5.9) — lista de texto livre, `[]` quando vazia. */
+  comorbidities: string[];
+}
+
 /** Linha enriquecida exibida na lista/detalhe (joins resolvidos no serviço). */
 export interface AlertRow extends ClinicalAlert {
-  patient: {
-    id: string;
-    name: string;
-    birth_date: string | null;
-    phone: string | null;
-    surgery_date: string | null;
-    hospital_discharge_date: string | null;
-    team_id: string;
-    status: EntityStatus;
-    surgery_type: { name: string } | null;
-    hospital: { name: string } | null;
-    /** Resumo de prontuário (texto livre, opcional) — histórico, comorbidades, alergias, medicação de uso contínuo. */
-    medical_record_summary: string | null;
-    /** Variáveis clínicas/cirúrgicas do estudo (protocolo 5.9) — contexto de decisão na triagem. */
-    sex: 'M' | 'F' | null;
-    weight_kg: number | null;
-    height_cm: number | null;
-    comorbidities: string[];
-    length_of_stay_days: number | null;
-    alternative_phone: string | null;
-    tcle_accepted_at: string | null;
-  } | null;
+  patient: AlertPatient | null;
   team: { team_number: number; main_surgeon_id: string | null } | null;
   vital_record: VitalSignRecord | null;
   /** Nomes resolvidos (não vêm do join por FK para evitar fragilidade). */
@@ -88,18 +91,25 @@ export interface TeamProfessional {
   role: 'MAIN_SURGEON' | 'ASSOCIATED_DOCTOR';
 }
 
-const ALERT_SELECT = `
+/**
+ * Colunas das variáveis clínicas do estudo vêm de `STUDY_VARIABLE_COLUMNS`
+ * (lib/studyVariables.ts), que é a mesma lista que a UI usa para montar o grid.
+ * Assim não existe um segundo de-para: acrescentar uma variável lá já a traz
+ * aqui, e nenhuma pode cair em "—" por ter ficado fora do select.
+ * `ALERT_SELECT` é exportado só para o teste de contrato.
+ */
+export const ALERT_SELECT = `
   *,
   patient:patients(
     id, name, birth_date, phone, surgery_date, hospital_discharge_date, team_id, status,
-    medical_record_summary, sex, weight_kg, height_cm, comorbidities, length_of_stay_days,
-    alternative_phone, tcle_accepted_at,
+    medical_record_summary, comorbidities,
+    ${STUDY_VARIABLE_COLUMNS.join(', ')},
     surgery_type:surgery_types(name),
     hospital:hospitals(name)
   ),
   team:medical_teams(team_number, main_surgeon_id),
   vital_record:vital_sign_records(*)
-` as const;
+`;
 
 function isToday(iso: string | null): boolean {
   if (!iso) return false;

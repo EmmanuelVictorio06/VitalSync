@@ -7,10 +7,11 @@
  * de seções — este módulo só evita repetir o JSX/lógica de apresentação.
  */
 import type { ComponentType, ReactNode } from 'react';
-import { calculateAge, Period } from '@vitalsync/shared';
+import { Period } from '@vitalsync/shared';
 import type { VitalSignRecord } from '../../services/types';
 import { DYSPNEA_LABEL } from '../../lib/alertTrigger';
-import { fmtDate, teamLabel } from '../attendances/utils';
+import { patientInfoRows, type PatientInfoInput } from '../../lib/patientInfo';
+import { fmtDate } from '../attendances/utils';
 
 /* ---------------- DSection ---------------- */
 export function DSection({
@@ -47,15 +48,9 @@ export function DGrid({ items }: { items: Array<[string, string]> }) {
 }
 
 /* ---------------- PatientInfoGrid ---------------- */
-export interface PatientInfoInput {
-  name: string;
-  birth_date: string | null;
-  phone: string | null;
-  surgery_type: { name: string } | null;
-  hospital: { name: string } | null;
-  surgery_date: string | null;
-  hospital_discharge_date: string | null;
-}
+/** O de-para rótulo/valor mora em `lib/patientInfo.ts` (fonte única compartilhada
+ *  com a conferência do cadastro); aqui fica só a renderização. */
+export type { PatientInfoInput } from '../../lib/patientInfo';
 
 /** Grid de dados do paciente — mesmo conjunto de campos nos dois drawers. */
 export function PatientInfoGrid({
@@ -69,22 +64,7 @@ export function PatientInfoGrid({
   surgeonName: string | null;
   monitoringDay: number | null | undefined;
 }) {
-  return (
-    <DGrid
-      items={[
-        ['Nome', patient?.name ?? '—'],
-        ['Idade', patient?.birth_date ? `${calculateAge(new Date(patient.birth_date))} anos` : '—'],
-        ['Telefone', patient?.phone ?? '—'],
-        ['Tipo de cirurgia', patient?.surgery_type?.name ?? '—'],
-        ['Hospital', patient?.hospital?.name ?? '—'],
-        ['Data da cirurgia', fmtDate(patient?.surgery_date)],
-        ['Data da alta', fmtDate(patient?.hospital_discharge_date)],
-        ['Dia de monitoramento', monitoringDay ? `D+${monitoringDay}` : '—'],
-        ['Equipe', teamLabel(teamNumber)],
-        ['Cirurgião responsável', surgeonName ?? '—'],
-      ]}
-    />
-  );
+  return <DGrid items={patientInfoRows({ patient, teamNumber, surgeonName, monitoringDay }).map((r) => [r.label, r.value])} />;
 }
 
 /* ---------------- MeasurementGrid ---------------- */

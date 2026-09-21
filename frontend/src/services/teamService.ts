@@ -29,6 +29,27 @@ export const teamService = {
     return (data as MedicalTeam[]) ?? [];
   },
 
+  /**
+   * Equipes para o cadastro de paciente: número + nome do cirurgião responsável.
+   * O nome vem da view pública `profiles_public` (campo não sensível — M-09),
+   * em UMA query, no mesmo padrão do `alertService`. Serve ao dropdown e à
+   * tela de conferência, que mostra a equipe e o cirurgião antes de confirmar.
+   */
+  async listForRegistration(): Promise<Array<{ id: string; number: number; surgeonName: string | null }>> {
+    const teams = await this.list();
+    const surgeonIds = [...new Set(teams.map((t) => t.main_surgeon_id).filter((id): id is string => !!id))];
+    const names = new Map<string, string>();
+    if (surgeonIds.length > 0) {
+      const { data } = await supabase.from('profiles_public').select('id, name').in('id', surgeonIds);
+      for (const p of (data ?? []) as Array<{ id: string; name: string }>) names.set(p.id, p.name);
+    }
+    return teams.map((t) => ({
+      id: t.id,
+      number: t.team_number,
+      surgeonName: t.main_surgeon_id ? names.get(t.main_surgeon_id) ?? null : null,
+    }));
+  },
+
   /** Alias semântico para a feature de Gerenciar Equipes. */
   getTeams(): Promise<MedicalTeam[]> {
     return this.list();
