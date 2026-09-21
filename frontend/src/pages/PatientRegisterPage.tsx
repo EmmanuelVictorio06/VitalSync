@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Copy, MessageCircle, UserPlus } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { CheckCircle2, ClipboardList, Copy, MessageCircle } from 'lucide-react';
 import { calculateAge, isDischargeAfterSurgery, whatsappLink } from '@vitalsync/shared';
 import { Role, useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
@@ -16,37 +17,27 @@ import { teamService } from '../services/teamService';
 import { teamViewService } from '../services/teamViewService';
 import { homologationService } from '../services/homologationService';
 import { patientService } from '../services/patientService';
+import { PatientReviewModal } from '../components/PatientReviewModal';
+import {
+  DISCHARGE_BEFORE_SURGERY_ERROR,
+  buildReviewSections,
+  registrationProblems,
+  reviewComorbidities,
+  type PatientRegistrationForm,
+  type RegistrationField,
+} from '../lib/patientReview';
 import type { Hospital, SurgeryType } from '../services/types';
 
-interface FormState {
-  name: string;
-  cpf: string;
-  birthDate: string;
-  phone: string;
-  surgeryTypeId: string;
-  surgeryDate: string;
-  dischargeDate: string;
-  hospitalId: string;
-  teamId: string;
-  isTest: boolean;
-  medicalRecordSummary: string;
-  sex: '' | 'M' | 'F';
-  weightKg: string;
-  heightCm: string;
-  comorbidities: string;
-  lengthOfStayDays: string;
-  alternativePhone: string;
-  tcleAcceptedAt: string;
-}
+/**
+ * O estado do formulário é o mesmo tipo que a conferência recebe
+ * (`lib/patientReview.ts`) — assim um campo novo aqui aparece lá sem ajuste.
+ */
+type FormState = PatientRegistrationForm;
 
 const empty: FormState = {
   name: '', cpf: '', birthDate: '', phone: '', surgeryTypeId: '', surgeryDate: '', dischargeDate: '', hospitalId: '', teamId: '', isTest: false, medicalRecordSummary: '',
   sex: '', weightKg: '', heightCm: '', comorbidities: '', lengthOfStayDays: '', alternativePhone: '', tcleAcceptedAt: '',
 };
-
-// Mensagem única (submit + feedback imediato no campo) — hospital_discharge_date
-// é o marco zero do monitoramento, então essa ordem precisa estar certa.
-const DISCHARGE_BEFORE_SURGERY_ERROR = 'A data da alta hospitalar não pode ser anterior à data da cirurgia.';
 
 export function PatientRegisterPage() {
   const toast = useToast();
@@ -60,26 +51,29 @@ export function PatientRegisterPage() {
   const [form, setForm] = useState<FormState>({ ...empty, isTest: featureFlags.defaultTestPatient });
   const [surgeryTypes, setSurgeryTypes] = useState<SurgeryType[]>([]);
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
-  const [teamOptions, setTeamOptions] = useState<Array<{ value: string; label: string }>>([]);
+  // Equipes com número e cirurgião responsável: alimentam o dropdown E a
+  // conferência (que mostra "Equipe 01" / "Dra. Ana Souza" antes de confirmar).
+  const [teams, setTeams] = useState<Array<{ id: string; number: number; surgeonName: string | null }>>([]);
   const [busy, setBusy] = useState(false);
+  /** Conferência aberta: o submit só sai daqui depois do "Confirmar cadastro". */
+  const [reviewing, setReviewing] = useState(false);
   const [result, setResult] = useState<{ link: string; phone: string; name: string } | null>(null);
 
   useEffect(() => {
     const teamsPromise = isManager
       ? teamViewService.getManagerTeams().then((details) =>
           details.map((d) => ({
-            value: d.summary.id,
-            label: `${d.summary.surgeonName} — Equipe nº ${String(d.summary.number).padStart(2, '0')}`,
+            id: d.summary.id,
+            number: d.summary.number,
+            surgeonName: d.summary.surgeonName ?? null,
           })),
         )
-      : teamService.list().then((t) =>
-          t.map((x) => ({ value: x.id, label: `Equipe ${String(x.team_number).padStart(2, '0')}` })),
-        );
+      : teamService.listForRegistration();
     Promise.all([surgeryTypeService.list(), hospitalService.list(), teamsPromise])
       .then(([st, h, t]) => {
         setSurgeryTypes(st.filter((x) => x.status === 'ACTIVE'));
         setHospitals(h.filter((x) => x.status === 'ACTIVE'));
-        setTeamOptions(t);
+        setTeams(t);
       })
       .catch(() => toast.error('Erro ao carregar as listas de cadastro.'));
   }, [isManager]);
@@ -97,6 +91,19 @@ export function PatientRegisterPage() {
       .catch(() => {});
   }, []);
 
+  // Rótulo do dropdown: gerente vê de quem é cada equipe (ele atende vários
+  // cirurgiões); admin vê só o número, como antes.
+  const teamOptions = useMemo(
+    () =>
+      teams.map((t) => ({
+        value: t.id,
+        label: isManager && t.surgeonName
+          ? `${t.surgeonName} — Equipe nº ${String(t.number).padStart(2, '0')}`
+          : `Equipe ${String(t.number).padStart(2, '0')}`,
+      })),
+    [teams, isManager],
+  );
+
   const age = useMemo(() => {
     if (!form.birthDate) return '';
     const d = new Date(form.birthDate);
@@ -110,33 +117,48 @@ export function PatientRegisterPage() {
     [form.surgeryDate, form.dischargeDate],
   );
 
+  const lookups = useMemo(
+    () => ({
+      surgeryTypes: surgeryTypes.map((s) => ({ id: s.id, name: s.name })),
+      hospitals: hospitals.map((h) => ({ id: h.id, name: h.name })),
+      teams,
+    }),
+    [surgeryTypes, hospitals, teams],
+  );
+
+  const reviewSections = useMemo(() => buildReviewSections(form, lookups), [form, lookups]);
+  const problems = useMemo(() => registrationProblems(form), [form]);
+
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((p) => ({ ...p, [key]: value }));
   }
 
+  /**
+   * Fecha a conferência e devolve o foco ao campo no formulário. Os campos são
+   * marcados com `data-campo` (FieldAnchor) porque nem todo controle do projeto
+   * aceita `id` — CustomSelect, DateField, PhoneInput e RichTextField envolvem
+   * o input real —, então focamos o primeiro elemento focável de dentro.
+   */
+  function fixField(field: RegistrationField) {
+    setReviewing(false);
+    // Espera o modal desmontar (ele trava o scroll do body enquanto aberto).
+    window.setTimeout(() => {
+      const anchor = document.querySelector<HTMLElement>(`[data-campo="${field}"]`);
+      if (!anchor) return;
+      anchor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      anchor
+        .querySelector<HTMLElement>('input, textarea, button, [contenteditable="true"]')
+        ?.focus({ preventScroll: true });
+    }, 0);
+  }
+
   async function submit() {
-    if (!validateCpf(form.cpf)) {
-      toast.error('CPF inválido. Verifique os dígitos e tente novamente.');
-      return;
-    }
-    // DateField não é um input de data nativo, então o `required` do campo é
-    // só visual (asterisco) — sem essa checagem explícita, o form deixaria
-    // passar com data obrigatória vazia (o navegador não bloqueia mais o
-    // submit sozinho, como bloqueava com o input nativo).
-    if (!form.birthDate) {
-      toast.error('Informe a data de nascimento.');
-      return;
-    }
-    if (!form.surgeryDate) {
-      toast.error('Informe a data da cirurgia.');
-      return;
-    }
-    if (!form.dischargeDate) {
-      toast.error('Informe a data da alta hospitalar.');
-      return;
-    }
-    if (!isDischargeAfterSurgery(form.surgeryDate, form.dischargeDate)) {
-      toast.error(DISCHARGE_BEFORE_SURGERY_ERROR);
+    // Guarda final: a conferência já bloqueia o "Confirmar", mas as mesmas
+    // regras rodam aqui (fonte única em `registrationProblems`) para o submit
+    // nunca depender só da UI. O servidor revalida em create-patient.
+    const [impedimento] = registrationProblems(form);
+    if (impedimento) {
+      toast.error(`${impedimento.label}: ${impedimento.message}`);
       return;
     }
     setBusy(true);
@@ -172,6 +194,7 @@ export function PatientRegisterPage() {
       // preview protegido da Vercel; cai em window.location.origin no dev local.
       const link = patientVitalsLink(patient.secure_token);
       toast.success('Paciente cadastrado e link gerado!');
+      setReviewing(false);
       setResult({ link, phone: form.phone, name: form.name });
       setForm({ ...empty, isTest: homologation });
     } catch (err) {
@@ -197,41 +220,61 @@ export function PatientRegisterPage() {
         className="space-y-6 animate-entry [animation-delay:100ms]"
         onSubmit={(e) => {
           e.preventDefault();
-          void submit();
+          // Não envia direto: abre a conferência. O cadastro só sai do
+          // "Confirmar cadastro" lá dentro, que chama o mesmo `submit()`.
+          setReviewing(true);
         }}
       >
         <Block index={1} title="Identificação do Paciente">
           <div className="grid md:grid-cols-2 gap-4">
-            <TextInput label="Nome do paciente" placeholder="Ex. Maria Aparecida" value={form.name} onChange={(e) => set('name', e.target.value)} required />
-            <TextInput
-              label="CPF"
-              hint="Usado para o paciente confirmar a identidade no link de medição."
-              placeholder="000.000.000-00"
-              inputMode="numeric"
-              value={form.cpf}
-              onChange={(e) => set('cpf', formatCpf(e.target.value))}
-              required
-            />
-            <PhoneInput label="Telefone (WhatsApp)" value={form.phone} onChange={(v) => set('phone', v)} required />
-            <DateField label="Data de nascimento" value={form.birthDate} onChange={(e) => set('birthDate', e.target.value)} required />
+            <FieldAnchor campo="name">
+              <TextInput label="Nome do paciente" placeholder="Ex. Maria Aparecida" value={form.name} onChange={(e) => set('name', e.target.value)} required />
+            </FieldAnchor>
+            <FieldAnchor campo="cpf">
+              <TextInput
+                label="CPF"
+                hint="Usado para o paciente confirmar a identidade no link de medição."
+                placeholder="000.000.000-00"
+                inputMode="numeric"
+                value={form.cpf}
+                onChange={(e) => set('cpf', formatCpf(e.target.value))}
+                required
+              />
+            </FieldAnchor>
+            <FieldAnchor campo="phone">
+              <PhoneInput label="Telefone (WhatsApp)" value={form.phone} onChange={(v) => set('phone', v)} required />
+            </FieldAnchor>
+            <FieldAnchor campo="birthDate">
+              <DateField label="Data de nascimento" value={form.birthDate} onChange={(e) => set('birthDate', e.target.value)} required />
+            </FieldAnchor>
             <Field label="Idade" hint="Calculada automaticamente.">
               <input className="input bg-muted/60" value={age} readOnly placeholder="—" />
             </Field>
-            <PhoneInput
-              label="Contato alternativo"
-              hint="Exigido no protocolo do estudo, caso o principal não atenda (opcional)."
-              value={form.alternativePhone}
-              onChange={(v) => set('alternativePhone', v)}
-            />
+            <FieldAnchor campo="alternativePhone">
+              <PhoneInput
+                label="Contato alternativo"
+                hint="Exigido no protocolo do estudo, caso o principal não atenda (opcional)."
+                value={form.alternativePhone}
+                onChange={(v) => set('alternativePhone', v)}
+              />
+            </FieldAnchor>
           </div>
         </Block>
 
         <Block index={2} title="Detalhes do Procedimento">
           <div className="grid md:grid-cols-2 gap-4">
-            <CustomSelect label="Tipo de cirurgia" value={form.surgeryTypeId} onChange={(e) => set('surgeryTypeId', e.target.value)} options={surgeryTypes.map((s) => ({ value: s.id, label: s.name }))} required />
-            <CustomSelect label="Hospital" value={form.hospitalId} onChange={(e) => set('hospitalId', e.target.value)} options={hospitals.map((h) => ({ value: h.id, label: h.name }))} required />
-            <DateField label="Data da cirurgia" value={form.surgeryDate} onChange={(e) => set('surgeryDate', e.target.value)} required />
-            <DateField label="Data da alta hospitalar" hint="Inicia a contagem dos 10 dias de monitoramento." value={form.dischargeDate} onChange={(e) => set('dischargeDate', e.target.value)} error={dischargeDateError} required />
+            <FieldAnchor campo="surgeryTypeId">
+              <CustomSelect label="Tipo de cirurgia" value={form.surgeryTypeId} onChange={(e) => set('surgeryTypeId', e.target.value)} options={surgeryTypes.map((s) => ({ value: s.id, label: s.name }))} required />
+            </FieldAnchor>
+            <FieldAnchor campo="hospitalId">
+              <CustomSelect label="Hospital" value={form.hospitalId} onChange={(e) => set('hospitalId', e.target.value)} options={hospitals.map((h) => ({ value: h.id, label: h.name }))} required />
+            </FieldAnchor>
+            <FieldAnchor campo="surgeryDate">
+              <DateField label="Data da cirurgia" value={form.surgeryDate} onChange={(e) => set('surgeryDate', e.target.value)} required />
+            </FieldAnchor>
+            <FieldAnchor campo="dischargeDate">
+              <DateField label="Data da alta hospitalar" hint="Inicia a contagem dos 10 dias de monitoramento." value={form.dischargeDate} onChange={(e) => set('dischargeDate', e.target.value)} error={dischargeDateError} required />
+            </FieldAnchor>
           </div>
           <div className="mt-4">
             <RichTextField
@@ -246,16 +289,26 @@ export function PatientRegisterPage() {
 
         <Block index={3} title="Variáveis Clínicas do Estudo">
           <div className="grid md:grid-cols-2 gap-4">
-            <CustomSelect
-              label="Sexo"
-              value={form.sex}
-              onChange={(e) => set('sex', e.target.value as FormState['sex'])}
-              options={[{ value: 'M', label: 'Masculino' }, { value: 'F', label: 'Feminino' }]}
-            />
-            <TextInput label="Peso (kg)" inputMode="decimal" placeholder="Ex. 72,5" value={form.weightKg} onChange={(e) => set('weightKg', e.target.value)} />
-            <TextInput label="Altura (cm)" inputMode="numeric" placeholder="Ex. 170" value={form.heightCm} onChange={(e) => set('heightCm', e.target.value)} />
-            <TextInput label="Tempo de internação (dias)" inputMode="numeric" value={form.lengthOfStayDays} onChange={(e) => set('lengthOfStayDays', e.target.value)} />
-            <DateField label="TCLE assinado em" hint="Data de assinatura do Termo de Consentimento. O termo precisa conter a cláusula de contato ativo (ver docs/AVISO_CONTATO_ATIVO.md)." value={form.tcleAcceptedAt} onChange={(e) => set('tcleAcceptedAt', e.target.value)} />
+            <FieldAnchor campo="sex">
+              <CustomSelect
+                label="Sexo"
+                value={form.sex}
+                onChange={(e) => set('sex', e.target.value as FormState['sex'])}
+                options={[{ value: 'M', label: 'Masculino' }, { value: 'F', label: 'Feminino' }]}
+              />
+            </FieldAnchor>
+            <FieldAnchor campo="weightKg">
+              <TextInput label="Peso (kg)" inputMode="decimal" placeholder="Ex. 72,5" value={form.weightKg} onChange={(e) => set('weightKg', e.target.value)} />
+            </FieldAnchor>
+            <FieldAnchor campo="heightCm">
+              <TextInput label="Altura (cm)" inputMode="numeric" placeholder="Ex. 170" value={form.heightCm} onChange={(e) => set('heightCm', e.target.value)} />
+            </FieldAnchor>
+            <FieldAnchor campo="lengthOfStayDays">
+              <TextInput label="Tempo de internação (dias)" inputMode="numeric" value={form.lengthOfStayDays} onChange={(e) => set('lengthOfStayDays', e.target.value)} />
+            </FieldAnchor>
+            <FieldAnchor campo="tcleAcceptedAt">
+              <DateField label="TCLE assinado em" hint="Data de assinatura do Termo de Consentimento. O termo precisa conter a cláusula de contato ativo (ver docs/AVISO_CONTATO_ATIVO.md)." value={form.tcleAcceptedAt} onChange={(e) => set('tcleAcceptedAt', e.target.value)} />
+            </FieldAnchor>
           </div>
           <div className="mt-4">
             <RichTextField
@@ -270,18 +323,20 @@ export function PatientRegisterPage() {
         </Block>
 
         <Block index={4} title="Equipe Médica">
-          <CustomSelect
-            label="Equipe responsável"
-            hint={
-              isManager
-                ? 'Você só pode cadastrar pacientes em equipes de cirurgiões vinculados a você.'
-                : 'O paciente fica vinculado a esta equipe; os médicos dela receberão os alertas.'
-            }
-            value={form.teamId}
-            onChange={(e) => set('teamId', e.target.value)}
-            options={teamOptions}
-            required
-          />
+          <FieldAnchor campo="teamId">
+            <CustomSelect
+              label="Equipe responsável"
+              hint={
+                isManager
+                  ? 'Você só pode cadastrar pacientes em equipes de cirurgiões vinculados a você.'
+                  : 'O paciente fica vinculado a esta equipe; os médicos dela receberão os alertas.'
+              }
+              value={form.teamId}
+              onChange={(e) => set('teamId', e.target.value)}
+              options={teamOptions}
+              required
+            />
+          </FieldAnchor>
 
           {(homologation || form.isTest) && (
             <div className="mt-4 flex flex-col gap-2 rounded-lg border border-warning/30 bg-warning/5 p-4">
@@ -300,10 +355,24 @@ export function PatientRegisterPage() {
 
         <div className="flex justify-end">
           <Button type="submit" loading={busy}>
-            <UserPlus className="size-4" /> Cadastrar e gerar link
+            <ClipboardList className="size-4" /> Conferir e cadastrar
           </Button>
         </div>
       </form>
+
+      {reviewing && (
+        <PatientReviewModal
+          sections={reviewSections}
+          problems={problems}
+          comorbidities={reviewComorbidities(form)}
+          medicalRecordSummary={form.medicalRecordSummary}
+          isTest={form.isTest}
+          busy={busy}
+          onEdit={() => setReviewing(false)}
+          onFixField={fixField}
+          onConfirm={() => void submit()}
+        />
+      )}
 
       {result && (
         <section className="bg-card border border-stable/30 rounded-xl p-6 animate-entry">
@@ -357,5 +426,19 @@ function Block({ index, title, children }: { index: number; title: string; child
       </header>
       {children}
     </section>
+  );
+}
+
+/**
+ * Âncora de campo: marca o container com `data-campo` para a conferência poder
+ * rolar até ele e devolver o foco ("Corrigir"). É um wrapper, e não um `id` no
+ * input, porque CustomSelect/DateField/PhoneInput envolvem o controle real e
+ * não repassam `id`. `scroll-mt-24` evita que o cabeçalho fixo cubra o campo.
+ */
+function FieldAnchor({ campo, children }: { campo: RegistrationField; children: ReactNode }) {
+  return (
+    <div data-campo={campo} className="min-w-0 scroll-mt-24">
+      {children}
+    </div>
   );
 }
