@@ -1,0 +1,35 @@
+-- ============================================================================
+-- Migration: 0083_regra_nova_para_novos_pacientes
+--
+-- ESTA É A VIRADA. A partir dela, todo paciente cadastrado sem informar
+-- `monitoring_starts_next_day` nasce na REGRA NOVA (dia 1 = dia seguinte à
+-- alta; janela alta + 1 … alta + 10). A coluna, o trigger de imutabilidade e
+-- as funções que entendem os dois ramos vieram na 0082.
+--
+-- Os pacientes que já existem NÃO mudam: mudar o default não toca linha
+-- gravada, e eles continuam com false (regra antiga) para sempre — o trigger
+-- da 0082 impede que alguém troque depois.
+--
+-- ⚠️ ORDEM EM PRODUÇÃO: esta migration SÓ pode subir DEPOIS que o frontend
+-- novo (que lê `monitoring_starts_next_day` e calcula dia/janela pela âncora)
+-- estiver no ar. Com o frontend antigo, um paciente da regra nova apareceria
+-- na tela com o dia 1 no dia da alta, divergindo do banco. A 0082 sozinha é
+-- segura com o frontend antigo, porque não cria ninguém na regra nova.
+--
+-- Uma única instrução de efeito. Idempotente. Não apaga nem altera dados.
+-- ============================================================================
+
+alter table public.patients alter column monitoring_starts_next_day set default true;
+
+-- ----------------------------------------------------------------------------
+-- VERIFICAÇÃO (rode após aplicar):
+--
+--   select column_name, is_nullable, column_default
+--     from information_schema.columns
+--    where table_schema = 'public' and table_name = 'patients'
+--      and column_name = 'monitoring_starts_next_day';
+--   --> NO | true
+--
+--   -- Os existentes continuam na regra antiga:
+--   select monitoring_starts_next_day, count(*) from public.patients group by 1;
+-- ----------------------------------------------------------------------------
