@@ -76,6 +76,25 @@ export function isWithinMonitoringWindow(dischargeDate: Date, reference: Date = 
   return monitoringDay(dischargeDate, reference) !== null;
 }
 
+/**
+ * ÂNCORA da janela de monitoramento: a data civil que é o DIA 1 do paciente.
+ *
+ * A regra fica gravada em cada paciente (`patients.monitoring_starts_next_day`,
+ * migration 0082):
+ *   - false (regra antiga) → a âncora é a própria alta (dia 1 = dia da alta);
+ *   - true  (regra nova)   → a âncora é o dia civil seguinte à alta.
+ *
+ * `monitoringDay`, `monitoringDayDate` e `isWithinMonitoringWindow` recebem a
+ * âncora no lugar da alta; com `startsNextDay = false` o resultado é idêntico ao
+ * de passar a alta. `daysSinceDischarge` NÃO deve recebê-la: ele mede dias
+ * corridos desde a ALTA REAL ("Dias pós-alta", acompanhamentos de 48 h e de
+ * 30 dias), que não dependem da regra da janela.
+ */
+export function monitoringAnchor(dischargeDate: Date, startsNextDay: boolean): Date {
+  if (!startsNextDay) return dischargeDate;
+  return new Date(civilMs(dischargeDate) + 86_400_000);
+}
+
 /** Formata uma data civil (meia-noite UTC) como dd/mm/aaaa, sem deslocar o fuso. */
 export function formatCivilDate(value: Date | string, locale = 'pt-BR'): string {
   const d = typeof value === 'string' ? new Date(value) : value;

@@ -160,7 +160,12 @@ export function PatientDashboardPage() {
   /* Calendário dos 10 dias (widget de adesão). Usa os MESMOS `records` dos
      gráficos e a data de alta do cabeçalho — nenhuma busca nova. */
   const calendario = useMemo(
-    () => buildMonitoringCalendar({ dischargeDate: data?.patient.dischargeDate ?? '', records: data?.records ?? [] }),
+    () =>
+      buildMonitoringCalendar({
+        dischargeDate: data?.patient.dischargeDate ?? '',
+        records: data?.records ?? [],
+        startsNextDay: data?.patient.monitoringStartsNextDay,
+      }),
     [data],
   );
 

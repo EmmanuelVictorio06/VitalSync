@@ -126,6 +126,8 @@ export interface PatientDashboard {
     attendedByName: string | null;
     daysSinceDischarge: number;
     monitoringDay: number | null;
+    /** Regra da janela (0082): true = dia 1 é o dia seguinte à alta. Ausente = regra antiga. */
+    monitoringStartsNextDay?: boolean;
     /** Resumo de prontuário (texto livre, opcional). */
     medicalRecordSummary: string | null;
     /** Esquecimento de hoje (janela fechada, sem registro) — null quando não se aplica. */

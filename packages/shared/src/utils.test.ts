@@ -7,6 +7,7 @@ import {
   CLINIC_TIMEZONE,
   isDischargeAfterSurgery,
 } from './utils.js';
+import { monitoringAnchor } from './utils.js';
 
 /** Data civil (meia-noite UTC), no mesmo formato usado pelo código de produção. */
 const day = (y: number, m: number, d: number) => new Date(Date.UTC(y, m - 1, d));
@@ -164,5 +165,45 @@ describe('isDischargeAfterSurgery', () => {
     // máquina que roda o teste.
     expect(isDischargeAfterSurgery('2026-08-14', '2026-08-14')).toBe(true);
     expect(isDischargeAfterSurgery('2026-08-14', '2026-08-13')).toBe(false);
+  });
+});
+
+describe('monitoringAnchor — dia 1 da janela conforme a regra do paciente', () => {
+  it('regra antiga (false) devolve a própria alta', () => {
+    const discharge = day(2026, 3, 1);
+    expect(monitoringAnchor(discharge, false)).toBe(discharge);
+    expect(monitoringAnchor(discharge, false).toISOString()).toBe(discharge.toISOString());
+  });
+
+  it('regra nova (true) devolve o dia civil seguinte', () => {
+    expect(monitoringAnchor(day(2026, 3, 10), true).toISOString()).toBe(day(2026, 3, 11).toISOString());
+  });
+
+  it('regra nova vira o mês', () => {
+    expect(monitoringAnchor(day(2026, 3, 31), true).toISOString()).toBe(day(2026, 4, 1).toISOString());
+    expect(monitoringAnchor(day(2026, 2, 28), true).toISOString()).toBe(day(2026, 3, 1).toISOString());
+  });
+
+  it('regra nova vira o ano', () => {
+    expect(monitoringAnchor(day(2026, 12, 31), true).toISOString()).toBe(day(2027, 1, 1).toISOString());
+  });
+});
+
+describe('contrato da regra nova — dia N = alta + N, janela alta+1 … alta+10', () => {
+  const discharge = day(2026, 3, 10);
+  const anchor = monitoringAnchor(discharge, true);
+  const plus = (n: number) => new Date(discharge.getTime() + n * 86_400_000);
+
+  it('monitoringDay(âncora, ref) é ref − alta em 1..10 e null fora (alta−2 … alta+12)', () => {
+    for (let offset = -2; offset <= 12; offset++) {
+      const expected = offset >= 1 && offset <= 10 ? offset : null;
+      expect(monitoringDay(anchor, plus(offset))).toBe(expected);
+    }
+  });
+
+  it('monitoringDayDate(âncora, N) = alta + N para N de 1 a 10', () => {
+    for (let n = 1; n <= 10; n++) {
+      expect(monitoringDayDate(anchor, n)?.toISOString()).toBe(plus(n).toISOString());
+    }
   });
 });

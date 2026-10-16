@@ -12,6 +12,7 @@
  * encerrada com adesão < 50%. Ver docs/PONTOS_PENDENTES.md.
  */
 import { daysSinceDischarge } from '@vitalsync/shared';
+import { adherenceWindow } from '../lib/adherenceWindow';
 import { supabase } from '../lib/supabase';
 
 const ADHERENCE_TARGET_PCT = 80;
@@ -71,12 +72,17 @@ export const adherenceService = {
   async getPatientAdherence(): Promise<PatientAdherence[]> {
     const { data: patients, error } = await supabase
       .from('patients')
-      .select('id, name, hospital_discharge_date, status')
+      .select('id, name, hospital_discharge_date, status, monitoring_starts_next_day')
       .eq('status', 'ACTIVE')
       .is('deleted_at', null)
       .not('hospital_discharge_date', 'is', null);
     if (error) throw new Error(error.message);
-    const list = (patients ?? []) as Array<{ id: string; name: string; hospital_discharge_date: string }>;
+    const list = (patients ?? []) as Array<{
+      id: string;
+      name: string;
+      hospital_discharge_date: string;
+      monitoring_starts_next_day?: boolean;
+    }>;
     if (list.length === 0) return [];
 
     const { data: records, error: recErr } = await supabase
@@ -95,8 +101,7 @@ export const adherenceService = {
 
     return list.map((p): PatientAdherence => {
       const dsd = daysSinceDischarge(new Date(p.hospital_discharge_date));
-      const effectiveDays = Math.min(dsd + 1, 10);
-      const monitoringWindowClosed = dsd >= 10;
+      const { effectiveDays, closed: monitoringWindowClosed } = adherenceWindow(dsd, p.monitoring_starts_next_day ?? false);
       const expectedCollections = effectiveDays * 2;
       const patientRecords = byPatient.get(p.id) ?? [];
       const actualCollections = patientRecords.length;
