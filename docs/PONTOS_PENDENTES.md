@@ -71,7 +71,8 @@ e `PatientDay30Section.tsx`.
 
 O protocolo (5.11) lista "perda de seguimento" como métrica do desfecho primário, mas não define
 um corte numérico exato no resumo disponível. Implementado em `adherenceService.ts` como: **janela
-de 10 dias encerrada COM adesão < 50%**. É uma assunção operacional razoável, não uma regra
+de 10 dias encerrada COM adesão < 50%**. A janela (dias que contam e se já encerrou) é calculada
+em `frontend/src/lib/adherenceWindow.ts` e depende da regra do paciente (ver item 7). É uma assunção operacional razoável, não uma regra
 confirmada — ajustar `LOST_TO_FOLLOWUP_THRESHOLD_PCT` nesse arquivo se o time do estudo definir
 outro critério (ex.: dias consecutivos sem coleta, independente da adesão total).
 
@@ -145,6 +146,28 @@ O pool amplia o acesso do enfermeiro para além da equipe. Dado de saúde ⇒ ar
 11 da LGPD; o tratamento por operador (VitalSync) para controlador (hospital)
 exige **contrato de operador/DPA** com cada hospital coberto pelo pool. A
 trilha técnica (`patient_access_logs`) já existe; o contrato, não.
+
+## 7. Dia 1 do monitoramento = dia seguinte à alta (janela por paciente)
+
+**Decisão de protocolo:** a partir da `0083` em produção, para pacientes cadastrados daí em
+diante, o dia 1 do monitoramento é o **dia seguinte à alta** (janela de alta + 1 a alta + 10).
+Pacientes já cadastrados mantêm a regra antiga (dia 1 = dia da alta) até concluírem. A regra é
+gravada por paciente em `patients.monitoring_starts_next_day` (migration `0082`) e **não pode ser
+trocada depois do cadastro** (trigger `trg_protect_patient_monitoring_rule`).
+
+**Limitações conhecidas, aceitas por enquanto:**
+
+1. `submit_vital_record` e `staff_insert_vital_record` **não bloqueiam** registro fora da janela.
+   Para paciente novo, um lançamento pela equipe no dia da alta entra como D1, e o registro do
+   paciente no dia seguinte também entra como D1 (`monitoring_day` = `greatest(1, hoje − alta)`).
+2. Para os pacientes da regra antiga, as particularidades do SQL foram mantidas **de propósito**:
+   o banco aceita até alta + 10 e usa `current_date` em UTC. Elas somem sozinhas quando esses
+   pacientes concluírem.
+3. Os scripts locais (`seed.sql` e `supabase/_scripts/dev_paciente_*.sql`) inserem pacientes sem
+   informar a flag. Depois da `0083` eles nascem na regra nova, mas alguns calculam
+   `monitoring_day` pela fórmula antiga. Só afeta o ambiente local.
+
+**Status:** ✅ decisão aplicada; limitações ⚠️ documentadas, não alteradas.
 
 ---
 

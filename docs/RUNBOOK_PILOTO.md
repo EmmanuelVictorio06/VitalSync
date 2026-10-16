@@ -7,6 +7,10 @@ Uma página. Para consultar às 2h da manhã, não para ler antes de dormir.
 > com todas as linhas em `[ OK ]`. A checagem nº 1 (modo homologação) é a que
 > mais causa dano: ligada, os alertas do paciente real viram
 > `SKIPPED_TEST_MODE` e **ninguém é avisado**.
+>
+> **Depois da 0083**, cadastre também um paciente de teste (`is_test = true`) com
+> alta no dia e abra o link dele: tem que aparecer "Seu acompanhamento ainda não
+> começou" (regra nova — os registros começam em alta + 1).
 
 ---
 
