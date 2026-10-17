@@ -94,3 +94,6 @@ Sem isso, abrir `/registro-sinais/<TOKEN>` direto resultava em 404 / queda para
 3. Link enviado usa o **domínio de produção**, não preview. ✅
 4. `vercel.json` com `rewrites` para `/index.html`. ✅
 5. Abrir o link em **aba anônima**: deve abrir o formulário **sem login**. ✅
+   Exceção desde a 0083: paciente da regra nova (`monitoring_starts_next_day = true`) com
+   alta **hoje** vê "Seu acompanhamento ainda não começou" — o formulário só abre a partir de
+   alta + 1.

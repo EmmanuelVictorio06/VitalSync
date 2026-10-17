@@ -20,6 +20,7 @@ import {
   MONITORING_DAYS,
   Period,
   classifyPeriodEntry,
+  monitoringAnchor,
   monitoringDayDate,
   startOfToday,
 } from '@vitalsync/shared';
@@ -121,9 +122,16 @@ export function buildMonitoringCalendar(input: {
   dischargeDate: Date | string;
   records: VitalRecord[];
   now?: Date;
+  /** Regra da janela do paciente (0082). Ausente/false = regra antiga (dia 1 = alta). */
+  startsNextDay?: boolean;
 }): CalendarDay[] {
-  const { records, now = new Date() } = input;
-  const discharge = typeof input.dischargeDate === 'string' ? new Date(input.dischargeDate) : input.dischargeDate;
+  const { records, now = new Date(), startsNextDay = false } = input;
+  // `discharge` daqui em diante é a ÂNCORA (dia 1): a própria alta na regra
+  // antiga, alta + 1 na nova — toda a régua abaixo se desloca junto.
+  const discharge = monitoringAnchor(
+    typeof input.dischargeDate === 'string' ? new Date(input.dischargeDate) : input.dischargeDate,
+    startsNextDay,
+  );
   if (Number.isNaN(discharge.getTime())) return [];
 
   const hojeMs = civilMs(startOfToday(now));

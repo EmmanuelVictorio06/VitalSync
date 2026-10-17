@@ -59,6 +59,8 @@ export interface TeamPatientView {
   surgeryType: string;
   surgeryDate: string | null;
   dischargeDate: string | null;
+  /** Regra da janela (0082): true = dia 1 é o dia seguinte à alta. Ausente = regra antiga. */
+  monitoringStartsNextDay?: boolean;
   status: ClinicalStatus;
   /** Há alerta clínico ainda não atendido (Pendente/Em análise). */
   hasUnattendedAlert: boolean;
@@ -204,7 +206,7 @@ export const teamViewService = {
     const showTest = await homologationService.isActive();
     let patientsQ = supabase
       .from('patients')
-      .select('id, name, current_status, surgery_date, hospital_discharge_date, surgery_type:surgery_types(name)')
+      .select('id, name, current_status, surgery_date, hospital_discharge_date, monitoring_starts_next_day, surgery_type:surgery_types(name)')
       .eq('team_id', teamId)
       .is('deleted_at', null);
     let alertsQ = supabase
@@ -226,6 +228,7 @@ export const teamViewService = {
       current_status: ClinicalStatus;
       surgery_date: string | null;
       hospital_discharge_date: string | null;
+      monitoring_starts_next_day: boolean | null;
       surgery_type: { name: string } | null;
     }>;
 
@@ -260,6 +263,7 @@ export const teamViewService = {
       surgeryType: p.surgery_type?.name ?? '—',
       surgeryDate: p.surgery_date,
       dischargeDate: p.hospital_discharge_date,
+      monitoringStartsNextDay: p.monitoring_starts_next_day ?? false,
       status: p.current_status,
       hasUnattendedAlert: alertsByPatient.has(p.id),
       lastAlert: alertsByPatient.get(p.id) ?? null,

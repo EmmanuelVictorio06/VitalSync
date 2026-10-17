@@ -16,7 +16,7 @@ import {
   Users2,
   X,
 } from 'lucide-react';
-import { onlyDigits } from '@vitalsync/shared';
+import { MONITORING_DAYS, onlyDigits } from '@vitalsync/shared';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
@@ -1154,7 +1154,7 @@ function TeamEditModal({
           ) : (
             <ul className="space-y-2">
               {patients.map((p) => {
-                const day = monitoringDayFrom(p.dischargeDate);
+                const day = monitoringDayFrom(p.dischargeDate, p.monitoringStartsNextDay);
                 return (
                   <li key={p.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 rounded-lg border border-border p-3">
                     <div className="min-w-0 flex-1">
@@ -1162,7 +1162,7 @@ function TeamEditModal({
                       <p className="text-xs text-muted-foreground break-words">
                         {p.surgeryType}
                         {p.dischargeDate && ` · alta ${p.dischargeDate.slice(0, 10)}`}
-                        {day != null && ` · dia ${day} de monitoramento`}
+                        {day != null && day >= 1 && day <= MONITORING_DAYS && ` · dia ${day} de monitoramento`}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">

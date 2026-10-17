@@ -8,7 +8,7 @@
  * `monitoringDay` do @vitalsync/shared — mesma convenção de
  * `submit_vital_record` (America/Sao_Paulo).
  */
-import { daysSinceDischarge, monitoringDay, startOfToday } from '@vitalsync/shared';
+import { daysSinceDischarge, monitoringAnchor, monitoringDay, startOfToday } from '@vitalsync/shared';
 
 /**
  * Videochamada estruturada do protocolo 5.6.5: acontece 48h após a alta. Em
@@ -54,11 +54,17 @@ export function needsDay30Assessment(input: {
 /**
  * true quando o paciente está nos dias 9–10 da janela de monitoramento — o
  * enfermeiro precisa preparar o encerramento (última coleta, orientações).
+ * `startsNextDay` é a regra da janela do paciente (0082); o padrão `false` é a
+ * regra antiga.
  */
-export function isMonitoringEndingSoon(input: { dischargeDate: Date | null; reference?: Date }): boolean {
-  const { dischargeDate, reference = startOfToday() } = input;
+export function isMonitoringEndingSoon(input: {
+  dischargeDate: Date | null;
+  reference?: Date;
+  startsNextDay?: boolean;
+}): boolean {
+  const { dischargeDate, reference = startOfToday(), startsNextDay = false } = input;
   if (!dischargeDate) return false;
-  const day = monitoringDay(dischargeDate, reference);
+  const day = monitoringDay(monitoringAnchor(dischargeDate, startsNextDay), reference);
   return day != null && (MONITORING_ENDING_DAYS as readonly number[]).includes(day);
 }
 

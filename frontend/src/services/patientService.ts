@@ -1,5 +1,5 @@
 /** Pacientes (RLS aplica o escopo por equipe). */
-import { isWithinMonitoringWindow } from '@vitalsync/shared';
+import { isWithinMonitoringWindow, monitoringAnchor } from '@vitalsync/shared';
 import { supabase } from '../lib/supabase';
 import { patientSecurityService, type SecurePatientUpdate } from './patientSecurityService';
 import type { ClinicalStatus, Patient } from './types';
@@ -17,6 +17,8 @@ export interface PatientWithNames extends Patient {
   surgery_type: { name: string } | null;
   hospital: { name: string } | null;
   medical_team: { team_number: number } | null;
+  /** Regra da janela (0082): true = dia 1 é o dia seguinte à alta. Imutável após o cadastro. */
+  monitoring_starts_next_day?: boolean;
 }
 
 export interface NewPatientInput {
@@ -56,7 +58,7 @@ const PATIENT_COLUMNS =
   'id, name, birth_date, phone, surgery_type_id, surgery_date, hospital_discharge_date, ' +
   'hospital_id, team_id, secure_token, status, current_status, is_test, medical_record_summary, ' +
   'sex, weight_kg, height_cm, comorbidities, length_of_stay_days, alternative_phone, tcle_accepted_at, ' +
-  'study_group, created_at, deleted_at, surgery_type:surgery_types(name), hospital:hospitals(name), ' +
+  'study_group, created_at, deleted_at, monitoring_starts_next_day, surgery_type:surgery_types(name), hospital:hospitals(name), ' +
   'medical_team:medical_teams(team_number)';
 
 export const patientService = {
@@ -140,13 +142,17 @@ export const patientService = {
 
     const { data: patients, error } = await supabase
       .from('patients')
-      .select('id, name, phone, team_id, hospital_discharge_date')
+      .select('id, name, phone, team_id, hospital_discharge_date, monitoring_starts_next_day')
       .eq('status', 'ACTIVE')
       .is('deleted_at', null);
     if (error) throw new Error(error.message);
 
     const active = (patients ?? []).filter(
-      (p) => p.hospital_discharge_date && isWithinMonitoringWindow(new Date(p.hospital_discharge_date)),
+      (p) =>
+        p.hospital_discharge_date &&
+        isWithinMonitoringWindow(
+          monitoringAnchor(new Date(p.hospital_discharge_date), p.monitoring_starts_next_day ?? false),
+        ),
     );
     if (active.length === 0) return [];
 

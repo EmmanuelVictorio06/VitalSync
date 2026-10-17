@@ -11,7 +11,7 @@
  * (`is_team_member()`) já limita tudo às equipes do usuário logado. As regras
  * derivadas (o que está vencido, o que é devido) ficam em `lib/nurseDashboard.ts`.
  */
-import { daysSinceDischarge, monitoringDay } from '@vitalsync/shared';
+import { daysSinceDischarge, monitoringAnchor, monitoringDay } from '@vitalsync/shared';
 import { supabase } from '../lib/supabase';
 import {
   isMonitoringEndingSoon,
@@ -74,13 +74,18 @@ function startOfTodaySPIso(): string {
 }
 
 /** Usa os helpers de data civil do @vitalsync/shared (fuso da clínica) — não refazer a conta. */
-function toAgendaItem(p: { id: string; name: string; hospital_discharge_date: string | null }): AgendaItem {
+function toAgendaItem(p: {
+  id: string;
+  name: string;
+  hospital_discharge_date: string | null;
+  monitoring_starts_next_day?: boolean;
+}): AgendaItem {
   const discharge = p.hospital_discharge_date ? new Date(p.hospital_discharge_date) : null;
   return {
     patientId: p.id,
     patientName: p.name,
     daysSinceDischarge: discharge ? daysSinceDischarge(discharge) : 0,
-    monitoringDay: discharge ? monitoringDay(discharge) : null,
+    monitoringDay: discharge ? monitoringDay(monitoringAnchor(discharge, p.monitoring_starts_next_day ?? false)) : null,
   };
 }
 
@@ -141,7 +146,7 @@ export const nurseDashboardService = {
       if (needsDay30Assessment({ dischargeDate: discharge, hasAssessment: day30ByPatient.has(p.id) })) {
         day30.push(toAgendaItem(p));
       }
-      if (isMonitoringEndingSoon({ dischargeDate: discharge })) {
+      if (isMonitoringEndingSoon({ dischargeDate: discharge, startsNextDay: p.monitoring_starts_next_day })) {
         endingSoon.push(toAgendaItem(p));
       }
     }

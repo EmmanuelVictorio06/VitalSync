@@ -207,6 +207,13 @@ migration recria os dois jobs (`measurement-reminder-morning` /
 - **Gate dos 10 dias**: crie um paciente de teste (`is_test = true`) com
   `hospital_discharge_date` = hoje − 11 dias e confirme que ele NÃO entra na
   lista (paciente com alta há 9 dias entra; há 11 dias, não).
+  Desde a 0082 a janela depende da regra do paciente, e depois da 0083 o
+  default da coluna é `true` — então informe `monitoring_starts_next_day`
+  **explicitamente** no insert de teste e confira as duas regras:
+  - regra antiga (`false`): alta hoje **entra**; alta há 10 dias ainda entra;
+    há 11 dias, não;
+  - regra nova (`true`): alta hoje **não** entra; alta há 1 dia entra; alta há
+    10 dias entra; há 11 dias, não.
 - **Gate de medição já enviada**: envie um `submit_vital_record` de teste para
   o período antes de rodar o enqueue — o paciente não deve receber lembrete
   daquele período no mesmo dia.
@@ -362,6 +369,13 @@ futuro** já recebia lembrete e alerta de esquecimento antes de ter alta. A
 migration `0073_gate_inicio_janela.sql` acrescenta o limite inferior
 `current_date >= hospital_discharge_date`: a janela de 10 dias só **abre no dia
 da alta**. Nenhuma outra lógica muda.
+
+**Desde a 0082, isso depende do paciente** (`patients.monitoring_starts_next_day`,
+gravado no cadastro e imutável depois). Regra antiga (`false`): a janela abre
+no dia da alta, exatamente como acima. Regra nova (`true`, o default para
+pacientes cadastrados depois da 0083): a janela abre em **alta + 1** e fecha em
+**alta + 10**, contados no dia de São Paulo — então o primeiro lembrete de um
+paciente novo sai em alta + 1. As duas funções de enqueue têm os dois ramos.
 
 ```bash
 supabase db push        # aplica a 0073 (CREATE OR REPLACE das duas funções)

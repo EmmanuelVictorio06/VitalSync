@@ -211,3 +211,25 @@ describe('fora da janela de monitoramento', () => {
     expect(buildMonitoringCalendar({ dischargeDate: '', records: [] })).toEqual([]);
   });
 });
+
+describe('buildMonitoringCalendar — regra nova (startsNextDay = true)', () => {
+  it('dia 1 = alta + 1 e dia 10 = alta + 10', () => {
+    const days = buildMonitoringCalendar({ dischargeDate: ALTA, records: [], now: AGORA_DIA5, startsNextDay: true });
+    expect(days).toHaveLength(10);
+    expect(days[0].day).toBe(1);
+    expect(days[0].date).toEqual(civil(2026, 3, 2));
+    expect(days[9].day).toBe(10);
+    expect(days[9].date).toEqual(civil(2026, 3, 11));
+  });
+
+  it('o dia da alta fica fora da régua', () => {
+    const days = buildMonitoringCalendar({ dischargeDate: ALTA, records: [], now: AGORA_DIA5, startsNextDay: true });
+    expect(days.some((d) => d.date.getTime() === ALTA.getTime())).toBe(false);
+  });
+
+  it('padrão (sem o parâmetro) é idêntico a startsNextDay = false', () => {
+    const base = buildMonitoringCalendar({ dischargeDate: ALTA, records: [], now: AGORA_DIA5 });
+    const antiga = buildMonitoringCalendar({ dischargeDate: ALTA, records: [], now: AGORA_DIA5, startsNextDay: false });
+    expect(antiga).toEqual(base);
+  });
+});

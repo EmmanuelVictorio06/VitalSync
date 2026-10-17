@@ -133,3 +133,29 @@ describe('openForLabel', () => {
     expect(openForLabel('2026-02-08T12:00:00.000Z', agora)).toBe('há 2d');
   });
 });
+
+describe('isMonitoringEndingSoon — regra nova (startsNextDay = true: dia N = alta + N)', () => {
+  it('dia 9 da janela nova (hoje = alta + 9) entra na lista', () => {
+    expect(
+      isMonitoringEndingSoon({ dischargeDate: civil('2026-02-01'), reference: HOJE, startsNextDay: true }),
+    ).toBe(true);
+  });
+
+  it('dia 10 da janela nova (hoje = alta + 10) entra na lista', () => {
+    expect(
+      isMonitoringEndingSoon({ dischargeDate: civil('2026-01-31'), reference: HOJE, startsNextDay: true }),
+    ).toBe(true);
+  });
+
+  it('dia 8 da janela nova (hoje = alta + 8) ainda não entra', () => {
+    expect(
+      isMonitoringEndingSoon({ dischargeDate: civil('2026-02-02'), reference: HOJE, startsNextDay: true }),
+    ).toBe(false);
+  });
+
+  it('hoje = alta + 11 já saiu da janela nova', () => {
+    expect(
+      isMonitoringEndingSoon({ dischargeDate: civil('2026-01-30'), reference: HOJE, startsNextDay: true }),
+    ).toBe(false);
+  });
+});

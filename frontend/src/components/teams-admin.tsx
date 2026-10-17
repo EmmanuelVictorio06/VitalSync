@@ -20,7 +20,7 @@ import {
   Users2,
   X,
 } from 'lucide-react';
-import { formatPhoneBR, onlyDigits } from '@vitalsync/shared';
+import { formatPhoneBR, monitoringAnchor, monitoringDay, onlyDigits } from '@vitalsync/shared';
 import type { TeamDetail } from '../services/teamViewService';
 import { Button, CustomSelect, ModalOverlay, PhoneInput, TextInput, cn } from './ui';
 
@@ -182,13 +182,26 @@ export function StatusTeamBadge({ active }: { active: boolean }) {
   );
 }
 
-/** Dia de monitoramento aproximado (dias desde a alta hospitalar). */
-export function monitoringDayFrom(dischargeDate: string | null): number | null {
+/**
+ * Dia de monitoramento aproximado (dias desde a alta hospitalar).
+ * `startsNextDay` = regra da janela do paciente (0082): na nova, o dia 1 é o
+ * dia seguinte à alta. O padrão `false` é a regra antiga, sem mudança.
+ * O ramo novo usa a mesma regra do @vitalsync/shared que o Acompanhamento usa:
+ * conta pelo dia civil de São Paulo (não pelo relógio UTC) e para no 10 —
+ * fora da janela devolve null.
+ */
+export function monitoringDayFrom(dischargeDate: string | null, startsNextDay = false): number | null {
+  if (!startsNextDay) {
+    if (!dischargeDate) return null;
+    const d = new Date(dischargeDate);
+    if (Number.isNaN(d.getTime())) return null;
+    const diff = Math.floor((Date.now() - d.getTime()) / 86_400_000);
+    return diff < 0 ? null : diff + 1;
+  }
   if (!dischargeDate) return null;
-  const d = new Date(dischargeDate);
+  const d = new Date(dischargeDate.slice(0, 10));
   if (Number.isNaN(d.getTime())) return null;
-  const diff = Math.floor((Date.now() - d.getTime()) / 86_400_000);
-  return diff < 0 ? null : diff + 1;
+  return monitoringDay(monitoringAnchor(d, true));
 }
 
 const pad2 = (n: number) => String(n).padStart(2, '0');

@@ -8,6 +8,8 @@ import { useToast } from '../components/Toast';
 import { SegmentedFilter } from '../components/admin';
 import { ConfirmModal, PageContainer, PageHeader, StatusBadge, cn, statusBorder } from '../components/ui';
 import { useMissedMeasurementCount } from '../components/MissedMeasurementCount';
+import { Tabs } from '../components/Tabs';
+import { monitoringEndDate, patientGroup } from '../lib/monitoringGroup';
 import { homologationService } from '../services/homologationService';
 import { patientService, type PatientKind, type PatientWithNames } from '../services/patientService';
 import { supportPermissionService } from '../services/supportPermissionService';
@@ -112,6 +114,39 @@ export function MonitoringPage() {
     (p) => !team || String(p.medical_team?.team_number ?? '') === team || String(p.medical_team?.team_number ?? '').padStart(2, '0') === team,
   );
 
+  // Abas: divide a lista JÁ filtrada (busca/status/tipo/equipe) — os badges
+  // batem com o que está na tela, sem consulta extra de contagem.
+  const andamento = visible.filter((p) => patientGroup(p.hospital_discharge_date, p.monitoring_starts_next_day) === 'andamento');
+  const concluidos = visible.filter((p) => patientGroup(p.hospital_discharge_date, p.monitoring_starts_next_day) === 'concluidos');
+
+  function renderGroup(list: PatientWithNames[], emptyTitle: string, emptyHint: string) {
+    if (patients === null) {
+      return <p className="text-center text-muted-foreground py-10 animate-pulse">Carregando…</p>;
+    }
+    if (list.length === 0) {
+      return (
+        <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground">
+          <p className="font-semibold">{emptyTitle}</p>
+          <p className="text-sm mt-1">{emptyHint}</p>
+        </div>
+      );
+    }
+    return (
+      <div className={cn(CARD_GRID, 'animate-entry [animation-delay:150ms]')}>
+        {list.map((p) => (
+          <PatientCard
+            key={p.id}
+            p={p}
+            onOpen={canOpen ? () => navigate(`/patients/${p.id}`) : undefined}
+            onCopy={() => share(p, 'copy')}
+            onWhats={() => share(p, 'whatsapp')}
+            onDelete={canDelete ? () => setToDelete(p) : undefined}
+          />
+        ))}
+      </div>
+    );
+  }
+
   function clearTeam() {
     const next = new URLSearchParams(searchParams);
     next.delete('team');
@@ -157,7 +192,7 @@ export function MonitoringPage() {
     <PageContainer size="wide">
       <PageHeader
         title="Pacientes em monitoramento"
-        subtitle="Pacientes ativos em monitoramento domiciliar pós-alta. Filtre por nome ou status."
+        subtitle="Monitoramento domiciliar pós-alta: em andamento e já concluídos após o 10º dia. Filtre por nome ou status."
       />
 
       {team && (
@@ -234,27 +269,26 @@ export function MonitoringPage() {
         </div>
       </div>
 
-      {patients === null ? (
-        <p className="text-center text-muted-foreground py-10 animate-pulse">Carregando…</p>
-      ) : visible.length === 0 ? (
-        <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground">
-          <p className="font-semibold">Nenhum paciente encontrado</p>
-          <p className="text-sm mt-1">Ajuste os filtros ou cadastre um novo paciente.</p>
-        </div>
-      ) : (
-        <div className={cn(CARD_GRID, 'animate-entry [animation-delay:150ms]')}>
-          {visible.map((p) => (
-            <PatientCard
-              key={p.id}
-              p={p}
-              onOpen={canOpen ? () => navigate(`/patients/${p.id}`) : undefined}
-              onCopy={() => share(p, 'copy')}
-              onWhats={() => share(p, 'whatsapp')}
-              onDelete={canDelete ? () => setToDelete(p) : undefined}
-            />
-          ))}
-        </div>
-      )}
+      <Tabs
+        param="grupo"
+        defaultTab="andamento"
+        ariaLabel="Pacientes em monitoramento e com monitoramento concluído"
+        tabs={[
+          {
+            id: 'andamento',
+            label: 'Em andamento',
+            shortLabel: 'Andamento',
+            badge: patients === null ? null : andamento.length,
+            content: renderGroup(andamento, 'Nenhum paciente em monitoramento', 'Ajuste os filtros ou cadastre um novo paciente.'),
+          },
+          {
+            id: 'concluidos',
+            label: 'Concluídos',
+            badge: patients === null ? null : concluidos.length,
+            content: renderGroup(concluidos, 'Nenhum paciente concluído', 'Eles aparecem aqui quando passam do 10º dia após a alta.'),
+          },
+        ]}
+      />
 
       {toDelete && (
         <ConfirmModal
@@ -286,6 +320,11 @@ function PatientCard({
   /** Indefinido = perfil não pode excluir (ex.: Suporte). */
   onDelete?: () => void;
 }) {
+  // Concluído: o link já não aceita registro — oferecer WhatsApp/Copiar link
+  // induziria a equipe a mandar um link morto.
+  const concluido = patientGroup(p.hospital_discharge_date, p.monitoring_starts_next_day) === 'concluidos';
+  const fimMonitoramento = concluido && p.hospital_discharge_date ? monitoringEndDate(new Date(p.hospital_discharge_date), p.monitoring_starts_next_day) : null;
+  const temAcoes = !!onOpen || !concluido;
   return (
     // `min-w-0`: como grid item, o card tem `min-width: auto` e não encolheria
     // abaixo do próprio min-content. É a garantia no item, redundante com o
@@ -334,6 +373,15 @@ function PatientCard({
             {p.hospital_discharge_date ? formatCivilDate(p.hospital_discharge_date) : '—'}
           </dd>
         </div>
+        {fimMonitoramento && (
+          <div>
+            <dt className="text-muted-foreground uppercase tracking-wider text-[10px] font-bold">Concluído em</dt>
+            <dd className="flex items-center gap-1 mt-0.5 font-medium">
+              <Calendar className="size-3" />
+              {formatCivilDate(fimMonitoramento)}
+            </dd>
+          </div>
+        )}
       </dl>
 
       {/* Duas colunas em qualquer largura, com "Acompanhar" ocupando a linha
@@ -341,19 +389,27 @@ function PatientCard({
           não vê "Acompanhar"), sem buraco nem botão esticado sozinho.
           Alvo de toque de 44px no mobile; do `sm` pra cima volta à densidade
           anterior. */}
-      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border">
-        {onOpen && (
-          <button onClick={onOpen} className={cn(ACTION_BTN, 'col-span-2 bg-primary text-primary-foreground hover:bg-primary/90')}>
-            <Eye className="size-3.5" /> Acompanhar
-          </button>
-        )}
-        <button onClick={onWhats} className={cn(ACTION_BTN, 'border border-border hover:bg-muted')}>
-          <MessageCircle className="size-3.5" /> WhatsApp
-        </button>
-        <button onClick={onCopy} className={cn(ACTION_BTN, 'border border-border hover:bg-muted')}>
-          <Copy className="size-3.5" /> Copiar link
-        </button>
-      </div>
+      {/* Sem nenhuma ação visível (Suporte num card concluído) a div não é
+          renderizada — senão sobraria só a borda. */}
+      {temAcoes && (
+        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border">
+          {onOpen && (
+            <button onClick={onOpen} className={cn(ACTION_BTN, 'col-span-2 bg-primary text-primary-foreground hover:bg-primary/90')}>
+              <Eye className="size-3.5" /> Acompanhar
+            </button>
+          )}
+          {!concluido && (
+            <>
+              <button onClick={onWhats} className={cn(ACTION_BTN, 'border border-border hover:bg-muted')}>
+                <MessageCircle className="size-3.5" /> WhatsApp
+              </button>
+              <button onClick={onCopy} className={cn(ACTION_BTN, 'border border-border hover:bg-muted')}>
+                <Copy className="size-3.5" /> Copiar link
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </article>
   );
 }

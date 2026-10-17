@@ -5,7 +5,7 @@
  * - Calcula o statusByVital com as regras do @vitalsync/shared.
  * - Gera URL assinada (temporária) para a foto da ferida (bucket privado).
  */
-import { daysSinceDischarge, evaluateVitalSigns, monitoringDay } from '@vitalsync/shared';
+import { daysSinceDischarge, evaluateVitalSigns, monitoringAnchor, monitoringDay } from '@vitalsync/shared';
 import { supabase } from '../lib/supabase';
 import { missedMeasurementService } from './missedMeasurementService';
 import { patientService } from './patientService';
@@ -166,7 +166,10 @@ export const patientDashboardService = {
         attendedById,
         attendedByName,
         daysSinceDischarge: days,
-        monitoringDay: discharge ? monitoringDay(discharge) : null,
+        monitoringDay: discharge
+          ? monitoringDay(monitoringAnchor(discharge, patient.monitoring_starts_next_day ?? false))
+          : null,
+        monitoringStartsNextDay: patient.monitoring_starts_next_day ?? false,
         medicalRecordSummary: patient.medical_record_summary ?? null,
         missedToday,
       },

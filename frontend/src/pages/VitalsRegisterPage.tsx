@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { AlertCircle, CheckCircle2, Moon, ShieldCheck, Sun } from 'lucide-react';
 import { Period, calculateAge } from '@vitalsync/shared';
 import { formatCpf } from '../lib/cpfUtils';
+import { monitoringNotStartedYet } from '../lib/monitoringGroup';
 import { publicAccessService, type PatientAccessValidation } from '../services/publicAccessService';
 import { type PatientLinkInfo } from '../services/vitalSignsService';
 import {
@@ -75,6 +76,18 @@ export function VitalsRegisterPage() {
 
   // Monitoramento encerrado (fora da janela de 10 dias).
   if (!link.within_window) {
+    // Regra nova (0082/0083): no dia da alta a janela ainda não abriu — o paciente
+    // costuma abrir o link de boas-vindas nesse dia. Ver monitoringNotStartedYet.
+    if (monitoringNotStartedYet(link.hospital_discharge_date)) {
+      return (
+        <CenteredCard>
+          <h2 className="text-xl font-extrabold tracking-tight">Seu acompanhamento ainda não começou</h2>
+          <p className="text-sm text-muted-foreground mt-2 text-balance">
+            Os registros começam no dia seguinte à sua alta. Volte a este mesmo link nessa data. Em caso de sintomas, contate sua equipe.
+          </p>
+        </CenteredCard>
+      );
+    }
     return (
       <CenteredCard>
         <h2 className="text-xl font-extrabold tracking-tight">Monitoramento encerrado</h2>
