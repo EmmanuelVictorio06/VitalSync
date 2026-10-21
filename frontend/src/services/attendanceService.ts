@@ -11,6 +11,13 @@
  *   associado só veem os atendimentos dos pacientes das SUAS equipes. O frontend
  *   nunca amplia esse escopo — apenas filtra/visualiza o que a RLS já liberou.
  *
+ * ESCOPO DENTRO DA TELA (`AttendanceScope`): a RLS é o TETO, não o recorte. A
+ * aba se chama "Meus Atendimentos" e por padrão lista só o que o profissional
+ * logado finalizou (`attended_by = auth.uid()`) — antes ela trazia o histórico
+ * inteiro da equipe, e um associado via os atendimentos do colega como se
+ * fossem seus (inclusive nos cards do topo). `TEAM` reabre a visão de equipe
+ * sob demanda, sempre dentro do que a RLS já permitia.
+ *
  * A edição de observação usa a própria policy `attendance_rw` (membro da equipe).
  * Apenas registros finalizados (ATTENDED ou IGNORED) são listados aqui.
  */
@@ -24,6 +31,12 @@ import type {
 
 /** Status de um atendimento finalizado (exibido em Meus Atendimentos). */
 export type AttendanceStatus = 'ATTENDED' | 'IGNORED';
+
+/**
+ * Recorte da lista: só os do profissional logado (padrão) ou tudo o que a RLS
+ * libera (equipe; para o Admin, todos). Nunca amplia o que a RLS já permite.
+ */
+export type AttendanceScope = 'MINE' | 'TEAM';
 
 /** Nível clínico do alerta de origem (semáforo). */
 export type AttendanceAlertLevel = 'YELLOW' | 'RED';
@@ -195,15 +208,31 @@ async function enrichAttendanceRows(raw: RawRow[]): Promise<AttendanceRow[]> {
 
 export const attendanceService = {
   /**
-   * Lista os atendimentos visíveis ao usuário (RLS) já enriquecidos.
-   * Ordena do mais recente para o mais antigo.
+   * Lista os atendimentos finalizados já enriquecidos, do mais recente para o
+   * mais antigo.
+   *
+   * `scope = 'MINE'` (padrão) filtra por `attended_by = auth.uid()` — é o que a
+   * aba promete. `'TEAM'` devolve tudo o que a RLS libera. O filtro é feito no
+   * SERVIDOR, e não depois de carregar, para os cards do topo (que contam o
+   * conjunto recebido) refletirem o mesmo recorte da lista.
    */
-  async getMyAttendances(): Promise<AttendanceRow[]> {
-    const { data, error } = await supabase
+  async getMyAttendances(scope: AttendanceScope = 'MINE'): Promise<AttendanceRow[]> {
+    let query = supabase
       .from('attendance_confirmations')
       .select(ATTENDANCE_SELECT)
       .in('status', ['ATTENDED', 'IGNORED'])
       .order('created_at', { ascending: false });
+
+    if (scope === 'MINE') {
+      const { data: userData } = await supabase.auth.getUser();
+      const uid = userData.user?.id;
+      // Sem sessão não existe "meu": devolve vazio em vez de cair no escopo
+      // amplo, que é justamente o que esta tela deixou de fazer.
+      if (!uid) return [];
+      query = query.eq('attended_by', uid);
+    }
+
+    const { data, error } = await query;
     if (error) throw new Error(error.message);
     return enrichAttendanceRows((data as unknown as RawRow[]) ?? []);
   },
