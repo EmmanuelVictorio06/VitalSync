@@ -6,6 +6,7 @@ export { AttendanceErrorState } from './AttendanceErrorState';
 export { AttendanceFiltersSheet } from './AttendanceFiltersSheet';
 export { AttendanceListSkeleton } from './AttendanceListSkeleton';
 export { AttendanceOriginBadge } from './AttendanceOriginBadge';
+export { AttendanceScopeToggle } from './AttendanceScopeToggle';
 export { AttendanceSearchBar } from './AttendanceSearchBar';
 export { AttendanceStatusBadge } from './AttendanceStatusBadge';
 export { AttendanceSummaryCards } from './AttendanceSummaryCards';

@@ -5,6 +5,11 @@
  * Admin vê todos; Cirurgião Principal e Médico Associado só os atendimentos dos
  * pacientes das suas equipes. Esta tela lista apenas registros finalizados
  * (ATTENDED ou IGNORED), sem ações de resolução.
+ *
+ * Dentro desse teto, a tela abre no escopo do PRÓPRIO profissional
+ * (`AttendanceScope = 'MINE'`): o que ela promete no título é o histórico dele,
+ * não o da equipe. "Da equipe" continua a um clique — e é o que o Admin usa
+ * para ver todos.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
@@ -18,6 +23,7 @@ import {
   AttendanceErrorState,
   AttendanceFiltersSheet,
   AttendanceListSkeleton,
+  AttendanceScopeToggle,
   AttendanceSearchBar,
   AttendanceSummaryCards,
   EditAttendanceObservationModal,
@@ -28,7 +34,11 @@ import {
   sortAttendances,
   type AttendanceFiltersState,
 } from '../components/attendances';
-import { attendanceService, type AttendanceRow } from '../services/attendanceService';
+import {
+  attendanceService,
+  type AttendanceRow,
+  type AttendanceScope,
+} from '../services/attendanceService';
 import { permissionService } from '../services/permissionService';
 
 export function MyAttendancesPage() {
@@ -36,6 +46,7 @@ export function MyAttendancesPage() {
   const toast = useToast();
 
   const [rows, setRows] = useState<AttendanceRow[] | null>(null);
+  const [scope, setScope] = useState<AttendanceScope>('MINE');
   const [error, setError] = useState(false);
   const [filters, setFilters] = useState<AttendanceFiltersState>(EMPTY_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -44,18 +55,19 @@ export function MyAttendancesPage() {
 
   // Só profissionais clínicos editam observação; o Admin tem visão de leitura.
   const canEdit = permissionService.canAttendAlerts(user);
+  const isAdmin = permissionService.isAdmin(user);
 
   const load = useCallback(async () => {
     setError(false);
     setRows(null);
     try {
-      const data = await attendanceService.getMyAttendances();
+      const data = await attendanceService.getMyAttendances(scope);
       setRows(data);
     } catch {
       setError(true);
       setRows([]);
     }
-  }, []);
+  }, [scope]);
 
   useEffect(() => {
     void load();
@@ -124,12 +136,35 @@ export function MyAttendancesPage() {
   const hasAdvancedOrSearch =
     advancedCount > 0 || filters.search.trim().length > 0 || filters.quick !== 'ALL';
 
+  // Para o Admin, "da equipe" é na prática "todos" — o rótulo acompanha.
+  const teamScopeLabel = isAdmin ? 'Todos' : 'Da equipe';
+
   return (
     <PageContainer>
       <PageHeader
         title="Meus Atendimentos"
-        subtitle="Histórico de alertas já atendidos ou finalizados pela equipe médica."
+        subtitle={
+          scope === 'MINE'
+            ? 'Alertas que você atendeu ou finalizou.'
+            : isAdmin
+              ? 'Alertas atendidos ou finalizados por todos os profissionais.'
+              : 'Alertas atendidos ou finalizados pela sua equipe.'
+        }
       />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <AttendanceScopeToggle
+          value={scope}
+          onChange={setScope}
+          teamLabel={teamScopeLabel}
+          disabled={rows === null}
+        />
+        {scope === 'TEAM' && (
+          <span className="text-xs text-muted-foreground">
+            Incluindo atendimentos de outros profissionais.
+          </span>
+        )}
+      </div>
 
       {rows && !error && (
         <AttendanceSummaryCards
@@ -161,7 +196,18 @@ export function MyAttendancesPage() {
         rows.length === 0 ? (
           <AttendanceEmptyState
             title="Nenhum atendimento finalizado"
-            hint="Quando um alerta for atendido pela equipe médica, ele aparecerá neste histórico."
+            hint={
+              scope === 'MINE'
+                ? `Os alertas que você atender aparecem aqui. Para ver os dos outros profissionais, troque para "${teamScopeLabel}".`
+                : 'Quando um alerta for atendido pela equipe médica, ele aparecerá neste histórico.'
+            }
+            action={
+              scope === 'MINE' ? (
+                <Button variant="secondary" size="sm" onClick={() => setScope('TEAM')}>
+                  {isAdmin ? 'Ver todos' : 'Ver os da equipe'}
+                </Button>
+              ) : undefined
+            }
           />
         ) : (
           <AttendanceEmptyState
