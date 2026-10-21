@@ -31,10 +31,10 @@ import {
   X,
 } from 'lucide-react';
 import { Period, whatsappLink } from '@vitalsync/shared';
-import type { AttendanceStatus, AttendanceConfirmation, NotificationLog } from '../services/types';
+import type { AttendanceStatus, NotificationLog, UserRole } from '../services/types';
 import { effectiveSeverity, isEscalated } from '../lib/alertSeverity';
 import { ALERT_TYPE_OPTIONS, clinicalRuleFor, triggerValueFor } from '../lib/alertTrigger';
-import type { AlertRow, AlertSummary, TeamProfessional } from '../services/alertService';
+import type { AlertRow, AlertSummary, AlertTimelineEvent, TeamProfessional } from '../services/alertService';
 import { alertService } from '../services/alertService';
 import { attendanceService, type AttendanceRow } from '../services/attendanceService';
 import { storageService } from '../services/storageService';
@@ -42,6 +42,7 @@ import { DSection, DGrid, MeasurementGrid, PatientInfoGrid } from './clinical/De
 import { isSlaBreached, slaLabel } from '../lib/sla';
 import { studyVariableRows } from '../lib/studyVariables';
 import { richTextToPlainText, sanitizeRichText } from '../lib/richText';
+import { dbRoleLabelPt } from '../lib/roles';
 import {
   clinicalRule as attClinicalRule,
   fmtDateTime as attFmtDateTime,
@@ -541,7 +542,7 @@ export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, 
   onRelease: () => void;
   onRegisterContact?: () => void;
 }) {
-  const [timeline, setTimeline] = useState<AttendanceConfirmation[] | null>(null);
+  const [timeline, setTimeline] = useState<AlertTimelineEvent[] | null>(null);
   const [logs, setLogs] = useState<NotificationLog[] | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [drainPhotoUrl, setDrainPhotoUrl] = useState<string | null>(null);
@@ -569,7 +570,7 @@ export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, 
     }
     if (alert.patient?.id) {
       attendanceService
-        .getRecentByPatient(alert.patient.id)
+        .getByPatient(alert.patient.id)
         .then((rows) => active && setRecentAttendances(rows))
         .catch(() => active && setRecentAttendances([]));
     } else {
@@ -724,9 +725,12 @@ export function AlertDetailsDrawer({ alert, perms, onClose, onAction, onAttend, 
             <MeasurementGrid record={r} photoUrl={photoUrl} drainPhotoUrl={drainPhotoUrl} />
           </DSection>
 
-          {/* 4. Atendimentos das últimas 48h */}
-          <DSection title="Atendimentos (últimas 48h)" icon={History}>
-            <RecentAttendancesList rows={recentAttendances} />
+          {/* 4. Histórico completo de atendimentos do paciente */}
+          <DSection
+            title={`Atendimentos do paciente${recentAttendances?.length ? ` (${recentAttendances.length})` : ''}`}
+            icon={History}
+          >
+            <PatientAttendancesList rows={recentAttendances} />
           </DSection>
 
           {/* 5. Timeline */}
@@ -820,22 +824,45 @@ const TIMELINE_LABEL: Record<string, string> = {
   ESCALATION_UNANSWERED: 'Escalonamento sem resposta — Cirurgião Principal avisado',
 };
 
+/**
+ * Autor de um evento: nome + papel, ou "Sistema (automático)" quando a ação
+ * não teve dono — alerta gerado pela regra clínica, envio de WhatsApp, oferta
+ * expirada e o escalonamento automático de 8h (0068).
+ */
+function actorLabel(name: string | null, role: UserRole | null): string {
+  if (!name) return 'Sistema (automático)';
+  return role ? `${name} · ${dbRoleLabelPt(role)}` : name;
+}
+
 export function AlertTimeline({ alert, timeline, logs }: {
-  alert: AlertRow; timeline: AttendanceConfirmation[] | null; logs: NotificationLog[] | null;
+  alert: AlertRow; timeline: AlertTimelineEvent[] | null; logs: NotificationLog[] | null;
 }) {
   const events = useMemo(() => {
-    const out: Array<{ at: string; label: string }> = [];
-    out.push({ at: alert.created_at, label: `Alerta gerado (${alert.status === 'RED' ? 'vermelho' : 'amarelo'})` });
+    const out: Array<{ at: string; label: string; actor: string }> = [];
+    const system = actorLabel(null, null);
+    out.push({
+      at: alert.created_at,
+      label: `Alerta gerado (${alert.status === 'RED' ? 'vermelho' : 'amarelo'})`,
+      actor: system,
+    });
     // Só conta envios efetivos (ignora SKIPPED_TEST_MODE e pendentes).
     const SENT_STATUSES = ['SENT', 'DELIVERED', 'READ', 'sent', 'delivered', 'logged'];
     const delivered = (logs ?? []).filter((l) => l.sent_at && SENT_STATUSES.includes(l.status));
     const firstSent = delivered[0];
     if (firstSent) {
-      out.push({ at: firstSent.sent_at ?? alert.created_at, label: `WhatsApp enviado para a equipe (${delivered.length})` });
+      out.push({
+        at: firstSent.sent_at ?? alert.created_at,
+        label: `WhatsApp enviado para a equipe (${delivered.length})`,
+        actor: system,
+      });
     }
     for (const t of timeline ?? []) {
       const label = TIMELINE_LABEL[t.status ?? ''] ?? 'Atualização';
-      out.push({ at: t.created_at, label: t.observation ? `${label}: ${t.observation}` : label });
+      out.push({
+        at: t.created_at,
+        label: t.observation ? `${label}: ${t.observation}` : label,
+        actor: actorLabel(t.actor_name, t.actor_role),
+      });
     }
     return out.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
   }, [alert, timeline, logs]);
@@ -849,9 +876,11 @@ export function AlertTimeline({ alert, timeline, logs }: {
             <span className="size-2 rounded-full bg-primary mt-1.5" />
             {i < events.length - 1 && <span className="w-px flex-1 bg-border" />}
           </div>
-          <div className="pb-1">
+          <div className="pb-1 min-w-0">
             <p className="text-sm font-medium leading-snug">{e.label}</p>
-            <p className="text-[11px] text-muted-foreground">{fmtDateTime(e.at)}</p>
+            <p className="text-[11px] text-muted-foreground break-words">
+              {fmtDateTime(e.at)} · {e.actor}
+            </p>
           </div>
         </li>
       ))}
@@ -859,20 +888,29 @@ export function AlertTimeline({ alert, timeline, logs }: {
   );
 }
 
-/* ============================ Atendimentos (48h) ============================ */
+/* ======================= Atendimentos do paciente ======================= */
 
-/** Histórico de atendimentos finalizados do paciente nas últimas 48h (contexto de decisão). */
-function RecentAttendancesList({ rows }: { rows: AttendanceRow[] | null }) {
+/**
+ * Histórico COMPLETO de atendimentos finalizados do paciente (contexto de
+ * decisão), do mais recente para o mais antigo, com o profissional que
+ * conduziu cada um. Antes a seção se limitava às últimas 48h.
+ */
+function PatientAttendancesList({ rows }: { rows: AttendanceRow[] | null }) {
   if (rows === null) return <Loading label="Carregando atendimentos…" />;
   if (rows.length === 0) {
-    return <p className="text-xs text-muted-foreground">Sem atendimentos nas últimas 48 horas.</p>;
+    return <p className="text-xs text-muted-foreground">Nenhum atendimento finalizado para este paciente.</p>;
   }
   return (
     <ul className="space-y-2.5">
       {rows.map((row) => (
         <li key={row.id} className="border border-border rounded-lg p-3 text-xs">
           <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
-            <span className="font-semibold">{row.professional_name ?? '—'}</span>
+            <span className="font-semibold min-w-0 break-words">
+              {row.professional_name ?? '—'}
+              {row.professional_role && (
+                <span className="font-normal text-muted-foreground"> · {dbRoleLabelPt(row.professional_role)}</span>
+              )}
+            </span>
             <div className="flex items-center gap-1.5">
               {row.alert_level && <StatusBadge status={row.alert_level} />}
               <span className="text-muted-foreground">{attFmtDateTime(row.created_at)}</span>

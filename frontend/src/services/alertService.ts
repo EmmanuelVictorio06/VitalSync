@@ -18,6 +18,7 @@ import type {
   ClinicalAlert,
   EntityStatus,
   NotificationLog,
+  UserRole,
   VitalSignRecord,
 } from './types';
 
@@ -89,6 +90,21 @@ export interface TeamProfessional {
   id: string;
   name: string;
   role: 'MAIN_SURGEON' | 'ASSOCIATED_DOCTOR';
+}
+
+/**
+ * Evento da timeline com o AUTOR já resolvido.
+ *
+ * `attendance_confirmations.attended_by` é quem executou a ação, e nulo
+ * significa evento gerado pelo sistema (oferta expirada, escalonamento
+ * automático de 8h — 0068). A timeline mostrava só o rótulo e a hora: para
+ * auditar um caso era preciso ir ao banco para saber de quem foi cada ação.
+ */
+export interface AlertTimelineEvent extends AttendanceConfirmation {
+  /** Nome de quem agiu; null = ação do sistema. */
+  actor_name: string | null;
+  /** Papel (profiles.role) de quem agiu; null = ação do sistema. */
+  actor_role: UserRole | null;
 }
 
 /**
@@ -310,15 +326,33 @@ export const alertService = {
     return (data as NotificationLog[]) ?? [];
   },
 
-  /** Linha do tempo (eventos de atendimento) de um alerta. */
-  async getTimeline(alertId: string): Promise<AttendanceConfirmation[]> {
+  /**
+   * Linha do tempo (eventos de atendimento) de um alerta, com o autor de cada
+   * ação resolvido. Nome/papel vêm da view pública `profiles_public` numa
+   * query só — mesmo padrão de `getAlerts`, para não acoplar à RLS de
+   * `profiles` (M-09). Evento sem `attended_by` é do sistema e fica com
+   * `actor_name` nulo; quem renderiza decide o rótulo.
+   */
+  async getTimeline(alertId: string): Promise<AlertTimelineEvent[]> {
     const { data, error } = await supabase
       .from('attendance_confirmations')
       .select('*')
       .eq('alert_id', alertId)
       .order('created_at', { ascending: true });
     if (error) throw new Error(error.message);
-    return (data as AttendanceConfirmation[]) ?? [];
+    const rows = (data as AttendanceConfirmation[]) ?? [];
+
+    const ids = [...new Set(rows.map((r) => r.attended_by).filter((id): id is string => Boolean(id)))];
+    const actors = new Map<string, { name: string; role: UserRole }>();
+    if (ids.length > 0) {
+      const { data: profs } = await supabase.from('profiles_public').select('id, name, role').in('id', ids);
+      for (const p of profs ?? []) actors.set(p.id, { name: p.name, role: p.role as UserRole });
+    }
+
+    return rows.map((r) => {
+      const actor = r.attended_by ? actors.get(r.attended_by) : undefined;
+      return { ...r, actor_name: actor?.name ?? null, actor_role: actor?.role ?? null };
+    });
   },
 
   /** Profissionais da equipe (para escolher o responsável pelo atendimento). */
