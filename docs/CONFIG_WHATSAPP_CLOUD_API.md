@@ -380,3 +380,69 @@ paciente novo sai em alta + 1. As duas funções de enqueue têm os dois ramos.
 ```bash
 supabase db push        # aplica a 0073 (CREATE OR REPLACE das duas funções)
 ```
+
+---
+
+## Alerta escalado (enfermagem → médico) — 0084
+
+Quando a enfermagem escala um caso (ou o auto-escalonamento de 8h faz isso), o
+alerta deixa de ser da triagem e vira fila do médico. Até a `0084`, **essa
+notificação nunca saía**: o envio dependia de um trigger `after INSERT on
+clinical_alerts` (0034), e escalonamento é UPDATE — os `notification_logs`
+nasciam `PENDING` e ficavam `PENDING` para sempre. O mesmo valia para o aviso
+de "escalado sem resposta" (0064) e para o botão **Reenviar** do Admin.
+
+A `0084` move o disparo para dentro de `notify_team_of_alert` /
+`notify_escalation_unanswered` (ponto único, logo após os logs serem criados) e
+remove o trigger de INSERT, que passaria a duplicar o envio.
+
+### Template novo a submeter na Meta
+
+- **Nome**: `alerta_escalonado_vitalsync` (minúsculas + underscore — é o nome
+  que a `0084` grava em `notification_logs.template_name`).
+- **Idioma**: `pt_BR`.
+- **Categoria: Utilidade (Utility)** — é aviso transacional, não Marketing.
+- **Corpo** (`{{1}}` = nome do médico, sem dado clínico):
+  > "Olá, {{1}}. Um caso do VitalSync foi escalado para avaliação médica e está
+  > aguardando atendimento da equipe. Abra o painel para ver os detalhes."
+  - Amostra para a aprovação — `{{1}}`: `Dr. José Sampaio`.
+- **Botão "Visitar site" (URL dinâmica)**, texto **"Ver no VitalSync"**, igual
+  ao do `alerta_clinico_vitalsync`:
+    - URL do site (base): `https://vital-sync-frontend-iota.vercel.app/`
+    - Variável `{{1}}` (anexada pela Meta no fim) = `patients/<id-do-paciente>`.
+    - URL de amostra: `https://vital-sync-frontend-iota.vercel.app/patients/8f2c…`
+  ⚠️ Mesma regra do lembrete: **não** digite `{{1}}` dentro da base.
+
+### Enquanto a Meta não aprova
+
+Nada fica pendente. A Edge Function envia o template que o log pede e, se o
+provedor responder que ele não existe (código `132001` / "template not found"),
+**repete o envio com `alerta_clinico_vitalsync`** e grava o aviso em
+`notification_logs.error_message`, mantendo o status `SENT`. Por isso a
+migration pode subir antes da aprovação: o médico é avisado desde o primeiro
+dia, só com o texto genérico.
+
+Para ver se algum envio caiu no fallback:
+
+```sql
+select created_at, recipient_name, template_name, error_message
+  from public.notification_logs
+ where status = 'SENT' and error_message is not null
+ order by created_at desc limit 20;
+```
+
+Quando o template for aprovado, nada precisa ser reconfigurado — o próximo
+envio já usa o nome correto (opcionalmente,
+`supabase secrets set WHATSAPP_ESCALATION_TEMPLATE_NAME=…` **não** existe: o
+nome vem do banco, não de env).
+
+### Deploy
+
+```bash
+supabase functions deploy send-whatsapp-alert
+supabase db push        # aplica a 0084
+```
+
+Reaproveita os MESMOS secrets do Passo 5 e os MESMOS segredos do Vault
+(`project_url`, `service_role_key`) do Passo 6 — o disparo continua sendo
+`pg_net` → Edge Function, só muda de onde ele parte.

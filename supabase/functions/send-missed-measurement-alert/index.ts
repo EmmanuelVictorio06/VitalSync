@@ -1,9 +1,10 @@
 // ============================================================================
 // Edge Function: send-missed-measurement-alert
 //
-// Entrega por WhatsApp (Meta Cloud API) os missed_measurement_logs PENDENTES
-// — alerta OPERACIONAL para a equipe (priorizando o Profissional de
-// Enfermagem) quando o paciente não registrou um período depois que a janela
+// Entrega por WhatsApp (provedor configurável — ver _shared/whatsapp.ts) os
+// missed_measurement_logs PENDENTES — alerta OPERACIONAL para a equipe
+// (priorizando o Profissional de Enfermagem) quando o paciente não
+// registrou um período depois que a janela
 // de medição fechou. NÃO decide destinatários nem aplica o gate de
 // homologação — isso já foi feito pela função SQL
 // enqueue_missed_measurement_alerts (0061), que resolve a prioridade de
@@ -16,8 +17,8 @@
 // period (processa todos os PENDING de qualquer período).
 //
 // Segurança: mesmo padrão de send-whatsapp-alert/send-measurement-reminder —
-// token da Meta é SECRET (nunca no frontend); sem credenciais configuradas,
-// registra como "logged" (simulado).
+// a credencial do provedor é SECRET (nunca no frontend); sem credenciais do
+// provedor ativo configuradas, registra como "logged" (simulado).
 //
 // Mensagem SEM dado clínico sensível: nome do destinatário, nome do
 // paciente, período ("manhã"/"noite") e um link para a tela do paciente.
@@ -25,8 +26,8 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
+import { isWhatsAppConfigured, sendWhatsAppTemplate } from '../_shared/whatsapp.ts';
 
-const GRAPH_VERSION = 'v20.0';
 const TEMPLATE_NAME = Deno.env.get('WHATSAPP_MISSED_MEASUREMENT_TEMPLATE_NAME') ?? 'alerta_medicao_esquecida_vitalsync';
 const TEMPLATE_LANG = Deno.env.get('WHATSAPP_TEMPLATE_LANG') ?? 'pt_BR';
 
@@ -39,75 +40,45 @@ interface PendingMissedLog {
   patients: { name: string } | null;
 }
 
-function onlyDigits(phone: string): string {
-  return phone.replace(/\D/g, '');
-}
-
-/**
- * Normaliza para o formato internacional do WhatsApp (Brasil). Se o número
- * vier sem DDI (10-11 dígitos: DDD + número), prefixa 55. Números com 12-13
- * dígitos já têm o código do país e são mantidos. Usa o COMPRIMENTO (e não
- * "começa com 55") para não confundir DDDs 51-55 do Sul com o DDI.
- */
-function toBrWhatsApp(phone: string): string {
-  const d = onlyDigits(phone);
-  return d.length <= 11 ? `55${d}` : d;
-}
-
 function periodLabelPt(period: 'MORNING' | 'NIGHT'): string {
   return period === 'MORNING' ? 'manhã' : 'noite';
 }
 
 /**
- * Envia o template aprovado via Meta Cloud API. {{1}}/{{2}}/{{3}} do corpo =
- * nome do destinatário, nome do paciente, período. O botão "Ver paciente"
- * (URL dinâmica) tem a base fixa aprovada no template — aqui só passamos
- * `patients/${patientId}` como {{1}} do botão, mesmo padrão de
+ * Envia o template aprovado pelo provedor configurado. {{1}}/{{2}}/{{3}} do
+ * corpo = nome do destinatário, nome do paciente, período. O botão "Ver
+ * paciente" (URL dinâmica) tem a base fixa aprovada no template — aqui só
+ * passamos `patients/${patientId}` como {{1}} do botão, mesmo padrão de
  * send-whatsapp-alert (link é da equipe, não do paciente).
  */
-async function sendViaMeta(
-  token: string,
-  phoneNumberId: string,
+async function sendMissedAlert(
   to: string,
   recipientName: string,
   patientName: string,
   period: 'MORNING' | 'NIGHT',
   patientId: string,
 ): Promise<string> {
-  const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${phoneNumberId}/messages`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      messaging_product: 'whatsapp',
-      to: toBrWhatsApp(to),
-      type: 'template',
-      template: {
-        name: TEMPLATE_NAME,
-        language: { code: TEMPLATE_LANG },
-        components: [
-          {
-            type: 'body',
-            parameters: [
-              { type: 'text', text: recipientName || 'equipe' },
-              { type: 'text', text: patientName || 'paciente' },
-              { type: 'text', text: periodLabelPt(period) },
-            ],
-          },
-          {
-            type: 'button',
-            sub_type: 'url',
-            index: '0',
-            parameters: [{ type: 'text', text: `patients/${patientId}` }],
-          },
+  return sendWhatsAppTemplate({
+    to,
+    templateName: TEMPLATE_NAME,
+    templateLang: TEMPLATE_LANG,
+    components: [
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: recipientName || 'equipe' },
+          { type: 'text', text: patientName || 'paciente' },
+          { type: 'text', text: periodLabelPt(period) },
         ],
       },
-    }),
+      {
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        parameters: [{ type: 'text', text: `patients/${patientId}` }],
+      },
+    ],
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data?.error?.message ?? `Meta API HTTP ${res.status}`);
-  }
-  return data?.messages?.[0]?.id ?? '';
 }
 
 serve(async (req) => {
@@ -136,9 +107,7 @@ serve(async (req) => {
     const pending = (logs ?? []) as unknown as PendingMissedLog[];
     if (pending.length === 0) return json({ ok: true, sent: 0, failed: 0 });
 
-    const token = Deno.env.get('WHATSAPP_API_TOKEN');
-    const phoneNumberId = Deno.env.get('WHATSAPP_PHONE_NUMBER_ID');
-    const hasProvider = Boolean(token && phoneNumberId);
+    const hasProvider = isWhatsAppConfigured();
 
     let sent = 0;
     let failed = 0;
@@ -154,7 +123,7 @@ serve(async (req) => {
         continue;
       }
       if (!hasProvider) {
-        // Sem credenciais Meta: registra como simulado (não envia de verdade).
+        // Sem credenciais do provedor ativo: registra como simulado (não envia de verdade).
         await supabase
           .from('missed_measurement_logs')
           .update({ status: 'logged', sent_at: now, error_message: null })
@@ -163,9 +132,7 @@ serve(async (req) => {
         continue;
       }
       try {
-        const providerId = await sendViaMeta(
-          token!,
-          phoneNumberId!,
+        const providerId = await sendMissedAlert(
           log.recipient_phone,
           log.recipient_name ?? '',
           patientName,
