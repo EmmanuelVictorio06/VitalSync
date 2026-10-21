@@ -238,21 +238,29 @@ export const attendanceService = {
   },
 
   /**
-   * Atendimentos FINALIZADOS (Atendido/Ignorado) de UM paciente numa janela de
-   * horas (padrão 48h), do mais recente para o mais antigo. Dá contexto de
-   * decisão no "Detalhes do Alerta" — mesma query/enriquecimento de
-   * `getMyAttendances`, só filtrada por paciente e período. RLS de
-   * `attendance_confirmations` já limita ao escopo do usuário.
+   * Atendimentos FINALIZADOS (Atendido/Ignorado) de UM paciente, do mais
+   * recente para o mais antigo. Dá contexto de decisão no "Detalhes do Alerta"
+   * — mesma query/enriquecimento de `getMyAttendances`, só filtrada por
+   * paciente. RLS de `attendance_confirmations` já limita ao escopo do usuário.
+   *
+   * `hours` recorta uma janela quando informado; sem ele, devolve TODO o
+   * histórico do paciente. A janela fixa de 48h escondia os atendimentos
+   * anteriores do mesmo paciente — justamente o que diz se a queixa de hoje já
+   * vinha sendo acompanhada, e por quem.
    */
-  async getRecentByPatient(patientId: string, hours = 48): Promise<AttendanceRow[]> {
-    const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
-    const { data, error } = await supabase
+  async getByPatient(patientId: string, hours?: number): Promise<AttendanceRow[]> {
+    let query = supabase
       .from('attendance_confirmations')
       .select(ATTENDANCE_SELECT)
       .eq('patient_id', patientId)
       .in('status', ['ATTENDED', 'IGNORED'])
-      .gte('created_at', since)
       .order('created_at', { ascending: false });
+
+    if (hours != null) {
+      query = query.gte('created_at', new Date(Date.now() - hours * 60 * 60 * 1000).toISOString());
+    }
+
+    const { data, error } = await query;
     if (error) throw new Error(error.message);
     return enrichAttendanceRows((data as unknown as RawRow[]) ?? []);
   },
