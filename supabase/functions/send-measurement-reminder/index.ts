@@ -1,9 +1,10 @@
 // ============================================================================
 // Edge Function: send-measurement-reminder
 //
-// Entrega por WhatsApp (Meta Cloud API) os reminder_logs PENDENTES de um
-// período de medição (MORNING/NIGHT). NÃO decide destinatários — isso já foi
-// feito pela função SQL enqueue_measurement_reminders (0038), que aplica o
+// Entrega por WhatsApp (provedor configurável — ver _shared/whatsapp.ts) os
+// reminder_logs PENDENTES de um período de medição (MORNING/NIGHT). NÃO
+// decide destinatários — isso já foi feito pela função SQL
+// enqueue_measurement_reminders (0038), que aplica o
 // gate de elegibilidade (10 dias pós-alta, sem medição do dia) e o gate de
 // homologação (só whitelist vira PENDING; o resto vira SKIPPED_TEST_MODE).
 //
@@ -12,17 +13,18 @@
 // aqui via pg_net com { period }. Também aceita chamada direta sem period
 // (processa todos os PENDING de qualquer período — útil para reenvio manual).
 //
-// Segurança: mesmo padrão de send-whatsapp-alert — token da Meta é SECRET
-// (nunca no frontend); sem credenciais configuradas, registra como "logged"
-// (simulado), permitindo testar o fluxo sem enviar mensagens reais.
+// Segurança: mesmo padrão de send-whatsapp-alert — a credencial do provedor
+// é SECRET (nunca no frontend); sem credenciais do provedor ativo
+// configuradas, registra como "logged" (simulado), permitindo testar o
+// fluxo sem enviar mensagens reais.
 //
 // Mensagem SEM dado clínico sensível: só nome do paciente + link de registro.
 // ============================================================================
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
+import { isWhatsAppConfigured, sendWhatsAppTemplate } from '../_shared/whatsapp.ts';
 
-const GRAPH_VERSION = 'v20.0';
 const TEMPLATE_NAME = Deno.env.get('WHATSAPP_REMINDER_TEMPLATE_NAME') ?? 'lembrete_medicao_vitalsync';
 const TEMPLATE_LANG = Deno.env.get('WHATSAPP_TEMPLATE_LANG') ?? 'pt_BR';
 
@@ -33,65 +35,31 @@ interface PendingReminder {
   patients: { secure_token: string } | null;
 }
 
-function onlyDigits(phone: string): string {
-  return phone.replace(/\D/g, '');
-}
-
 /**
- * Normaliza para o formato internacional do WhatsApp (Brasil). Se o número
- * vier sem DDI (10-11 dígitos: DDD + número), prefixa 55. Números com 12-13
- * dígitos já têm o código do país e são mantidos. Usa o COMPRIMENTO (e não
- * "começa com 55") para não confundir DDDs 51-55 do Sul com o DDI.
- */
-function toBrWhatsApp(phone: string): string {
-  const d = onlyDigits(phone);
-  return d.length <= 11 ? `55${d}` : d;
-}
-
-/**
- * Envia o template aprovado via Meta Cloud API. {{1}} do corpo = nome do
- * paciente. O botão "Registrar agora" (URL dinâmica) tem a base fixa
+ * Envia o template aprovado pelo provedor configurado. {{1}} do corpo = nome
+ * do paciente. O botão "Registrar agora" (URL dinâmica) tem a base fixa
  * `https://vital-sync-frontend-iota.vercel.app/registro-sinais/` configurada na
  * aprovação do template — aqui só passamos o `secure_token` como {{1}} do
  * botão (não o path inteiro, diferente do send-whatsapp-alert que usa
  * `patients/${patientId}` porque aquele link é da equipe, não do paciente).
  */
-async function sendViaMeta(
-  token: string,
-  phoneNumberId: string,
-  to: string,
-  patientName: string,
-  secureToken: string,
-): Promise<string> {
-  const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${phoneNumberId}/messages`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      messaging_product: 'whatsapp',
-      to: toBrWhatsApp(to),
-      type: 'template',
-      template: {
-        name: TEMPLATE_NAME,
-        language: { code: TEMPLATE_LANG },
-        components: [
-          { type: 'body', parameters: [{ type: 'text', text: patientName || 'paciente' }] },
-          {
-            type: 'button',
-            sub_type: 'url',
-            index: '0',
-            // {{1}} do botão = só o secure_token; a base
-            // "https://vital-sync-frontend-iota.vercel.app/registro-sinais/" é fixa no template.
-            parameters: [{ type: 'text', text: secureToken }],
-          },
-        ],
+async function sendReminder(to: string, patientName: string, secureToken: string): Promise<string> {
+  return sendWhatsAppTemplate({
+    to,
+    templateName: TEMPLATE_NAME,
+    templateLang: TEMPLATE_LANG,
+    components: [
+      { type: 'body', parameters: [{ type: 'text', text: patientName || 'paciente' }] },
+      {
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        // {{1}} do botão = só o secure_token; a base
+        // "https://vital-sync-frontend-iota.vercel.app/registro-sinais/" é fixa no template.
+        parameters: [{ type: 'text', text: secureToken }],
       },
-    }),
+    ],
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data?.error?.message ?? `Meta API HTTP ${res.status}`);
-  }
-  return data?.messages?.[0]?.id ?? '';
 }
 
 serve(async (req) => {
@@ -120,9 +88,7 @@ serve(async (req) => {
     const pending = (logs ?? []) as unknown as PendingReminder[];
     if (pending.length === 0) return json({ ok: true, sent: 0, failed: 0 });
 
-    const token = Deno.env.get('WHATSAPP_API_TOKEN');
-    const phoneNumberId = Deno.env.get('WHATSAPP_PHONE_NUMBER_ID');
-    const hasProvider = Boolean(token && phoneNumberId);
+    const hasProvider = isWhatsAppConfigured();
 
     let sent = 0;
     let failed = 0;
@@ -138,7 +104,7 @@ serve(async (req) => {
         continue;
       }
       if (!hasProvider) {
-        // Sem credenciais Meta: registra como simulado (não envia de verdade).
+        // Sem credenciais do provedor ativo: registra como simulado (não envia de verdade).
         await supabase
           .from('reminder_logs')
           .update({ status: 'logged', sent_at: now, error_message: null })
@@ -147,13 +113,7 @@ serve(async (req) => {
         continue;
       }
       try {
-        const providerId = await sendViaMeta(
-          token!,
-          phoneNumberId!,
-          log.recipient_phone,
-          log.recipient_name ?? '',
-          secureToken,
-        );
+        const providerId = await sendReminder(log.recipient_phone, log.recipient_name ?? '', secureToken);
         await supabase
           .from('reminder_logs')
           .update({ status: 'SENT', provider_message_id: providerId, sent_at: now, error_message: null })

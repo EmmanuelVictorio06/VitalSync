@@ -1,10 +1,11 @@
 // ============================================================================
 // Edge Function: send-welcome-message
 //
-// Entrega por WhatsApp (Meta Cloud API) os welcome_logs PENDENTES — a primeira
-// mensagem que o paciente recebe, no momento do cadastro. NÃO decide quem
-// recebe: isso já foi feito pela função SQL enqueue_welcome_message (0072), que
-// aplica o gate de elegibilidade (paciente ativo COM telefone, uma boas-vindas
+// Entrega por WhatsApp (provedor configurável — ver _shared/whatsapp.ts) os
+// welcome_logs PENDENTES — a primeira mensagem que o paciente recebe, no
+// momento do cadastro. NÃO decide quem recebe: isso já foi feito pela
+// função SQL enqueue_welcome_message (0072), que aplica o gate de
+// elegibilidade (paciente ativo COM telefone, uma boas-vindas
 // por paciente) e o gate de homologação (só whitelist vira PENDING; o resto
 // vira SKIPPED_TEST_MODE).
 //
@@ -14,17 +15,18 @@
 // TODOS os PENDING — útil para reenvio manual e para recolher retardatários,
 // já que o POST do pg_net pode chegar antes do COMMIT do cadastro).
 //
-// Segurança: mesmo padrão de send-measurement-reminder — token da Meta é SECRET
-// (nunca no frontend); sem credenciais configuradas, registra como "logged"
-// (simulado), permitindo testar o fluxo sem enviar mensagens reais.
+// Segurança: mesmo padrão de send-measurement-reminder — a credencial do
+// provedor é SECRET (nunca no frontend); sem credenciais do provedor ativo
+// configuradas, registra como "logged" (simulado), permitindo testar o
+// fluxo sem enviar mensagens reais.
 //
 // Mensagem SEM dado clínico: só o nome do paciente + link de primeiro acesso.
 // ============================================================================
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
+import { isWhatsAppConfigured, sendWhatsAppTemplate } from '../_shared/whatsapp.ts';
 
-const GRAPH_VERSION = 'v20.0';
 const TEMPLATE_NAME = Deno.env.get('WHATSAPP_WELCOME_TEMPLATE_NAME') ?? 'boas_vindas_vitalsync';
 const TEMPLATE_LANG = Deno.env.get('WHATSAPP_TEMPLATE_LANG') ?? 'pt_BR';
 
@@ -36,65 +38,31 @@ interface PendingWelcome {
   patients: { secure_token: string } | null;
 }
 
-function onlyDigits(phone: string): string {
-  return phone.replace(/\D/g, '');
-}
-
 /**
- * Normaliza para o formato internacional do WhatsApp (Brasil). Se o número
- * vier sem DDI (10-11 dígitos: DDD + número), prefixa 55. Números com 12-13
- * dígitos já têm o código do país e são mantidos. Usa o COMPRIMENTO (e não
- * "começa com 55") para não confundir DDDs 51-55 do Sul com o DDI.
- */
-function toBrWhatsApp(phone: string): string {
-  const d = onlyDigits(phone);
-  return d.length <= 11 ? `55${d}` : d;
-}
-
-/**
- * Envia o template aprovado via Meta Cloud API. {{1}} do corpo = nome do
- * paciente. O botão "Acessar VitalSync" (URL dinâmica) tem a base fixa
+ * Envia o template aprovado pelo provedor configurado. {{1}} do corpo = nome
+ * do paciente. O botão "Acessar VitalSync" (URL dinâmica) tem a base fixa
  * `https://vital-sync-frontend-iota.vercel.app/registro-sinais/` configurada na
  * aprovação do template — aqui só passamos o `secure_token` como {{1}} do
  * botão (não o path inteiro), idêntico ao botão do template
  * lembrete_medicao_vitalsync.
  */
-async function sendViaMeta(
-  token: string,
-  phoneNumberId: string,
-  to: string,
-  patientName: string,
-  secureToken: string,
-): Promise<string> {
-  const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${phoneNumberId}/messages`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      messaging_product: 'whatsapp',
-      to: toBrWhatsApp(to),
-      type: 'template',
-      template: {
-        name: TEMPLATE_NAME,
-        language: { code: TEMPLATE_LANG },
-        components: [
-          { type: 'body', parameters: [{ type: 'text', text: patientName || 'paciente' }] },
-          {
-            type: 'button',
-            sub_type: 'url',
-            index: '0',
-            // {{1}} do botão = só o secure_token; a base
-            // "https://vital-sync-frontend-iota.vercel.app/registro-sinais/" é fixa no template.
-            parameters: [{ type: 'text', text: secureToken }],
-          },
-        ],
+async function sendWelcome(to: string, patientName: string, secureToken: string): Promise<string> {
+  return sendWhatsAppTemplate({
+    to,
+    templateName: TEMPLATE_NAME,
+    templateLang: TEMPLATE_LANG,
+    components: [
+      { type: 'body', parameters: [{ type: 'text', text: patientName || 'paciente' }] },
+      {
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        // {{1}} do botão = só o secure_token; a base
+        // "https://vital-sync-frontend-iota.vercel.app/registro-sinais/" é fixa no template.
+        parameters: [{ type: 'text', text: secureToken }],
       },
-    }),
+    ],
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data?.error?.message ?? `Meta API HTTP ${res.status}`);
-  }
-  return data?.messages?.[0]?.id ?? '';
 }
 
 serve(async (req) => {
@@ -123,9 +91,7 @@ serve(async (req) => {
       return json({ ok: true, sent: 0, failed: 0, patient_id: patientId ?? null });
     }
 
-    const token = Deno.env.get('WHATSAPP_API_TOKEN');
-    const phoneNumberId = Deno.env.get('WHATSAPP_PHONE_NUMBER_ID');
-    const hasProvider = Boolean(token && phoneNumberId);
+    const hasProvider = isWhatsAppConfigured();
 
     let sent = 0;
     let failed = 0;
@@ -141,7 +107,7 @@ serve(async (req) => {
         continue;
       }
       if (!hasProvider) {
-        // Sem credenciais Meta: registra como simulado (não envia de verdade).
+        // Sem credenciais do provedor ativo: registra como simulado (não envia de verdade).
         await supabase
           .from('welcome_logs')
           .update({ status: 'logged', sent_at: now, error_message: null })
@@ -150,13 +116,7 @@ serve(async (req) => {
         continue;
       }
       try {
-        const providerId = await sendViaMeta(
-          token!,
-          phoneNumberId!,
-          log.recipient_phone,
-          log.recipient_name ?? '',
-          secureToken,
-        );
+        const providerId = await sendWelcome(log.recipient_phone, log.recipient_name ?? '', secureToken);
         await supabase
           .from('welcome_logs')
           .update({ status: 'SENT', provider_message_id: providerId, sent_at: now, error_message: null })

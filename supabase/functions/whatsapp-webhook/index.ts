@@ -16,6 +16,16 @@
 //
 // Deploy SEM verificação de JWT (a Meta não envia o header):
 //   supabase functions deploy whatsapp-webhook --no-verify-jwt
+//
+// Se WHATSAPP_PROVIDER=360dialog (ver _shared/whatsapp.ts e
+// docs/CONFIG_WHATSAPP_360DIALOG.md): a configuração é diferente — cola-se a
+// mesma Callback URL direto no 360dialog Hub, SEM o passo de hub.challenge
+// (o branch GET abaixo simplesmente não é chamado pelo 360dialog). O parser
+// do POST abaixo assume o payload entry[].changes[].value.statuses[] no
+// formato Meta Cloud API — 360dialog documenta compatibilidade com esse
+// formato, mas CONFIRME com um payload real de teste (console 360dialog)
+// antes de depender disto em produção; ajuste o parser se o formato vier
+// diferente.
 // ============================================================================
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
