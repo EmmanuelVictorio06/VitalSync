@@ -5,5 +5,6 @@
 export { PatientMeasurementWizard } from './PatientMeasurementWizard';
 export { MeasurementSuccess } from './MeasurementSuccess';
 export { ContatoAtivoAviso } from './ContatoAtivoAviso';
+export { TutorialVideoCard } from './TutorialVideoCard';
 export { SupportFooter } from './SupportFooter';
 export { GRADIENT_BG, periodLabel, type MeasurementPatient } from './types';
