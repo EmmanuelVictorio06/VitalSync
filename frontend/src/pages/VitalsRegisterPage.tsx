@@ -13,6 +13,7 @@ import {
   PatientMeasurementWizard,
   periodLabel,
   SupportFooter,
+  TutorialVideoCard,
   type MeasurementPatient,
 } from '../components/patient-measurement';
 import { ThemeToggle } from '../components/ThemeToggle';
@@ -171,7 +172,8 @@ function CenteredCard({ children }: { children: React.ReactNode }) {
 /* ------------------------------------------------------------------ */
 /*  Escolha do período                                                 */
 /* ------------------------------------------------------------------ */
-function PeriodChoice({
+// Exportado só para a página de pré-visualização de dev (DevPatientPreviewPage).
+export function PeriodChoice({
   name,
   morningDone,
   nightDone,
@@ -190,6 +192,12 @@ function PeriodChoice({
       <p className="text-sm text-muted-foreground">Olá, {firstName}</p>
       <h1 className="text-xl font-extrabold tracking-tight mt-0.5">Quando você está registrando?</h1>
       <p className="text-sm text-muted-foreground mt-2">Escolha o período para iniciar sua medição.</p>
+
+      {/* Vídeo tutorial (aparelhos + preenchimento). Some sozinho se
+          VITE_TUTORIAL_VIDEO_URL não estiver configurado. */}
+      <div className="mt-5">
+        <TutorialVideoCard />
+      </div>
 
       <div className="mt-6 space-y-3 text-left">
         <button

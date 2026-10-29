@@ -1,4 +1,4 @@
-import { useLayoutEffect } from 'react';
+import { lazy, Suspense, useLayoutEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Role } from './auth/AuthContext';
 import { AlertCountProvider } from './components/AlertCount';
@@ -32,6 +32,12 @@ import { HospitalsPage } from './pages/admin/HospitalsPage';
 import { SettingsPage } from './pages/admin/SettingsPage';
 import { SurgeryTypesPage } from './pages/admin/SurgeryTypesPage';
 import { ManagerTeamsPage } from './pages/ManagerTeamsPage';
+
+// Só em `npm run dev`: em build de produção `import.meta.env.DEV` vira `false`
+// e o Vite descarta a página inteira (não vai para o bundle).
+const DevPatientPreviewPage = import.meta.env.DEV
+  ? lazy(() => import('./pages/DevPatientPreviewPage').then((m) => ({ default: m.DevPatientPreviewPage })))
+  : null;
 
 /** Tela do paciente protegida pelo fallback de linguagem simples. */
 function PacienteComBoundary() {
@@ -92,6 +98,17 @@ export function App() {
       <Route path="/r/:token" element={<PacienteComBoundary />} />
       {/* Auto-cadastro do profissional por convite (público, sem login). */}
       <Route path="/convite/:token" element={<InviteRegisterPage />} />
+      {/* Pré-visualização da tela do paciente sem banco — SÓ em dev. */}
+      {DevPatientPreviewPage && (
+        <Route
+          path="/dev/paciente"
+          element={
+            <Suspense fallback={null}>
+              <DevPatientPreviewPage />
+            </Suspense>
+          }
+        />
+      )}
 
       {/* Internas (autenticadas) */}
       <Route
