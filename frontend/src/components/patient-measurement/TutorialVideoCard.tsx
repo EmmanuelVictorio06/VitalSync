@@ -19,18 +19,16 @@ export function TutorialVideoCard() {
   if (!id) return null;
 
   return (
-    <section className="rounded-2xl border border-primary/20 bg-primary/5 p-3 text-left">
-      <div className="flex items-start gap-2.5 px-1 pb-3">
-        <PlayCircle className="size-5 text-primary shrink-0 mt-0.5" />
-        <div>
-          <h2 className="text-sm font-bold text-foreground">Como fazer suas medições</h2>
-          <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">
-            Veja como usar os aparelhos e como preencher o registro. Assista antes da primeira medição.
-          </p>
-        </div>
+    <section className="text-left">
+      <div className="flex items-center gap-2 pb-2.5">
+        <PlayCircle className="size-5 text-primary shrink-0" />
+        <h2 className="text-sm font-bold text-foreground">Como fazer suas medições</h2>
       </div>
 
-      <div className="relative w-full aspect-video overflow-hidden rounded-xl bg-black">
+      {/* Vídeo gravado na vertical (celular): o player segue a proporção 9:16
+          para ocupar a largura toda no mobile, sem faixas pretas nas laterais.
+          No desktop a altura é limitada para caber na tela. */}
+      <div className="relative mx-auto w-full max-w-[calc(70svh*9/16)] aspect-[9/16] overflow-hidden rounded-2xl bg-black">
         {playing ? (
           <iframe
             src={youtubeEmbedUrl(id, { autoplay: true })}
