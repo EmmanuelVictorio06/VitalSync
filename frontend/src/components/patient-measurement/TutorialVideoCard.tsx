@@ -26,9 +26,10 @@ export function TutorialVideoCard() {
       </div>
 
       {/* Vídeo gravado na vertical (celular): o player segue a proporção 9:16
-          para ocupar a largura toda no mobile, sem faixas pretas nas laterais.
-          No desktop a altura é limitada para caber na tela. */}
-      <div className="relative mx-auto w-full max-w-[calc(70svh*9/16)] aspect-[9/16] overflow-hidden rounded-2xl bg-black">
+          (sem faixas pretas nas laterais), centralizado e com tamanho contido —
+          ~12rem × ~21rem, menor em telas baixas — para não empurrar os botões
+          de período para fora da tela. Tela cheia fica no próprio player. */}
+      <div className="relative mx-auto w-full max-w-[min(12rem,calc(40svh*9/16))] aspect-[9/16] overflow-hidden rounded-2xl bg-black">
         {playing ? (
           <iframe
             src={youtubeEmbedUrl(id, { autoplay: true })}
