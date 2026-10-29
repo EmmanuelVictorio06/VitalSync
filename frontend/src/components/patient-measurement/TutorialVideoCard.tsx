@@ -25,11 +25,12 @@ export function TutorialVideoCard() {
         <h2 className="text-sm font-bold text-foreground">Como fazer suas medições</h2>
       </div>
 
-      {/* Vídeo gravado na vertical (celular): o player segue a proporção 9:16
-          (sem faixas pretas nas laterais), centralizado e com tamanho contido —
-          ~12rem × ~21rem, menor em telas baixas — para não empurrar os botões
-          de período para fora da tela. Tela cheia fica no próprio player. */}
-      <div className="relative mx-auto w-full max-w-[min(12rem,calc(40svh*9/16))] aspect-[9/16] overflow-hidden rounded-2xl bg-black">
+      {/* Vídeo gravado na vertical (celular). O player usa 3:4 — meio-termo
+          escolhido no ajuste visual: 16:9 espremia o vídeo, 9:16 ficava
+          comprido demais. Tamanho contido (~16rem × ~21rem, menor em telas
+          baixas) para não empurrar os botões de período para fora da tela.
+          Tela cheia fica no próprio player. */}
+      <div className="relative mx-auto w-full max-w-[min(16rem,calc(45svh*3/4))] aspect-[3/4] overflow-hidden rounded-2xl bg-black">
         {playing ? (
           <iframe
             src={youtubeEmbedUrl(id, { autoplay: true })}
